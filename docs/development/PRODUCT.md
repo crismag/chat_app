@@ -2,7 +2,7 @@
 
 ## Product statement
 
-C.H.A.T. is a private-first conversational Scripture reflection application that helps users preserve meaningful conversations, organize them into **Context, Highlight, Application, Testimony**, improve or explain content with optional AI assistance, find previous reflections, and create beautifully designed shareable visual content.
+C.H.A.T. is a private-first conversational Scripture reflection application that helps users preserve meaningful conversations, organize them into **Context, Heart, Application, Testimony**, improve or explain content with optional AI assistance, find previous reflections, and create beautifully designed shareable visual content.
 
 ## Core user problem
 
@@ -23,16 +23,16 @@ The application should make that loop feel simple enough for everyday use.
 ## C.H.A.T. framework
 
 ### C — Context
-What is happening in the passage? What literary, historical, sermon, or conversational context helps the user understand it?
+The person explains the context of the passage. This can include what is happening, who is involved, the surrounding circumstances, relevant verses, and what the person understands the passage to mean. AI may assist with historical, literary, biblical, or textual context, but the entry represents the person's understanding.
 
-### H — Highlight
-What verse, phrase, truth, question, or revelation stands out?
+### H — Heart
+The person shares their heart and how the passage touches them. This includes what spoke to, affected, convicted, encouraged, challenged, or caused them to reflect. Heart is personal reflection and must not be silently manufactured by AI.
 
 ### A — Application
-How does the truth apply to the user's life, response, character, relationship, decision, or present situation?
+The person explains how the passage applies to them and how they will apply what they have learned. This may include actions, decisions, repentance, obedience, habits, relationships, attitudes, or practical next steps.
 
 ### T — Testimony
-What has the user personally experienced, witnessed, learned, overcome, received, or wants to remember as testimony?
+The person expresses a testimony, declaration of faith or conviction, commitment, prayer, or statement of belief related to the verse, passage, or learning. Testimony is not limited to recounting a past event. AI must never invent a personal testimony or experience and attribute it to the user.
 
 The C.H.A.T. structure must help the user, not force every conversation into four mandatory form fields.
 
