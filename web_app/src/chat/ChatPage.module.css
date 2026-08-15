@@ -277,3 +277,99 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Give the conversation the room it deserves.
+ *
+ * The thread is what this application is for, and it was the smallest thing on
+ * the screen. Two causes, both here:
+ *
+ *   `align-items: start` made every column shrink-wrap to its content, so the
+ *   thread card was only ever as tall as the one line inside it, floating in a
+ *   page of empty paper.
+ *
+ *   And the side panels took 31rem between them regardless of viewport, which
+ *   on a 1280px screen leaves the conversation with barely half the width.
+ *
+ * The fix is to let the workspace fill the screen and hand the surplus to the
+ * middle: the columns stretch, the thread becomes a column of its own with the
+ * message list taking the slack, and the panels are trimmed and allowed to
+ * scroll independently rather than stretching the page.
+ * ------------------------------------------------------------------------ */
+
+@media (min-width: 900px) {
+  .workspace {
+    /* Header, plus the main element's own padding. */
+    height: calc(100svh - 9.5rem);
+    min-height: 30rem;
+    grid-template-columns: 13.5rem minmax(0, 1fr) 15rem;
+    align-items: stretch;
+  }
+
+  /* A grid child will not shrink below its content without this. */
+  .sidebar,
+  .thread,
+  .sections {
+    min-height: 0;
+  }
+
+  .sidebar,
+  .sections {
+    overflow-y: auto;
+  }
+
+  /*
+   * The thread is a column: whatever heading it has stays put, the messages
+   * take the remaining height and scroll, and the composer sits at the bottom
+   * where a composer belongs — not wherever the last message happened to end.
+   */
+  .thread {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .messages {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    /* Room for the scrollbar so text does not sit under it. */
+    padding-right: var(--space-1);
+    scrollbar-gutter: stable;
+  }
+
+  .composer {
+    flex: none;
+  }
+}
+
+/* On a wide desktop the extra pixels go to the conversation, not the panels. */
+@media (min-width: 1400px) {
+  .workspace {
+    grid-template-columns: 15rem minmax(0, 1fr) 17rem;
+  }
+}
+
+/*
+ * On a phone the conversation comes first. The DOM order is sidebar, thread,
+ * sections — right for reading order and wrong for a small screen, where the
+ * thing you opened the app to do should not be below a form you rarely use.
+ */
+@media (max-width: 899px) {
+  .workspace {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .thread {
+    order: -1;
+    min-height: 55svh;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .messages {
+    flex: 1 1 auto;
+  }
+}
