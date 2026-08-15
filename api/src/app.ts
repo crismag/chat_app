@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { cors } from 'hono/cors';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
+import { SESSION_TTL_MS } from './db.ts';
 import {
   AI_ACTIONS,
   CREATE_LAYOUTS,
@@ -14,6 +15,7 @@ import {
   type HealthResponse,
 } from '@chat/shared';
 import { applyNamedAiAction, extractChatSections, sectionsFromStore } from './ai.ts';
+import { SqliteStore } from './db.ts';
 import { MemoryStore, type StoredConversation } from './store.ts';
 
 const SESSION_COOKIE = 'chat_session';
@@ -47,7 +49,27 @@ function summaryOf(conversation: StoredConversation) {
   };
 }
 
-export function createApp(store: MemoryStore = new MemoryStore()) {
+/**
+ * The session cookie's options.
+ *
+ * `secure` is on everywhere but development, because without it the browser
+ * will send the session token over plain HTTP — which is exactly the situation
+ * a session cookie exists to survive. It is off locally only because there is
+ * no certificate on localhost and the cookie would otherwise never be set.
+ */
+const sessionCookie = {
+  httpOnly: true,
+  sameSite: 'Lax',
+  path: '/',
+  secure: process.env.NODE_ENV === 'production',
+  maxAge: Math.floor(SESSION_TTL_MS / 1000),
+} as const;
+
+/**
+ * `store` accepts either backing. Tests hand in an in-memory SQLite database so
+ * each one gets a clean schema; the server hands in a file.
+ */
+export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) {
   const app = new Hono();
 
   app.use(
@@ -107,7 +129,7 @@ export function createApp(store: MemoryStore = new MemoryStore()) {
     store.usersByEmail.set(email, user.id);
     const token = randomUUID();
     store.sessions.set(token, { token, userId: user.id });
-    setCookie(c, SESSION_COOKIE, token, { httpOnly: true, sameSite: 'Lax', path: '/' });
+    setCookie(c, SESSION_COOKIE, token, sessionCookie);
     return c.json({ id: user.id, email: user.email }, 201);
   });
 
@@ -121,7 +143,7 @@ export function createApp(store: MemoryStore = new MemoryStore()) {
     }
     const token = randomUUID();
     store.sessions.set(token, { token, userId: user.id });
-    setCookie(c, SESSION_COOKIE, token, { httpOnly: true, sameSite: 'Lax', path: '/' });
+    setCookie(c, SESSION_COOKIE, token, sessionCookie);
     return c.json({ id: user.id, email: user.email });
   });
 

@@ -76,3 +76,8 @@ playwright-report/
 *.sqlite
 *.sqlite3
 local-data/
+
+# Local SQLite database
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
