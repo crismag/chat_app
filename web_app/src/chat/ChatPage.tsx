@@ -226,7 +226,19 @@ export function ChatPage() {
             </form>
           </>
         ) : (
-          <p>Start or open a conversation. It stays private until you publish it.</p>
+          /*
+            The empty state is a prompt, not a panel. Centred and quiet, so an
+            unopened conversation does not out-weigh the C.H.A.T. sections
+            beside it — which are the thing actually worth looking at before
+            anything has been written.
+          */
+          <div className={styles.empty}>
+            <p className={styles.emptyTitle}>No conversation open</p>
+            <p className={styles.emptyBody}>
+              Name one on the left and start writing. It stays private until you
+              publish it.
+            </p>
+          </div>
         )}
       </div>
 

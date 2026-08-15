@@ -373,3 +373,63 @@
     flex: 1 1 auto;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Rebalance: the C.H.A.T. sections are the artifact.
+ *
+ * The thread had taken the whole middle whether or not it held anything, while
+ * the four sections — the reason the product exists — were a 15rem strip with
+ * their own scrollbar and textareas too small to write a sentence in. An empty
+ * conversation should not out-weigh them.
+ * ------------------------------------------------------------------------ */
+
+.empty {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: var(--space-2);
+  flex: 1 1 auto;
+  min-height: 12rem;
+  padding: var(--space-6);
+  text-align: center;
+}
+
+.emptyTitle {
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  color: var(--ink-soft);
+}
+
+.emptyBody {
+  max-width: 30ch;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+@media (min-width: 900px) {
+  /* The sections get real width; the thread keeps the flexible remainder. */
+  .workspace {
+    grid-template-columns: 13rem minmax(0, 1fr) 21rem;
+  }
+
+  /*
+   * No inner scrollbar at rest. The panel scrolls only once its content
+   * genuinely exceeds the column, rather than always showing a gutter that
+   * makes it look like an overflowing sidebar.
+   */
+  .sections {
+    overflow-y: auto;
+    scrollbar-gutter: auto;
+  }
+
+  /* Room to actually write in. Four cramped boxes invite four cramped answers. */
+  .sections textarea {
+    min-height: 5.5rem;
+  }
+}
+
+@media (min-width: 1400px) {
+  .workspace {
+    grid-template-columns: 15rem minmax(0, 1fr) 24rem;
+  }
+}
