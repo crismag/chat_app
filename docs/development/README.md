@@ -30,4 +30,6 @@ If implementation reveals that a documented assumption is wrong, update the rele
 
 ## Current status
 
-The repository is in foundation stage. Framework scaffolding has not yet been treated as product architecture. These documents should guide the initial scaffold rather than be retrofitted after implementation.
+Phase 0 foundation is in the repository: a React/Vite web app, a Hono API, shared domain types, local `npm run dev`, and CI.
+
+These documents remain the implementation contract. Scaffolding should follow them rather than replace them.

@@ -9,9 +9,9 @@ C.H.A.T. uses AI to assist reflection, explanation, wording, organization, and c
 - what Scripture says;
 - what interpretation or commentary says.
 
-## 1. User testimony is not generative filler
+## 1. Heart and testimony are not generative filler
 
-Testimony represents the user's own experience or witness.
+Heart is the user's personal response to the passage. Testimony represents the user's own experience, witness, declaration, commitment, prayer, or belief.
 
 AI may:
 
@@ -20,12 +20,13 @@ AI may:
 - shorten;
 - help organize;
 - ask prompting questions;
-- help the user turn rough notes into a coherent testimony after the user supplies the substance.
+- help the user turn rough notes into a coherent Heart or Testimony after the user supplies the substance.
 
 AI must not:
 
 - invent an experience and present it as the user's;
 - fabricate answered prayer, healing, provision, encounter, conversion, or personal history;
+- silently manufacture Heart or Testimony when the user has not expressed it;
 - silently add details that change what happened.
 
 ## 2. Preserve originals
@@ -74,7 +75,7 @@ When extracting a structured C.H.A.T. from conversation:
 - Application may summarize how the user said the passage applies to them and how they intend to respond.
 - Testimony may organize a user-authored testimony, declaration of faith or conviction, commitment, prayer, or statement of belief. It must rely on the user's expressed substance.
 
-If no testimony exists, the system should leave Testimony empty or invite the user to add one rather than fabricate it.
+If no Heart or Testimony exists, the system should leave that section empty or invite the user to add it rather than fabricate it.
 
 ## 6. Suggested verses
 

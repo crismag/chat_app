@@ -1,0 +1,274 @@
+{
+  "evaluated_at": "2026-08-15T05:17:48Z",
+  "contract_id": "vibe-project-delivery-acceptance-v5",
+  "contract_version": 5,
+  "session_root": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df",
+  "artifacts": {
+    "execute_receipt_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/phase-execute.json",
+    "cleanup_receipt_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/cleanup-receipt.json",
+    "requirement_doc_path": "/mnt/ai/workspaces/chat_app/docs/requirements/2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri.md",
+    "execution_plan_path": "/mnt/ai/workspaces/chat_app/docs/plans/2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri-execution-plan.md",
+    "execution_manifest_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/execution-manifest.json",
+    "runtime_input_packet_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/runtime-input-packet.json"
+  },
+  "summary": {
+    "gate_result": "FAIL",
+    "completion_language_allowed": false,
+    "runtime_status": "completed_with_failures",
+    "readiness_state": "verification_failed",
+    "manual_review_layer_count": 0,
+    "failing_layer_count": 3,
+    "degraded_layer_count": 0,
+    "forbidden_completion_hit_count": 1,
+    "incomplete_layers": [
+      "engineering_verification_truth",
+      "workflow_completion_truth",
+      "product_acceptance_truth"
+    ],
+    "manual_spot_check_count": 0,
+    "code_task_tdd_evidence_requirement_count": 4,
+    "artifact_review_requirement_count": 0,
+    "baseline_document_quality_dimension_count": 0,
+    "baseline_ui_quality_dimension_count": 0
+  },
+  "truth_results": {
+    "governance_truth": {
+      "state": "passing",
+      "success": true,
+      "completion_language_allowed": true,
+      "evidence": [
+        "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/phase-execute.json",
+        "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/cleanup-receipt.json",
+        "/mnt/ai/workspaces/chat_app/docs/requirements/2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri.md",
+        "/mnt/ai/workspaces/chat_app/docs/plans/2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri-execution-plan.md",
+        "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/execution-manifest.json"
+      ],
+      "notes": ""
+    },
+    "engineering_verification_truth": {
+      "state": "partial",
+      "success": false,
+      "completion_language_allowed": false,
+      "evidence": [
+        "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/execution-manifest.json"
+      ],
+      "notes": "Execution verification completed with failing or timed-out units."
+    },
+    "specialist_disclosure_truth": {
+      "state": "passing",
+      "success": true,
+      "completion_language_allowed": true,
+      "evidence": [
+        "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/runtime-input-packet.json",
+        "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/phase-execute.json",
+        "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/execution-manifest.json"
+      ],
+      "notes": "Specialist disclosure stayed aligned with effective approved dispatch."
+    },
+    "specialist_decision_truth": {
+      "state": "passing",
+      "success": true,
+      "completion_language_allowed": true,
+      "evidence": [
+        "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/phase-execute.json"
+      ],
+      "notes": "Specialist decision stayed aligned with approved dispatch."
+    },
+    "code_task_tdd_evidence_truth": {
+      "state": "passing",
+      "success": true,
+      "completion_language_allowed": true,
+      "evidence": [
+        "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/tdd-evidence.json",
+        "tdd/red.txt",
+        "tdd/green.txt",
+        "tdd/mapping.md"
+      ],
+      "notes": "Failing-first API tests were recorded in tdd/red.txt before the conversation, library, community, publication, and C.H.A.T. extraction routes existed. After implementation, targeted web and API tests passed in tdd/green.txt. Behavior-to-test mapping is in tdd/mapping.md. No TDD exception was used."
+    },
+    "workflow_completion_truth": {
+      "state": "partial",
+      "success": false,
+      "completion_language_allowed": false,
+      "evidence": [
+        "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/phase-execute.json",
+        "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/cleanup-receipt.json",
+        "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/specialist-execution.json",
+        "specialist-scrapling-finding.md",
+        "specialist-spreadsheet-finding.md"
+      ],
+      "notes": "Workflow closed with failed units still present."
+    },
+    "artifact_review_truth": {
+      "state": "passing",
+      "success": true,
+      "completion_language_allowed": true,
+      "evidence": [],
+      "notes": ""
+    },
+    "product_acceptance_truth": {
+      "state": "partial",
+      "success": false,
+      "completion_language_allowed": false,
+      "evidence": [
+        "/mnt/ai/workspaces/chat_app/docs/requirements/2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri.md"
+      ],
+      "notes": "Product acceptance cannot pass while engineering verification remains partial."
+    }
+  },
+  "artifact_review_coverage": {
+    "covered_baseline_document_quality_dimensions": [],
+    "missing_baseline_document_quality_dimensions": [],
+    "covered_baseline_ui_quality_dimensions": [],
+    "missing_baseline_ui_quality_dimensions": [],
+    "covered_task_specific_acceptance_extensions": [],
+    "missing_task_specific_acceptance_extensions": [],
+    "considered_research_augmentation_sources": [],
+    "missing_research_augmentation_sources": []
+  },
+  "tdd_evidence_coverage": {
+    "covered_code_task_tdd_evidence_requirements": [
+      "Record failing-first evidence for the changed behavior before implementation or defect correction.",
+      "Record the green rerun that proves the targeted behavior passed after implementation.",
+      "Map the changed behavior to targeted verification evidence; generic suite success alone is insufficient.",
+      "If automated failing-first evidence is not appropriate, freeze and honor an explicit code-task TDD exception instead of silently skipping the requirement."
+    ],
+    "missing_code_task_tdd_evidence_requirements": [],
+    "covered_code_task_tdd_exceptions": [],
+    "missing_code_task_tdd_exceptions": [],
+    "red_phase_evidence_paths": [
+      "tdd/red.txt"
+    ],
+    "green_phase_evidence_paths": [
+      "tdd/green.txt"
+    ],
+    "refactor_phase_evidence_paths": []
+  },
+  "frozen_requirement_sections": {
+    "product_acceptance_criteria": [
+      "Requirement document is frozen before execution.",
+      "Execution plan exists before implementation.",
+      "Verification evidence exists before completion claims.",
+      "Phase cleanup receipt is produced.",
+      "The delivered output must satisfy observable behavior implied by the frozen goal and deliverable, not only internal runtime progress.",
+      "Full completion wording is allowed only after downstream delivery truth is passing."
+    ],
+    "manual_spot_checks": [],
+    "completion_language_policy": [
+      "Full completion wording is allowed only when governance truth, engineering verification truth, workflow completion truth, and product acceptance truth are all passing.",
+      "`completed_with_failures`, degraded execution, or pending manual actions must be reported as non-complete states.",
+      "If manual spot checks remain pending, the run must be described as requiring manual review rather than fully ready."
+    ],
+    "delivery_truth_contract": [
+      "Governance truth: requirement, plan, execution, and cleanup artifacts remain traceable and authoritative.",
+      "Engineering verification truth: targeted verification passes or fails explicitly; silence does not count as success.",
+      "Workflow completion truth: planned units, delegated lanes, and specialist outputs reconcile back into the governed plan.",
+      "Product acceptance truth: observable deliverable behavior satisfies frozen acceptance criteria before full completion language is allowed."
+    ],
+    "artifact_review_requirements": [],
+    "code_task_tdd_evidence_requirements": [
+      "Record failing-first evidence for the changed behavior before implementation or defect correction.",
+      "Record the green rerun that proves the targeted behavior passed after implementation.",
+      "Map the changed behavior to targeted verification evidence; generic suite success alone is insufficient.",
+      "If automated failing-first evidence is not appropriate, freeze and honor an explicit code-task TDD exception instead of silently skipping the requirement."
+    ],
+    "code_task_tdd_exceptions": [],
+    "baseline_document_quality_dimensions": [],
+    "baseline_ui_quality_dimensions": [],
+    "task_specific_acceptance_extensions": [],
+    "research_augmentation_sources": []
+  },
+  "execution_context": {
+    "run_id": "20260815T050438Z-edafd6df",
+    "session_root": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df",
+    "governance_scope": "root",
+    "completion_claim_allowed": true,
+    "cleanup_mode": "receipt_only",
+    "execution_status": "completed_with_failures",
+    "executed_unit_count": 4,
+    "failed_unit_count": 1,
+    "timed_out_unit_count": 0,
+    "execution_plan_contains_delivery_acceptance_plan": true,
+    "tdd_evidence_source_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/tdd-evidence.json",
+    "code_task_tdd_evidence_state": "passing",
+    "artifact_review_source_path": "",
+    "artifact_review_state": "passing",
+    "specialist_decision_source_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/phase-execute.json",
+    "specialist_execution_source_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/specialist-execution.json",
+    "specialist_execution_sidecar_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/specialist-execution.json",
+    "approved_dispatch_skill_ids": [
+      "scrapling",
+      "spreadsheet"
+    ],
+    "disclosed_specialist_skill_ids": [
+      "scrapling",
+      "spreadsheet"
+    ],
+    "direct_routed_specialist_unit_ids": [
+      "specialist-in_execution-ungrouped-scrapling-specialist",
+      "specialist-in_execution-ungrouped-spreadsheet-specialist"
+    ],
+    "direct_routed_specialist_skill_ids": [
+      "scrapling",
+      "spreadsheet"
+    ],
+    "direct_routed_specialist_units": [
+      {
+        "unit_id": "specialist-in_execution-ungrouped-scrapling-specialist",
+        "skill_id": "scrapling",
+        "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+        "result_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/execution-results/specialist-in_execution-ungrouped-scrapling-specialist.json"
+      },
+      {
+        "unit_id": "specialist-in_execution-ungrouped-spreadsheet-specialist",
+        "skill_id": "spreadsheet",
+        "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+        "result_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/execution-results/specialist-in_execution-ungrouped-spreadsheet-specialist.json"
+      }
+    ],
+    "specialist_host_resolution_state": "executed",
+    "specialist_host_executed_unit_count": 2,
+    "specialist_host_degraded_unit_count": 0,
+    "specialist_host_blocked_unit_count": 0,
+    "specialist_host_failed_unit_count": 0,
+    "specialist_host_resolved_units": [
+      {
+        "unit_id": "specialist-in_execution-ungrouped-scrapling-specialist",
+        "skill_id": "scrapling",
+        "resolution_state": "executed",
+        "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+        "evidence_paths": [
+          "specialist-scrapling-finding.md"
+        ],
+        "notes": "Consulted scrapling skill. No URL extraction work exists in C.H.A.T.; recorded not-applicable finding and did not scrape."
+      },
+      {
+        "unit_id": "specialist-in_execution-ungrouped-spreadsheet-specialist",
+        "skill_id": "spreadsheet",
+        "resolution_state": "executed",
+        "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+        "evidence_paths": [
+          "specialist-spreadsheet-finding.md"
+        ],
+        "notes": "Consulted spreadsheet skill. No workbook deliverable exists in C.H.A.T.; recorded not-applicable finding and did not create spreadsheets."
+      }
+    ],
+    "specialist_host_missing_unit_ids": [],
+    "runtime_specialist_execution_status": "direct_current_session_routed",
+    "specialist_effective_execution_status": "host_current_session_executed",
+    "specialist_host_continuation_pending": false,
+    "specialist_disclosure_state": "passing",
+    "specialist_execution_notes": []
+  },
+  "forbidden_completion_hits": [
+    {
+      "source": "runtime_status",
+      "value": "completed_with_failures",
+      "reason": "partial execution cannot be reported as full downstream delivery"
+    }
+  ],
+  "manual_spot_checks": [],
+  "residual_risks": [
+    "1 execution unit(s) failed."
+  ]
+}

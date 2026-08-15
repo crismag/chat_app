@@ -1,0 +1,44 @@
+
+> chat-app@0.1.0 test
+> npm run test --workspaces --if-present
+
+
+> web_app@0.1.0 test
+> vitest run
+
+
+ RUN  v4.1.10 /mnt/ai/workspaces/chat_app/web_app
+
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  01:17:00
+   Duration  352ms (transform 79ms, setup 26ms, import 123ms, tests 62ms, environment 86ms)
+
+
+> api@0.1.0 test
+> vitest run
+
+
+ RUN  v4.1.10 /mnt/ai/workspaces/chat_app/api
+
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  01:17:00
+   Duration  404ms (transform 35ms, setup 0ms, import 55ms, tests 287ms, environment 0ms)
+
+
+> @chat/shared@0.1.0 test
+> vitest run
+
+
+ RUN  v4.1.10 /mnt/ai/workspaces/chat_app/packages/shared
+
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  01:17:01
+   Duration  77ms (transform 12ms, setup 0ms, import 17ms, tests 2ms, environment 0ms)
+
+EXIT:0

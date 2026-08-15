@@ -1,0 +1,55 @@
+{
+  "ok": true,
+  "status": "backend_read",
+  "lane": "cognee",
+  "store_path": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/.vibeskills/memory/workspace-memory-plane.jsonl",
+  "project_key": "vibe",
+  "project_key_source": "workspace_plane",
+  "item_count": 3,
+  "items": [
+    "Cognee relation: design-react-vite-typescript-tailwind-cris-archon-ui-cockpit-fro specified_by 2026-05-07-design-react-vite-typescript-tailwind-cris-archon-ui-cockpit-fro.md",
+    "Cognee relation: design-react-vite-typescript-tailwind-cris-archon-ui-cockpit-fro planned_in 2026-05-07-design-react-vite-typescript-tailwind-cris-archon-ui-cockpit-fro-execution-plan.md",
+    "Cognee relation: design-react-vite-typescript-tailwind-cris-archon-ui-cockpit-fro executed_as execution-manifest.json"
+  ],
+  "capsule_count": 3,
+  "capsules": [
+    {
+      "capsule_id": "970df6176e87c6d4",
+      "owner": "Cognee",
+      "lane": "cognee",
+      "kind": "entity_relation_ingest",
+      "disclosure_level": "bounded",
+      "summary": "specified_by",
+      "updated_at": "2026-05-07T13:45:57Z"
+    },
+    {
+      "capsule_id": "9b7366ecb9303eb5",
+      "owner": "Cognee",
+      "lane": "cognee",
+      "kind": "entity_relation_ingest",
+      "disclosure_level": "bounded",
+      "summary": "planned_in",
+      "updated_at": "2026-05-07T13:45:57Z"
+    },
+    {
+      "capsule_id": "bfd22874c5c6a871",
+      "owner": "Cognee",
+      "lane": "cognee",
+      "kind": "entity_relation_ingest",
+      "disclosure_level": "bounded",
+      "summary": "executed_as",
+      "updated_at": "2026-05-07T13:45:57Z"
+    }
+  ],
+  "suppressed_count": 0,
+  "workspace_memory_plane": {
+    "schema_version": 1,
+    "workspace_root": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe",
+    "workspace_sidecar_root": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/.vibeskills",
+    "descriptor_path": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/.vibeskills/project.json",
+    "workspace_id": "ws:63c900a29f23316cb4389aff",
+    "plane_path": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/.vibeskills/memory/workspace-memory-plane.jsonl"
+  },
+  "driver_mode": "compatibility_shell",
+  "generated_at": "2026-08-15T05:01:47Z"
+}

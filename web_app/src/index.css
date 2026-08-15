@@ -1,0 +1,7 @@
+/*
+ * Entry point for styling. Order matters: tokens define the vocabulary, base
+ * applies it to bare elements, ui builds the shared components on top.
+ */
+@import './styles/tokens.css';
+@import './styles/base.css';
+@import './styles/ui.css';

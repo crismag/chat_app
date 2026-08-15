@@ -1,0 +1,194 @@
+{
+  "stage": "plan_execute",
+  "run_id": "20260815T050438Z-edafd6df",
+  "governance_scope": "root",
+  "mode": "interactive_governed",
+  "internal_grade": "L",
+  "status": "completed_with_failures",
+  "requirement_doc_path": "/mnt/ai/workspaces/chat_app/docs/requirements/2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri.md",
+  "execution_plan_path": "/mnt/ai/workspaces/chat_app/docs/plans/2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri-execution-plan.md",
+  "runtime_input_packet_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/runtime-input-packet.json",
+  "execution_memory_context_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/memory-activation/execution-context-pack.json",
+  "plan_shadow_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/plan-derived-execution-shadow.json",
+  "execution_manifest_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/execution-manifest.json",
+  "execution_proof_manifest_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/execution-proof/manifest.json",
+  "execution_topology_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/execution-topology.json",
+  "executed_unit_count": 4,
+  "successful_unit_count": 3,
+  "failed_unit_count": 1,
+  "delegated_lane_count": 2,
+  "review_receipt_count": 4,
+  "specialist_recommendation_count": 2,
+  "specialist_dispatch_unit_count": 2,
+  "attempted_specialist_unit_count": 0,
+  "executed_specialist_unit_count": 0,
+  "failed_specialist_unit_count": 0,
+  "direct_routed_specialist_unit_count": 2,
+  "blocked_specialist_unit_count": 0,
+  "degraded_specialist_unit_count": 0,
+  "specialist_dispatch_outcome_count": 2,
+  "specialist_execution_status": "direct_current_session_routed",
+  "specialist_skills": [
+    "scrapling",
+    "spreadsheet"
+  ],
+  "auto_approved_specialist_unit_count": 0,
+  "local_specialist_suggestion_count": 0,
+  "specialist_decision": {
+    "decision_state": "approved_dispatch",
+    "resolution_mode": "approved_dispatch",
+    "recommendation_count": 2,
+    "candidate_skill_ids_reviewed": [
+      "scrapling",
+      "spreadsheet"
+    ],
+    "selected_skill_ids": [
+      "scrapling",
+      "spreadsheet"
+    ],
+    "rejected_candidates": [],
+    "matched_skill_ids": [],
+    "surfaced_skill_ids": [
+      "scrapling",
+      "spreadsheet"
+    ],
+    "approved_dispatch_skill_ids": [
+      "scrapling",
+      "spreadsheet"
+    ],
+    "local_suggestion_skill_ids": [],
+    "blocked_skill_ids": [],
+    "degraded_skill_ids": [],
+    "repo_asset_fallback": {
+      "used": false,
+      "asset_paths": [],
+      "reason": "",
+      "legal_basis": "",
+      "traceability_basis": []
+    },
+    "notes": "Bounded specialist recommendations were surfaced and promoted into effective approved dispatch.",
+    "source": "runtime_structural_projection",
+    "override_source_path": null
+  },
+  "specialist_user_disclosure": {
+    "enabled": true,
+    "stage": "plan_execute",
+    "mode": "approved_dispatch_pre_execution_unified_once",
+    "timing": "before_execution",
+    "scope": "approved_dispatch_only",
+    "aggregation": "unified_once",
+    "path_source": "native_skill_entrypoint",
+    "routed_skill_count": 2,
+    "routed_skills": [
+      {
+        "skill_id": "scrapling",
+        "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+        "native_skill_entrypoint_raw": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+        "entrypoint_path_state": "resolved",
+        "entrypoint_missing": false,
+        "entrypoint_path_invalid": false,
+        "entrypoint_requirement_satisfied": true,
+        "native_skill_description": "\"CLI-first web scraping & content extraction with optional MCP server. Use when you have target URLs and need clean, selector-based outputs (html/md/txt).\"",
+        "dispatch_phase": "in_execution",
+        "write_scope": "specialist:scrapling",
+        "review_mode": "native_contract"
+      },
+      {
+        "skill_id": "spreadsheet",
+        "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+        "native_skill_entrypoint_raw": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+        "entrypoint_path_state": "resolved",
+        "entrypoint_missing": false,
+        "entrypoint_path_invalid": false,
+        "entrypoint_requirement_satisfied": true,
+        "native_skill_description": "\"Use when tasks involve creating, editing, analyzing, or formatting spreadsheets (`.xlsx`, `.csv`, `.tsv`) using Python (`openpyxl`, `pandas`), especially when formulas, references, and formatting need to be preserved and verified.\"",
+        "dispatch_phase": "in_execution",
+        "write_scope": "specialist:spreadsheet",
+        "review_mode": "native_contract"
+      }
+    ],
+    "rendered_text": "Pre-dispatch specialist disclosure:\n- scrapling -> /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md\n- spreadsheet -> /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md"
+  },
+  "dispatch_integrity_proof_passed": true,
+  "dispatch_integrity": {
+    "recommendation_skill_ids": [
+      "scrapling",
+      "spreadsheet"
+    ],
+    "recommendation_resolution_keys": [
+      "in_execution|scrapling",
+      "in_execution|spreadsheet"
+    ],
+    "matched_skill_ids": [],
+    "surfaced_skill_ids": [
+      "scrapling",
+      "spreadsheet"
+    ],
+    "approved_dispatch_skill_ids": [
+      "scrapling",
+      "spreadsheet"
+    ],
+    "approved_dispatch_resolution_keys": [
+      "in_execution|scrapling",
+      "in_execution|spreadsheet"
+    ],
+    "local_suggestion_skill_ids": [],
+    "local_suggestion_resolution_keys": [],
+    "blocked_skill_ids": [],
+    "degraded_skill_ids": [],
+    "ghost_match_skill_ids": [],
+    "executed_specialist_skill_ids": [],
+    "executed_specialist_resolution_keys": [],
+    "direct_routed_specialist_skill_ids": [
+      "scrapling",
+      "spreadsheet"
+    ],
+    "direct_routed_specialist_resolution_keys": [
+      "in_execution|scrapling",
+      "in_execution|spreadsheet"
+    ],
+    "resolved_specialist_skill_ids": [
+      "scrapling",
+      "spreadsheet"
+    ],
+    "resolved_specialist_resolution_keys": [
+      "in_execution|scrapling",
+      "in_execution|spreadsheet"
+    ],
+    "approved_dispatch_subset_of_recommendations": true,
+    "inherited_root_approval_allowed": false,
+    "approved_dispatch_supported_by_recommendation_or_inherited_approval": true,
+    "approved_dispatch_fully_executed": false,
+    "approved_dispatch_fully_resolved": true,
+    "executed_specialists_subset_of_approved_dispatch": true,
+    "routed_specialists_subset_of_approved_dispatch": true,
+    "local_suggestions_contained": true,
+    "native_contract_complete_for_approved_dispatch": true,
+    "matched_skills_resolved": true,
+    "approved_dispatch_missing_from_recommendations": [],
+    "approved_dispatch_missing_from_recommendations_resolution_keys": [],
+    "approved_dispatch_not_executed": [
+      "in_execution|scrapling",
+      "in_execution|spreadsheet"
+    ],
+    "approved_dispatch_not_resolved": [],
+    "executed_without_approval": [],
+    "routed_without_approval": [],
+    "local_suggestions_executed_without_approval": [],
+    "dispatch_contract_incomplete_skill_ids": [],
+    "proof_passed": true
+  },
+  "escalation_required": false,
+  "escalation_request_path": null,
+  "specialist_dispatch_resolution_path": null,
+  "completion_claim_allowed": true,
+  "proof_class": "runtime",
+  "verification_contract": [
+    "No completion claim without verification evidence.",
+    "All subagent prompts must end with $vibe.",
+    "Specialist help must preserve native workflow and remain bounded under vibe governance.",
+    "Child-governed lanes may not issue final completion claims or mutate canonical requirement/plan truth.",
+    "Phase cleanup must run after execution."
+  ],
+  "generated_at": "2026-08-15T05:04:44Z"
+}

@@ -52,7 +52,7 @@ For grammar/polish/rewrite actions:
 - record enough provenance to distinguish user text from AI-assisted text where practical;
 - require deliberate acceptance for replacement when the UI supports editing suggestions.
 
-Testimony must receive stricter handling than ordinary generated copy. Do not invent first-person testimony and attribute it to the user.
+Heart and Testimony must receive stricter handling than ordinary generated copy. Do not invent the person's inner response, first-person testimony, declaration, commitment, or prayer and attribute it to the user.
 
 ## 5. AI actions must be explicit
 
@@ -83,7 +83,7 @@ For shareable visual content:
 - image generation may create background artwork;
 - application code renders final text;
 - Scripture/reference text must be deterministic;
-- user testimony text must remain editable;
+- user Heart and Testimony text must remain editable;
 - typography and spacing are controlled by the Create engine.
 
 Avoid sending the complete final poster to an image model and trusting it to spell and typeset the content.

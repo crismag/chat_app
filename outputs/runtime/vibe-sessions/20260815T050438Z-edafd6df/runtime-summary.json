@@ -1,0 +1,716 @@
+{
+  "run_id": "20260815T050438Z-edafd6df",
+  "governance_scope": "root",
+  "mode": "interactive_governed",
+  "task": "implement full C.H.A.T. web application React TypeScript Vite; private Scripture... Deliverable: Governed implementation artifacts, verification evidence, and cleanup receipts. Constraints: Do not bypass the fixed six-stage governed runtime.; Do not widen scope silently beyond the frozen requirement document.. Update: implement full C.H.A.T. web application React TypeScript Vite; private Scripture conversation library community create-engine; Context Heart Application Testimony; existing Phase 0 scaffold",
+  "generated_at": "2026-08-15T05:04:44Z",
+  "artifact_root": "/mnt/ai/workspaces/chat_app",
+  "session_root": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df",
+  "session_root_relative": "outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df",
+  "hierarchy": {
+    "root_run_id": "20260815T050438Z-edafd6df",
+    "parent_run_id": null,
+    "parent_unit_id": null,
+    "inherited_requirement_doc_path": null,
+    "inherited_execution_plan_path": null,
+    "delegation_envelope_path": null
+  },
+  "stage_order": [
+    "skeleton_check",
+    "deep_interview",
+    "requirement_doc",
+    "xl_plan",
+    "plan_execute",
+    "phase_cleanup"
+  ],
+  "executed_stage_order": [
+    "skeleton_check",
+    "deep_interview",
+    "requirement_doc",
+    "xl_plan",
+    "plan_execute",
+    "phase_cleanup"
+  ],
+  "terminal_stage": "phase_cleanup",
+  "artifacts": {
+    "skeleton_receipt": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/skeleton-receipt.json",
+    "runtime_input_packet": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/runtime-input-packet.json",
+    "governance_capsule": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/governance-capsule.json",
+    "stage_lineage": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/stage-lineage.json",
+    "intent_contract": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/intent-contract.json",
+    "requirement_doc": "/mnt/ai/workspaces/chat_app/docs/requirements/2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri.md",
+    "requirement_receipt": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/requirement-doc-receipt.json",
+    "execution_plan": "/mnt/ai/workspaces/chat_app/docs/plans/2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri-execution-plan.md",
+    "execution_plan_receipt": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/execution-plan-receipt.json",
+    "execute_receipt": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/phase-execute.json",
+    "execution_manifest": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/execution-manifest.json",
+    "execution_topology": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/execution-topology.json",
+    "execution_proof_manifest": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/execution-proof/manifest.json",
+    "discussion_specialist_consultation": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/discussion-specialist-consultation.json",
+    "planning_specialist_consultation": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/planning-specialist-consultation.json",
+    "specialist_lifecycle_disclosure": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/specialist-lifecycle-disclosure.json",
+    "host_stage_disclosure": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/host-stage-disclosure.json",
+    "host_user_briefing": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/host-user-briefing.md",
+    "cleanup_receipt": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/cleanup-receipt.json",
+    "delivery_acceptance_report": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/delivery-acceptance-report.json",
+    "delivery_acceptance_markdown": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/delivery-acceptance-report.md",
+    "memory_activation_report": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/memory-activation/memory-activation-report.json",
+    "memory_activation_markdown": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/memory-activation/memory-activation-report.md",
+    "delegation_envelope": null,
+    "delegation_validation_receipt": null
+  },
+  "storage": {
+    "workspace_root": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe",
+    "workspace_sidecar_root": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/.vibeskills",
+    "project_descriptor_path": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/.vibeskills/project.json",
+    "artifact_root": "/mnt/ai/workspaces/chat_app",
+    "artifact_root_source": "explicit_override",
+    "default_workspace_sidecar_artifact_root": false,
+    "host_sidecar_root": "/home/cris/.cursor/.vibeskills",
+    "workspace_memory_identity_root": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/.vibeskills/project.json",
+    "workspace_memory_identity_scope": "workspace",
+    "workspace_memory_driver_contract": "workspace_shared_memory_v1",
+    "workspace_memory_logical_owners": [
+      "state_store",
+      "serena",
+      "ruflo",
+      "cognee"
+    ]
+  },
+  "memory_activation": {
+    "policy_mode": "shadow",
+    "routing_contract": "advisory_first_post_route_only",
+    "fallback_event_count": 4,
+    "artifact_count": 7,
+    "budget_guard_respected": true
+  },
+  "delivery_acceptance": {
+    "gate_result": "FAIL",
+    "completion_language_allowed": false,
+    "readiness_state": "verification_failed",
+    "manual_review_layer_count": 1,
+    "failing_layer_count": 3
+  },
+  "specialist_decision": {
+    "decision_state": "approved_dispatch",
+    "resolution_mode": "approved_dispatch",
+    "recommendation_count": 2,
+    "candidate_skill_ids_reviewed": [
+      "scrapling",
+      "spreadsheet"
+    ],
+    "selected_skill_ids": [
+      "scrapling",
+      "spreadsheet"
+    ],
+    "rejected_candidates": [],
+    "matched_skill_ids": [],
+    "surfaced_skill_ids": [
+      "scrapling",
+      "spreadsheet"
+    ],
+    "approved_dispatch_skill_ids": [
+      "scrapling",
+      "spreadsheet"
+    ],
+    "local_suggestion_skill_ids": [],
+    "blocked_skill_ids": [],
+    "degraded_skill_ids": [],
+    "repo_asset_fallback": {
+      "used": false,
+      "asset_paths": [],
+      "reason": "",
+      "legal_basis": "",
+      "traceability_basis": []
+    },
+    "notes": "Bounded specialist recommendations were surfaced and promoted into effective approved dispatch.",
+    "source": "runtime_structural_projection",
+    "override_source_path": null
+  },
+  "specialist_user_disclosure": {
+    "enabled": true,
+    "stage": "plan_execute",
+    "mode": "approved_dispatch_pre_execution_unified_once",
+    "timing": "before_execution",
+    "scope": "approved_dispatch_only",
+    "aggregation": "unified_once",
+    "path_source": "native_skill_entrypoint",
+    "routed_skill_count": 2,
+    "routed_skills": [
+      {
+        "skill_id": "scrapling",
+        "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+        "native_skill_entrypoint_raw": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+        "entrypoint_path_state": "resolved",
+        "entrypoint_missing": false,
+        "entrypoint_path_invalid": false,
+        "entrypoint_requirement_satisfied": true,
+        "native_skill_description": "\"CLI-first web scraping & content extraction with optional MCP server. Use when you have target URLs and need clean, selector-based outputs (html/md/txt).\"",
+        "dispatch_phase": "in_execution",
+        "write_scope": "specialist:scrapling",
+        "review_mode": "native_contract"
+      },
+      {
+        "skill_id": "spreadsheet",
+        "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+        "native_skill_entrypoint_raw": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+        "entrypoint_path_state": "resolved",
+        "entrypoint_missing": false,
+        "entrypoint_path_invalid": false,
+        "entrypoint_requirement_satisfied": true,
+        "native_skill_description": "\"Use when tasks involve creating, editing, analyzing, or formatting spreadsheets (`.xlsx`, `.csv`, `.tsv`) using Python (`openpyxl`, `pandas`), especially when formulas, references, and formatting need to be preserved and verified.\"",
+        "dispatch_phase": "in_execution",
+        "write_scope": "specialist:spreadsheet",
+        "review_mode": "native_contract"
+      }
+    ],
+    "rendered_text": "Pre-dispatch specialist disclosure:\n- scrapling -> /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md\n- spreadsheet -> /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md"
+  },
+  "specialist_consultation": {
+    "enabled": true,
+    "window_count": 2,
+    "approved_consultation_count": 4,
+    "consulted_unit_count": 0,
+    "routed_unit_count": 4,
+    "user_disclosure_count": 4,
+    "freeze_gate_passed": true,
+    "freeze_gate_error_count": 0,
+    "windows": [
+      {
+        "window_id": "discussion",
+        "stage": "deep_interview",
+        "approved_consultation_count": 2,
+        "consulted_unit_count": 0,
+        "routed_unit_count": 2,
+        "user_disclosure_count": 2,
+        "approved_skill_ids": [
+          "scrapling",
+          "spreadsheet"
+        ],
+        "consulted_skill_ids": null,
+        "routed_skill_ids": [
+          "scrapling",
+          "spreadsheet"
+        ],
+        "deferred_skill_ids": null,
+        "degraded_skill_ids": null,
+        "freeze_gate_passed": true,
+        "freeze_gate_error_count": 0
+      },
+      {
+        "window_id": "planning",
+        "stage": "requirement_doc",
+        "approved_consultation_count": 2,
+        "consulted_unit_count": 0,
+        "routed_unit_count": 2,
+        "user_disclosure_count": 2,
+        "approved_skill_ids": [
+          "scrapling",
+          "spreadsheet"
+        ],
+        "consulted_skill_ids": null,
+        "routed_skill_ids": [
+          "scrapling",
+          "spreadsheet"
+        ],
+        "deferred_skill_ids": null,
+        "degraded_skill_ids": null,
+        "freeze_gate_passed": true,
+        "freeze_gate_error_count": 0
+      }
+    ]
+  },
+  "specialist_lifecycle_disclosure": {
+    "enabled": true,
+    "truth_model": "routing_consultation_execution_separated",
+    "layer_count": 4,
+    "skill_count": 2,
+    "skill_ids": [
+      "scrapling",
+      "spreadsheet"
+    ],
+    "layers": [
+      {
+        "layer_id": "discussion_routing",
+        "truth_layer": "routing",
+        "stage": "runtime_input_freeze",
+        "skill_count": 2,
+        "skills": [
+          {
+            "skill_id": "scrapling",
+            "why_now": "top ranked specialist candidate from pack 'web-scraping' via fallback_task_default",
+            "source": "route_ranked",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+            "native_skill_description": "\"CLI-first web scraping & content extraction with optional MCP server. Use when you have target URLs and need clean, selector-based outputs (html/md/txt).\"",
+            "state": "routed"
+          },
+          {
+            "skill_id": "spreadsheet",
+            "why_now": "top ranked specialist candidate from pack 'docs-media' via fallback_task_default",
+            "source": "route_ranked",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+            "native_skill_description": "\"Use when tasks involve creating, editing, analyzing, or formatting spreadsheets (`.xlsx`, `.csv`, `.tsv`) using Python (`openpyxl`, `pandas`), especially when formulas, references, and formatting need to be preserved and verified.\"",
+            "state": "routed"
+          }
+        ],
+        "rendered_text": "Discussion-chain routed Skills:\n- scrapling: top ranked specialist candidate from pack 'web-scraping' via fallback_task_default (/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md)\n- spreadsheet: top ranked specialist candidate from pack 'docs-media' via fallback_task_default (/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md)"
+      },
+      {
+        "layer_id": "discussion_consultation",
+        "truth_layer": "consultation",
+        "stage": "deep_interview",
+        "skill_count": 2,
+        "skills": [
+          {
+            "skill_id": "scrapling",
+            "why_now": "top ranked specialist candidate from pack 'web-scraping' via fallback_task_default",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+            "native_skill_description": "\"CLI-first web scraping & content extraction with optional MCP server. Use when you have target URLs and need clean, selector-based outputs (html/md/txt).\"",
+            "state": "routed_pending_current_session",
+            "summary": "Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(scrapling) unless that skill name is explicitly visible in the host registry."
+          },
+          {
+            "skill_id": "spreadsheet",
+            "why_now": "top ranked specialist candidate from pack 'docs-media' via fallback_task_default",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+            "native_skill_description": "\"Use when tasks involve creating, editing, analyzing, or formatting spreadsheets (`.xlsx`, `.csv`, `.tsv`) using Python (`openpyxl`, `pandas`), especially when formulas, references, and formatting need to be preserved and verified.\"",
+            "state": "routed_pending_current_session",
+            "summary": "Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(spreadsheet) unless that skill name is explicitly visible in the host registry."
+          }
+        ],
+        "rendered_text": "Specialist consultation routing during discussion:\n- scrapling: top ranked specialist candidate from pack 'web-scraping' via fallback_task_default (/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md)\n- spreadsheet: top ranked specialist candidate from pack 'docs-media' via fallback_task_default (/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md)"
+      },
+      {
+        "layer_id": "planning_consultation",
+        "truth_layer": "consultation",
+        "stage": "requirement_doc",
+        "skill_count": 2,
+        "skills": [
+          {
+            "skill_id": "scrapling",
+            "why_now": "top ranked specialist candidate from pack 'web-scraping' via fallback_task_default",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+            "native_skill_description": "\"CLI-first web scraping & content extraction with optional MCP server. Use when you have target URLs and need clean, selector-based outputs (html/md/txt).\"",
+            "state": "routed_pending_current_session",
+            "summary": "Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(scrapling) unless that skill name is explicitly visible in the host registry."
+          },
+          {
+            "skill_id": "spreadsheet",
+            "why_now": "top ranked specialist candidate from pack 'docs-media' via fallback_task_default",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+            "native_skill_description": "\"Use when tasks involve creating, editing, analyzing, or formatting spreadsheets (`.xlsx`, `.csv`, `.tsv`) using Python (`openpyxl`, `pandas`), especially when formulas, references, and formatting need to be preserved and verified.\"",
+            "state": "routed_pending_current_session",
+            "summary": "Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(spreadsheet) unless that skill name is explicitly visible in the host registry."
+          }
+        ],
+        "rendered_text": "Specialist consultation routing during planning:\n- scrapling: top ranked specialist candidate from pack 'web-scraping' via fallback_task_default (/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md)\n- spreadsheet: top ranked specialist candidate from pack 'docs-media' via fallback_task_default (/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md)"
+      },
+      {
+        "layer_id": "execution_dispatch",
+        "truth_layer": "execution",
+        "stage": "plan_execute",
+        "skill_count": 2,
+        "skills": [
+          {
+            "skill_id": "scrapling",
+            "why_now": "approved for execution-time specialist dispatch under governed vibe",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+            "native_skill_entrypoint_raw": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+            "entrypoint_path_state": "resolved",
+            "entrypoint_missing": false,
+            "entrypoint_path_invalid": false,
+            "native_skill_description": "\"CLI-first web scraping & content extraction with optional MCP server. Use when you have target URLs and need clean, selector-based outputs (html/md/txt).\"",
+            "state": "disclosed_for_execution"
+          },
+          {
+            "skill_id": "spreadsheet",
+            "why_now": "approved for execution-time specialist dispatch under governed vibe",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+            "native_skill_entrypoint_raw": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+            "entrypoint_path_state": "resolved",
+            "entrypoint_missing": false,
+            "entrypoint_path_invalid": false,
+            "native_skill_description": "\"Use when tasks involve creating, editing, analyzing, or formatting spreadsheets (`.xlsx`, `.csv`, `.tsv`) using Python (`openpyxl`, `pandas`), especially when formulas, references, and formatting need to be preserved and verified.\"",
+            "state": "disclosed_for_execution"
+          }
+        ],
+        "rendered_text": "Execution-chain specialist disclosure:\n- scrapling: approved for execution (/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md)\n- spreadsheet: approved for execution (/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md)"
+      }
+    ],
+    "rendered_text": "Discussion-chain routed Skills:\n- scrapling: top ranked specialist candidate from pack 'web-scraping' via fallback_task_default (/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md)\n- spreadsheet: top ranked specialist candidate from pack 'docs-media' via fallback_task_default (/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md)\n\nSpecialist consultation routing during discussion:\n- scrapling: top ranked specialist candidate from pack 'web-scraping' via fallback_task_default (/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md)\n- spreadsheet: top ranked specialist candidate from pack 'docs-media' via fallback_task_default (/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md)\n\nSpecialist consultation routing during planning:\n- scrapling: top ranked specialist candidate from pack 'web-scraping' via fallback_task_default (/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md)\n- spreadsheet: top ranked specialist candidate from pack 'docs-media' via fallback_task_default (/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md)\n\nExecution-chain specialist disclosure:\n- scrapling: approved for execution (/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md)\n- spreadsheet: approved for execution (/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md)"
+  },
+  "host_stage_disclosure": {
+    "enabled": true,
+    "protocol_version": "v1",
+    "mode": "progressive_host_stage_disclosure",
+    "append_only": true,
+    "event_count": 4,
+    "last_sequence": 4,
+    "freeze_gate_passed": true,
+    "events": [
+      {
+        "sequence": 1,
+        "emitted_at": "2026-08-15T05:04:41Z",
+        "event_id": "discussion_routing_frozen",
+        "segment_id": "discussion_routing",
+        "stage": "runtime_input_freeze",
+        "category": "routing",
+        "truth_layer": "routing",
+        "status": "informational",
+        "gate_status": null,
+        "skill_count": 2,
+        "skills": [
+          {
+            "skill_id": "scrapling",
+            "why_now": "top ranked specialist candidate from pack 'web-scraping' via fallback_task_default",
+            "source": "route_ranked",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+            "native_skill_description": "\"CLI-first web scraping & content extraction with optional MCP server. Use when you have target URLs and need clean, selector-based outputs (html/md/txt).\"",
+            "state": "routed"
+          },
+          {
+            "skill_id": "spreadsheet",
+            "why_now": "top ranked specialist candidate from pack 'docs-media' via fallback_task_default",
+            "source": "route_ranked",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+            "native_skill_description": "\"Use when tasks involve creating, editing, analyzing, or formatting spreadsheets (`.xlsx`, `.csv`, `.tsv`) using Python (`openpyxl`, `pandas`), especially when formulas, references, and formatting need to be preserved and verified.\"",
+            "state": "routed"
+          }
+        ],
+        "rendered_text": "Vibe routed these Skills into the discussion/planning chain:\n- scrapling [routed] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'web-scraping' via fallback_task_default\n- spreadsheet [routed] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'docs-media' via fallback_task_default"
+      },
+      {
+        "sequence": 2,
+        "emitted_at": "2026-08-15T05:04:41Z",
+        "event_id": "discussion_consultation_routed",
+        "segment_id": "discussion_consultation",
+        "stage": "deep_interview",
+        "category": "consultation",
+        "truth_layer": "consultation",
+        "status": "gate_passed",
+        "gate_status": "passed",
+        "skill_count": 2,
+        "skills": [
+          {
+            "skill_id": "scrapling",
+            "why_now": "top ranked specialist candidate from pack 'web-scraping' via fallback_task_default",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+            "native_skill_description": "\"CLI-first web scraping & content extraction with optional MCP server. Use when you have target URLs and need clean, selector-based outputs (html/md/txt).\"",
+            "state": "routed_pending_current_session",
+            "summary": "Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(scrapling) unless that skill name is explicitly visible in the host registry."
+          },
+          {
+            "skill_id": "spreadsheet",
+            "why_now": "top ranked specialist candidate from pack 'docs-media' via fallback_task_default",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+            "native_skill_description": "\"Use when tasks involve creating, editing, analyzing, or formatting spreadsheets (`.xlsx`, `.csv`, `.tsv`) using Python (`openpyxl`, `pandas`), especially when formulas, references, and formatting need to be preserved and verified.\"",
+            "state": "routed_pending_current_session",
+            "summary": "Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(spreadsheet) unless that skill name is explicitly visible in the host registry."
+          }
+        ],
+        "rendered_text": "Vibe routed these Skills for direct current-session consultation during discussion; freeze gate: passed.\n- scrapling [routed_pending_current_session] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'web-scraping' via fallback_task_default\n  Summary: Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(scrapling) unless that skill name is explicitly visible in the host registry.\n- spreadsheet [routed_pending_current_session] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'docs-media' via fallback_task_default\n  Summary: Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(spreadsheet) unless that skill name is explicitly visible in the host registry."
+      },
+      {
+        "sequence": 3,
+        "emitted_at": "2026-08-15T05:04:42Z",
+        "event_id": "planning_consultation_routed",
+        "segment_id": "planning_consultation",
+        "stage": "requirement_doc",
+        "category": "consultation",
+        "truth_layer": "consultation",
+        "status": "gate_passed",
+        "gate_status": "passed",
+        "skill_count": 2,
+        "skills": [
+          {
+            "skill_id": "scrapling",
+            "why_now": "top ranked specialist candidate from pack 'web-scraping' via fallback_task_default",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+            "native_skill_description": "\"CLI-first web scraping & content extraction with optional MCP server. Use when you have target URLs and need clean, selector-based outputs (html/md/txt).\"",
+            "state": "routed_pending_current_session",
+            "summary": "Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(scrapling) unless that skill name is explicitly visible in the host registry."
+          },
+          {
+            "skill_id": "spreadsheet",
+            "why_now": "top ranked specialist candidate from pack 'docs-media' via fallback_task_default",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+            "native_skill_description": "\"Use when tasks involve creating, editing, analyzing, or formatting spreadsheets (`.xlsx`, `.csv`, `.tsv`) using Python (`openpyxl`, `pandas`), especially when formulas, references, and formatting need to be preserved and verified.\"",
+            "state": "routed_pending_current_session",
+            "summary": "Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(spreadsheet) unless that skill name is explicitly visible in the host registry."
+          }
+        ],
+        "rendered_text": "Vibe routed these Skills for direct current-session consultation during planning; freeze gate: passed.\n- scrapling [routed_pending_current_session] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'web-scraping' via fallback_task_default\n  Summary: Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(scrapling) unless that skill name is explicitly visible in the host registry.\n- spreadsheet [routed_pending_current_session] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'docs-media' via fallback_task_default\n  Summary: Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(spreadsheet) unless that skill name is explicitly visible in the host registry."
+      },
+      {
+        "sequence": 4,
+        "emitted_at": "2026-08-15T05:04:42Z",
+        "event_id": "execution_dispatch_confirmed",
+        "segment_id": "execution_dispatch",
+        "stage": "plan_execute",
+        "category": "execution",
+        "truth_layer": "execution",
+        "status": "execution_disclosure",
+        "gate_status": null,
+        "skill_count": 2,
+        "skills": [
+          {
+            "skill_id": "scrapling",
+            "why_now": "approved for execution-time specialist dispatch under governed vibe",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+            "native_skill_entrypoint_raw": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+            "entrypoint_path_state": "resolved",
+            "entrypoint_missing": false,
+            "entrypoint_path_invalid": false,
+            "native_skill_description": "\"CLI-first web scraping & content extraction with optional MCP server. Use when you have target URLs and need clean, selector-based outputs (html/md/txt).\"",
+            "state": "disclosed_for_execution"
+          },
+          {
+            "skill_id": "spreadsheet",
+            "why_now": "approved for execution-time specialist dispatch under governed vibe",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+            "native_skill_entrypoint_raw": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+            "entrypoint_path_state": "resolved",
+            "entrypoint_missing": false,
+            "entrypoint_path_invalid": false,
+            "native_skill_description": "\"Use when tasks involve creating, editing, analyzing, or formatting spreadsheets (`.xlsx`, `.csv`, `.tsv`) using Python (`openpyxl`, `pandas`), especially when formulas, references, and formatting need to be preserved and verified.\"",
+            "state": "disclosed_for_execution"
+          }
+        ],
+        "rendered_text": "Vibe approved these Skills for execution:\n- scrapling [disclosed_for_execution] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md\n  Why: approved for execution-time specialist dispatch under governed vibe\n- spreadsheet [disclosed_for_execution] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md\n  Why: approved for execution-time specialist dispatch under governed vibe"
+      }
+    ],
+    "rendered_text": "Vibe routed these Skills into the discussion/planning chain:\n- scrapling [routed] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'web-scraping' via fallback_task_default\n- spreadsheet [routed] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'docs-media' via fallback_task_default\n\nVibe routed these Skills for direct current-session consultation during discussion; freeze gate: passed.\n- scrapling [routed_pending_current_session] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'web-scraping' via fallback_task_default\n  Summary: Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(scrapling) unless that skill name is explicitly visible in the host registry.\n- spreadsheet [routed_pending_current_session] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'docs-media' via fallback_task_default\n  Summary: Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(spreadsheet) unless that skill name is explicitly visible in the host registry.\n\nVibe routed these Skills for direct current-session consultation during planning; freeze gate: passed.\n- scrapling [routed_pending_current_session] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'web-scraping' via fallback_task_default\n  Summary: Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(scrapling) unless that skill name is explicitly visible in the host registry.\n- spreadsheet [routed_pending_current_session] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'docs-media' via fallback_task_default\n  Summary: Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(spreadsheet) unless that skill name is explicitly visible in the host registry.\n\nVibe approved these Skills for execution:\n- scrapling [disclosed_for_execution] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md\n  Why: approved for execution-time specialist dispatch under governed vibe\n- spreadsheet [disclosed_for_execution] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md\n  Why: approved for execution-time specialist dispatch under governed vibe"
+  },
+  "host_user_briefing": {
+    "enabled": true,
+    "mode": "progressive_specialist_host_briefing",
+    "freeze_gate_passed": true,
+    "segment_count": 5,
+    "segments": [
+      {
+        "segment_id": "execution_handoff",
+        "stage": "phase_cleanup",
+        "category": "execution",
+        "truth_layer": "workflow_completion_truth",
+        "status": "current_session_continuation_required",
+        "gate_status": "FAIL",
+        "skill_count": 2,
+        "skills": [
+          "scrapling",
+          "spreadsheet"
+        ],
+        "rendered_text": "Execution handoff is still pending under governed vibe.\n- gate_result: `FAIL`\n- readiness_state: `verification_failed`\n- completion_language_allowed: `False`\n- source_run_id: `20260815T050438Z-edafd6df`\n- specialist_effective_execution_status: `direct_current_session_routed`\n- direct_routed_unit_ids: `specialist-in_execution-ungrouped-scrapling-specialist`, `specialist-in_execution-ungrouped-spreadsheet-specialist`\n- direct_routed_skill_ids: `scrapling`, `spreadsheet`\n- specialist_execution_sidecar_path: `/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/specialist-execution.json`\n- approved specialist execution has not been formally resolved inside the governed runtime yet.\n- next required action: load each disclosed `native_skill_entrypoint` in the current host session, execute the bounded specialist work there, write `specialist-execution.json`, then refresh governed verification before claiming completion.\n- verification refresh command: `python3 scripts/verify/runtime_neutral/runtime_delivery_acceptance.py --session-root \"/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df\" --write-artifacts`\n- blocking truth layers: `engineering_verification_truth`, `code_task_tdd_evidence_truth`, `workflow_completion_truth`, `product_acceptance_truth`",
+        "host_decision_contract": {
+          "protocol_version": "v1",
+          "decision_kind": "specialist_execution_resolution",
+          "decision_context": "execution_handoff",
+          "source_run_id": "20260815T050438Z-edafd6df",
+          "session_root": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df",
+          "sidecar_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/specialist-execution.json",
+          "verification_refresh_command": "python3 scripts/verify/runtime_neutral/runtime_delivery_acceptance.py --session-root \"/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df\" --write-artifacts",
+          "allowed_resolution_states": [
+            "executed",
+            "degraded",
+            "blocked"
+          ],
+          "direct_routed_unit_ids": [
+            "specialist-in_execution-ungrouped-scrapling-specialist",
+            "specialist-in_execution-ungrouped-spreadsheet-specialist"
+          ],
+          "direct_routed_skill_ids": [
+            "scrapling",
+            "spreadsheet"
+          ],
+          "required_units": [
+            {
+              "unit_id": "specialist-in_execution-ungrouped-scrapling-specialist",
+              "skill_id": "scrapling",
+              "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+              "result_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/execution-results/specialist-in_execution-ungrouped-scrapling-specialist.json"
+            },
+            {
+              "unit_id": "specialist-in_execution-ungrouped-spreadsheet-specialist",
+              "skill_id": "spreadsheet",
+              "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+              "result_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/execution-results/specialist-in_execution-ungrouped-spreadsheet-specialist.json"
+            }
+          ],
+          "preferred_payload": {
+            "protocol_version": "v1",
+            "source_run_id": "20260815T050438Z-edafd6df",
+            "resolution_mode": "current_session_host_execution",
+            "units": [
+              {
+                "unit_id": "specialist-in_execution-ungrouped-scrapling-specialist",
+                "skill_id": "scrapling",
+                "resolution_state": "executed",
+                "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+                "evidence_paths": [
+                  "<host evidence path>"
+                ],
+                "notes": ""
+              },
+              {
+                "unit_id": "specialist-in_execution-ungrouped-spreadsheet-specialist",
+                "skill_id": "spreadsheet",
+                "resolution_state": "executed",
+                "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+                "evidence_paths": [
+                  "<host evidence path>"
+                ],
+                "notes": ""
+              }
+            ]
+          }
+        }
+      },
+      {
+        "segment_id": "discussion_routing",
+        "stage": "runtime_input_freeze",
+        "category": "routing",
+        "truth_layer": "routing",
+        "status": "informational",
+        "gate_status": null,
+        "skill_count": 2,
+        "skills": [
+          {
+            "skill_id": "scrapling",
+            "why_now": "top ranked specialist candidate from pack 'web-scraping' via fallback_task_default",
+            "source": "route_ranked",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+            "native_skill_description": "\"CLI-first web scraping & content extraction with optional MCP server. Use when you have target URLs and need clean, selector-based outputs (html/md/txt).\"",
+            "state": "routed"
+          },
+          {
+            "skill_id": "spreadsheet",
+            "why_now": "top ranked specialist candidate from pack 'docs-media' via fallback_task_default",
+            "source": "route_ranked",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+            "native_skill_description": "\"Use when tasks involve creating, editing, analyzing, or formatting spreadsheets (`.xlsx`, `.csv`, `.tsv`) using Python (`openpyxl`, `pandas`), especially when formulas, references, and formatting need to be preserved and verified.\"",
+            "state": "routed"
+          }
+        ],
+        "rendered_text": "Vibe routed these Skills into the discussion/planning chain:\n- scrapling [routed] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'web-scraping' via fallback_task_default\n- spreadsheet [routed] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'docs-media' via fallback_task_default"
+      },
+      {
+        "segment_id": "discussion_consultation",
+        "stage": "deep_interview",
+        "category": "consultation",
+        "truth_layer": "consultation",
+        "status": "gate_passed",
+        "gate_status": "passed",
+        "skill_count": 2,
+        "skills": [
+          {
+            "skill_id": "scrapling",
+            "why_now": "top ranked specialist candidate from pack 'web-scraping' via fallback_task_default",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+            "native_skill_description": "\"CLI-first web scraping & content extraction with optional MCP server. Use when you have target URLs and need clean, selector-based outputs (html/md/txt).\"",
+            "state": "routed_pending_current_session",
+            "summary": "Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(scrapling) unless that skill name is explicitly visible in the host registry."
+          },
+          {
+            "skill_id": "spreadsheet",
+            "why_now": "top ranked specialist candidate from pack 'docs-media' via fallback_task_default",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+            "native_skill_description": "\"Use when tasks involve creating, editing, analyzing, or formatting spreadsheets (`.xlsx`, `.csv`, `.tsv`) using Python (`openpyxl`, `pandas`), especially when formulas, references, and formatting need to be preserved and verified.\"",
+            "state": "routed_pending_current_session",
+            "summary": "Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(spreadsheet) unless that skill name is explicitly visible in the host registry."
+          }
+        ],
+        "rendered_text": "Vibe routed these Skills for direct current-session consultation during discussion; freeze gate: passed.\n- scrapling [routed_pending_current_session] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'web-scraping' via fallback_task_default\n  Summary: Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(scrapling) unless that skill name is explicitly visible in the host registry.\n- spreadsheet [routed_pending_current_session] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'docs-media' via fallback_task_default\n  Summary: Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(spreadsheet) unless that skill name is explicitly visible in the host registry."
+      },
+      {
+        "segment_id": "planning_consultation",
+        "stage": "requirement_doc",
+        "category": "consultation",
+        "truth_layer": "consultation",
+        "status": "gate_passed",
+        "gate_status": "passed",
+        "skill_count": 2,
+        "skills": [
+          {
+            "skill_id": "scrapling",
+            "why_now": "top ranked specialist candidate from pack 'web-scraping' via fallback_task_default",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+            "native_skill_description": "\"CLI-first web scraping & content extraction with optional MCP server. Use when you have target URLs and need clean, selector-based outputs (html/md/txt).\"",
+            "state": "routed_pending_current_session",
+            "summary": "Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(scrapling) unless that skill name is explicitly visible in the host registry."
+          },
+          {
+            "skill_id": "spreadsheet",
+            "why_now": "top ranked specialist candidate from pack 'docs-media' via fallback_task_default",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+            "native_skill_description": "\"Use when tasks involve creating, editing, analyzing, or formatting spreadsheets (`.xlsx`, `.csv`, `.tsv`) using Python (`openpyxl`, `pandas`), especially when formulas, references, and formatting need to be preserved and verified.\"",
+            "state": "routed_pending_current_session",
+            "summary": "Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(spreadsheet) unless that skill name is explicitly visible in the host registry."
+          }
+        ],
+        "rendered_text": "Vibe routed these Skills for direct current-session consultation during planning; freeze gate: passed.\n- scrapling [routed_pending_current_session] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'web-scraping' via fallback_task_default\n  Summary: Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(scrapling) unless that skill name is explicitly visible in the host registry.\n- spreadsheet [routed_pending_current_session] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'docs-media' via fallback_task_default\n  Summary: Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(spreadsheet) unless that skill name is explicitly visible in the host registry."
+      },
+      {
+        "segment_id": "execution_dispatch",
+        "stage": "plan_execute",
+        "category": "execution",
+        "truth_layer": "execution",
+        "status": "execution_disclosure",
+        "gate_status": null,
+        "skill_count": 2,
+        "skills": [
+          {
+            "skill_id": "scrapling",
+            "why_now": "approved for execution-time specialist dispatch under governed vibe",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+            "native_skill_entrypoint_raw": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+            "entrypoint_path_state": "resolved",
+            "entrypoint_missing": false,
+            "entrypoint_path_invalid": false,
+            "native_skill_description": "\"CLI-first web scraping & content extraction with optional MCP server. Use when you have target URLs and need clean, selector-based outputs (html/md/txt).\"",
+            "state": "disclosed_for_execution"
+          },
+          {
+            "skill_id": "spreadsheet",
+            "why_now": "approved for execution-time specialist dispatch under governed vibe",
+            "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+            "native_skill_entrypoint_raw": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+            "entrypoint_path_state": "resolved",
+            "entrypoint_missing": false,
+            "entrypoint_path_invalid": false,
+            "native_skill_description": "\"Use when tasks involve creating, editing, analyzing, or formatting spreadsheets (`.xlsx`, `.csv`, `.tsv`) using Python (`openpyxl`, `pandas`), especially when formulas, references, and formatting need to be preserved and verified.\"",
+            "state": "disclosed_for_execution"
+          }
+        ],
+        "rendered_text": "Vibe approved these Skills for execution:\n- scrapling [disclosed_for_execution] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md\n  Why: approved for execution-time specialist dispatch under governed vibe\n- spreadsheet [disclosed_for_execution] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md\n  Why: approved for execution-time specialist dispatch under governed vibe"
+      }
+    ],
+    "rendered_text": "Governed runtime handoff status:\n\nExecution handoff is still pending under governed vibe.\n- gate_result: `FAIL`\n- readiness_state: `verification_failed`\n- completion_language_allowed: `False`\n- source_run_id: `20260815T050438Z-edafd6df`\n- specialist_effective_execution_status: `direct_current_session_routed`\n- direct_routed_unit_ids: `specialist-in_execution-ungrouped-scrapling-specialist`, `specialist-in_execution-ungrouped-spreadsheet-specialist`\n- direct_routed_skill_ids: `scrapling`, `spreadsheet`\n- specialist_execution_sidecar_path: `/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/specialist-execution.json`\n- approved specialist execution has not been formally resolved inside the governed runtime yet.\n- next required action: load each disclosed `native_skill_entrypoint` in the current host session, execute the bounded specialist work there, write `specialist-execution.json`, then refresh governed verification before claiming completion.\n- verification refresh command: `python3 scripts/verify/runtime_neutral/runtime_delivery_acceptance.py --session-root \"/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df\" --write-artifacts`\n- blocking truth layers: `engineering_verification_truth`, `code_task_tdd_evidence_truth`, `workflow_completion_truth`, `product_acceptance_truth`\nSpecialist activity under governed vibe:\n\nVibe routed these Skills into the discussion/planning chain:\n- scrapling [routed] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'web-scraping' via fallback_task_default\n- spreadsheet [routed] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'docs-media' via fallback_task_default\n\nVibe routed these Skills for direct current-session consultation during discussion; freeze gate: passed.\n- scrapling [routed_pending_current_session] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'web-scraping' via fallback_task_default\n  Summary: Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(scrapling) unless that skill name is explicitly visible in the host registry.\n- spreadsheet [routed_pending_current_session] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'docs-media' via fallback_task_default\n  Summary: Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(spreadsheet) unless that skill name is explicitly visible in the host registry.\n\nVibe routed these Skills for direct current-session consultation during planning; freeze gate: passed.\n- scrapling [routed_pending_current_session] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'web-scraping' via fallback_task_default\n  Summary: Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(scrapling) unless that skill name is explicitly visible in the host registry.\n- spreadsheet [routed_pending_current_session] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md\n  Why: top ranked specialist candidate from pack 'docs-media' via fallback_task_default\n  Summary: Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(spreadsheet) unless that skill name is explicitly visible in the host registry.\n\nVibe approved these Skills for execution:\n- scrapling [disclosed_for_execution] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md\n  Why: approved for execution-time specialist dispatch under governed vibe\n- spreadsheet [disclosed_for_execution] from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md\n  Why: approved for execution-time specialist dispatch under governed vibe"
+  },
+  "bounded_return_control": null,
+  "artifacts_relative": {
+    "skeleton_receipt": "outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/skeleton-receipt.json",
+    "runtime_input_packet": "outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/runtime-input-packet.json",
+    "governance_capsule": "outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/governance-capsule.json",
+    "stage_lineage": "outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/stage-lineage.json",
+    "intent_contract": "outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/intent-contract.json",
+    "requirement_doc": "docs/requirements/2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri.md",
+    "requirement_receipt": "outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/requirement-doc-receipt.json",
+    "execution_plan": "docs/plans/2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri-execution-plan.md",
+    "execution_plan_receipt": "outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/execution-plan-receipt.json",
+    "execute_receipt": "outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/phase-execute.json",
+    "execution_manifest": "outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/execution-manifest.json",
+    "execution_topology": "outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/execution-topology.json",
+    "execution_proof_manifest": "outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/execution-proof/manifest.json",
+    "discussion_specialist_consultation": "outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/discussion-specialist-consultation.json",
+    "planning_specialist_consultation": "outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/planning-specialist-consultation.json",
+    "specialist_lifecycle_disclosure": "outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/specialist-lifecycle-disclosure.json",
+    "host_stage_disclosure": "outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/host-stage-disclosure.json",
+    "host_user_briefing": "outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/host-user-briefing.md",
+    "cleanup_receipt": "outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/cleanup-receipt.json",
+    "delivery_acceptance_report": "outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/delivery-acceptance-report.json",
+    "delivery_acceptance_markdown": "outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/delivery-acceptance-report.md",
+    "memory_activation_report": "outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/memory-activation/memory-activation-report.json",
+    "memory_activation_markdown": "outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/memory-activation/memory-activation-report.md",
+    "delegation_envelope": null,
+    "delegation_validation_receipt": null
+  }
+}

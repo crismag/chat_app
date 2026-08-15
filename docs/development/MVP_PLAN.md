@@ -6,6 +6,8 @@ Ship the smallest version of C.H.A.T. that proves users will return to their own
 
 ## Phase 0 — Foundation
 
+Status: scaffolded. The web app and API start locally; CI runs lint, typecheck, test, and build. Authentication is documented, not implemented.
+
 Deliverables:
 
 - repository structure;
@@ -66,7 +68,7 @@ Deliverables:
 - manual section editing;
 - extract C.H.A.T. from a conversation;
 - source/provenance references where practical;
-- Testimony-specific authorship safeguards.
+- Heart- and Testimony-specific authorship safeguards.
 
 Exit criteria:
 

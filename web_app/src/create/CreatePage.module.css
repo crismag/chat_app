@@ -1,0 +1,51 @@
+.page {
+  display: grid;
+  gap: 1rem;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.controls select,
+.controls button {
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  background: #fff;
+}
+
+.card {
+  border-radius: 1.2rem;
+  padding: 1.6rem;
+  min-height: 18rem;
+  display: grid;
+  gap: 0.7rem;
+  background: #f3ead8;
+}
+
+.card[data-style='modern-minimal'] {
+  background: #fff;
+}
+
+.card[data-style='dark-worship'] {
+  background: #1b1a17;
+  color: #f6efe4;
+}
+
+.card[data-layout='chat-two-column'] {
+  grid-template-columns: 1fr 1fr;
+}
+
+.kicker {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+}
+
+.note {
+  color: var(--muted);
+  font-size: 0.85rem;
+}

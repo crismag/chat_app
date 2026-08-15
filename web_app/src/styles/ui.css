@@ -1,0 +1,238 @@
+/*
+ * The shared component vocabulary: buttons, fields, cards, badges.
+ *
+ * These are global class names rather than CSS modules on purpose. A button
+ * should look the same on the auth page and in the chat composer, and the way
+ * to guarantee that is for there to be one definition of a button.
+ */
+
+/* --- Buttons ----------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0.6rem 1.1rem;
+  min-height: 2.75rem; /* a comfortable touch target on a phone */
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--text-base);
+  font-weight: 550;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background var(--fast) var(--ease),
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease),
+    transform var(--fast) var(--ease),
+    box-shadow var(--fast) var(--ease);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-secondary {
+  background: var(--surface);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-ghost {
+  color: var(--muted);
+  padding-inline: 0.75rem;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.btn-sm {
+  min-height: 2.125rem;
+  padding: 0.35rem 0.75rem;
+  font-size: var(--text-sm);
+}
+
+/* --- Fields ------------------------------------------------------------ */
+
+.field {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.input,
+.textarea {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  transition:
+    border-color var(--fast) var(--ease),
+    box-shadow var(--fast) var(--ease);
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--faint);
+}
+
+.input:focus-visible,
+.textarea:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+
+.textarea {
+  min-height: 6rem;
+  resize: vertical;
+  line-height: var(--leading-body);
+}
+
+.hint {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+/* --- Surfaces ---------------------------------------------------------- */
+
+.card {
+  padding: var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.card-interactive {
+  transition:
+    transform var(--normal) var(--ease-out),
+    box-shadow var(--normal) var(--ease-out),
+    border-color var(--normal) var(--ease-out);
+}
+
+.card-interactive:hover {
+  transform: translateY(-2px);
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-md);
+}
+
+/* --- Badges ------------------------------------------------------------ */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/*
+ * Provenance badges. The data model tracks whether text came from the user, was
+ * AI-assisted, or was AI-generated; these make that visible, which the content
+ * rules require — a reader must never have to guess whose words they are.
+ */
+.badge-user {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.badge-ai-assisted {
+  background: var(--ai-assisted-soft);
+  color: var(--ai-assisted);
+}
+.badge-ai-generated {
+  background: var(--ai-generated-soft);
+  color: var(--ai-generated);
+}
+
+/* Section badges, one per letter of C.H.A.T. */
+.badge-context {
+  background: var(--context-soft);
+  color: var(--context);
+}
+.badge-heart {
+  background: var(--heart-soft);
+  color: var(--heart);
+}
+.badge-application {
+  background: var(--application-soft);
+  color: var(--application);
+}
+.badge-testimony {
+  background: var(--testimony-soft);
+  color: var(--testimony);
+}
+
+/* --- Utilities --------------------------------------------------------- */
+
+.eyebrow {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.lede {
+  font-size: var(--text-md);
+  color: var(--muted);
+  max-width: var(--measure);
+}
+
+.stack {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

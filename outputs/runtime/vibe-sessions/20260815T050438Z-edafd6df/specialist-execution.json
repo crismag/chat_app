@@ -1,0 +1,31 @@
+{
+  "source_run_id": "20260815T050438Z-edafd6df",
+  "resolution_mode": "current_session_host_execution",
+  "notes": "Host loaded disclosed specialist entrypoints in this session. Both specialists are out of scope for C.H.A.T. and produced not-applicable findings rather than product code.",
+  "evidence_paths": [
+    "specialist-scrapling-finding.md",
+    "specialist-spreadsheet-finding.md"
+  ],
+  "units": [
+    {
+      "unit_id": "specialist-in_execution-ungrouped-scrapling-specialist",
+      "skill_id": "scrapling",
+      "resolution_state": "executed",
+      "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+      "evidence_paths": [
+        "specialist-scrapling-finding.md"
+      ],
+      "notes": "Consulted scrapling skill. No URL extraction work exists in C.H.A.T.; recorded not-applicable finding and did not scrape."
+    },
+    {
+      "unit_id": "specialist-in_execution-ungrouped-spreadsheet-specialist",
+      "skill_id": "spreadsheet",
+      "resolution_state": "executed",
+      "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+      "evidence_paths": [
+        "specialist-spreadsheet-finding.md"
+      ],
+      "notes": "Consulted spreadsheet skill. No workbook deliverable exists in C.H.A.T.; recorded not-applicable finding and did not create spreadsheets."
+    }
+  ]
+}

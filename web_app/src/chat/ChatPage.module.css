@@ -1,0 +1,375 @@
+.workspace {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 900px) {
+  .workspace {
+    grid-template-columns: 15rem minmax(0, 1fr) 16rem;
+    align-items: start;
+  }
+}
+
+.sidebar,
+.thread,
+.sections,
+.proposal {
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 1rem;
+}
+
+.stack,
+.composer,
+.sections {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0.8rem 0 0;
+}
+
+.list button,
+.actions button,
+.composer button,
+.stack button,
+.thread header button {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 0.6rem;
+  padding: 0.45rem 0.6rem;
+  cursor: pointer;
+}
+
+.activeItem {
+  background: var(--sage-soft);
+  color: var(--sage);
+}
+
+.messages {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.8rem;
+}
+
+.actions button {
+  width: auto;
+}
+
+.composer textarea,
+.sections textarea,
+.stack input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  padding: 0.55rem;
+  min-height: 4.5rem;
+}
+
+.stack input {
+  min-height: 0;
+}
+
+.error {
+  color: var(--warn);
+}
+
+.proposal {
+  margin-bottom: 0.8rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * Design-system pass.
+ *
+ * Appended rather than rewritten so the layout above is untouched — this only
+ * replaces the ad-hoc colours and spacing with tokens, and gives the four
+ * C.H.A.T. sections the identity they carry everywhere else in the app.
+ * ------------------------------------------------------------------------ */
+
+.workspace {
+  gap: var(--space-4);
+}
+
+.sidebar,
+.thread,
+.sections {
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+/*
+ * The panel headings were set at the global h2 size, which is tuned for a page
+ * title and overflowed a 200px column. In a side panel they are labels.
+ */
+/*
+ * Panel headings. These were inheriting the global h2 size, which is tuned for
+ * a page title and overflowed a 200px column — the word "Conversation" ran past
+ * its own card. In a side panel a heading is a label, so it is sized like one.
+ */
+.sidebar h1,
+.sidebar h2,
+.sections h1,
+.sections h2 {
+  font-size: var(--text-md);
+  letter-spacing: 0.02em;
+  margin-bottom: var(--space-3);
+}
+
+.sidebar input,
+.sections textarea,
+.composer textarea,
+.composer input {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  transition:
+    border-color var(--fast) var(--ease),
+    box-shadow var(--fast) var(--ease);
+}
+
+.sidebar input:focus-visible,
+.sections textarea:focus-visible,
+.composer textarea:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+
+.sidebar button,
+.composer button,
+.actions button {
+  min-height: 2.4rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 550;
+  transition:
+    background var(--fast) var(--ease),
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.sidebar button:hover,
+.composer button:hover,
+.actions button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* The one primary action in each panel reads as the primary action. */
+.sidebar form button[type='submit'],
+.composer button[type='submit'] {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--on-accent);
+}
+
+.sidebar form button[type='submit']:hover,
+.composer button[type='submit']:hover {
+  background: var(--accent-hover);
+  color: var(--on-accent);
+}
+
+.list button {
+  width: 100%;
+  text-align: left;
+  border-radius: var(--radius-md);
+}
+
+.activeItem,
+.list .activeItem {
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: var(--accent-ink);
+  font-weight: 650;
+}
+
+/*
+ * The four sections, in order: Context, Heart, Application, Testimony.
+ *
+ * Each gets its letter's colour as a rule down the left edge and on its label.
+ * Nothing else in the panel changes — the point is that a user learns which
+ * section is which by shape and colour rather than by reading four headings
+ * every time.
+ */
+.sections label {
+  display: grid;
+  gap: var(--space-2);
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--line);
+  font-size: var(--text-sm);
+  font-weight: 650;
+  text-transform: capitalize;
+  letter-spacing: 0.01em;
+}
+
+.sections label:nth-of-type(1) {
+  border-left-color: var(--context);
+  color: var(--context);
+}
+.sections label:nth-of-type(2) {
+  border-left-color: var(--heart);
+  color: var(--heart);
+}
+.sections label:nth-of-type(3) {
+  border-left-color: var(--application);
+  color: var(--application);
+}
+.sections label:nth-of-type(4) {
+  border-left-color: var(--testimony);
+  color: var(--testimony);
+}
+
+/* The field itself stays neutral; only the label and rule carry the hue. */
+.sections label textarea {
+  color: var(--ink);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.messages {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.error {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+.proposal {
+  border: 1px dashed var(--ai-assisted);
+  border-radius: var(--radius-md);
+  background: var(--ai-assisted-soft);
+  padding: var(--space-3);
+}
+
+@media (max-width: 900px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Give the conversation the room it deserves.
+ *
+ * The thread is what this application is for, and it was the smallest thing on
+ * the screen. Two causes, both here:
+ *
+ *   `align-items: start` made every column shrink-wrap to its content, so the
+ *   thread card was only ever as tall as the one line inside it, floating in a
+ *   page of empty paper.
+ *
+ *   And the side panels took 31rem between them regardless of viewport, which
+ *   on a 1280px screen leaves the conversation with barely half the width.
+ *
+ * The fix is to let the workspace fill the screen and hand the surplus to the
+ * middle: the columns stretch, the thread becomes a column of its own with the
+ * message list taking the slack, and the panels are trimmed and allowed to
+ * scroll independently rather than stretching the page.
+ * ------------------------------------------------------------------------ */
+
+@media (min-width: 900px) {
+  .workspace {
+    /* Header, plus the main element's own padding. */
+    height: calc(100svh - 9.5rem);
+    min-height: 30rem;
+    grid-template-columns: 13.5rem minmax(0, 1fr) 15rem;
+    align-items: stretch;
+  }
+
+  /* A grid child will not shrink below its content without this. */
+  .sidebar,
+  .thread,
+  .sections {
+    min-height: 0;
+  }
+
+  .sidebar,
+  .sections {
+    overflow-y: auto;
+  }
+
+  /*
+   * The thread is a column: whatever heading it has stays put, the messages
+   * take the remaining height and scroll, and the composer sits at the bottom
+   * where a composer belongs — not wherever the last message happened to end.
+   */
+  .thread {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .messages {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    /* Room for the scrollbar so text does not sit under it. */
+    padding-right: var(--space-1);
+    scrollbar-gutter: stable;
+  }
+
+  .composer {
+    flex: none;
+  }
+}
+
+/* On a wide desktop the extra pixels go to the conversation, not the panels. */
+@media (min-width: 1400px) {
+  .workspace {
+    grid-template-columns: 15rem minmax(0, 1fr) 17rem;
+  }
+}
+
+/*
+ * On a phone the conversation comes first. The DOM order is sidebar, thread,
+ * sections — right for reading order and wrong for a small screen, where the
+ * thing you opened the app to do should not be below a form you rarely use.
+ */
+@media (max-width: 899px) {
+  .workspace {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .thread {
+    order: -1;
+    min-height: 55svh;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .messages {
+    flex: 1 1 auto;
+  }
+}
