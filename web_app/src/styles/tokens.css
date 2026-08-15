@@ -1,0 +1,207 @@
+/*
+ * Design tokens.
+ *
+ * Everything visual resolves to a name here. The rule is that a component
+ * stylesheet may use `var(--…)` and may not invent a colour, a radius, a
+ * duration or a step of spacing — that is what keeps eight stylesheets looking
+ * like one application rather than eight.
+ *
+ * Two things are deliberate and worth stating.
+ *
+ * The palette is paper, not screen. C.H.A.T. is about reading and reflection,
+ * so the light theme is warm off-white with a brown-black ink, the way a page
+ * is, rather than the pure #fff / #000 of a dashboard.
+ *
+ * And the four C.H.A.T. sections carry their own colours. Context, Heart,
+ * Application and Testimony are the product's whole structure; giving each one a
+ * hue means a user learns the framework by using the app instead of by reading
+ * about it.
+ */
+
+:root {
+  /* --- Type ------------------------------------------------------------- */
+
+  /*
+   * The serif is for headings and Scripture. `Iowan Old Style` is beautiful and
+   * exists only on Apple platforms, so the chain falls through Palatino, then
+   * the Linux and Windows equivalents, and lands on Georgia — which is
+   * everywhere and is a far better failure than Times New Roman.
+   */
+  --font-serif:
+    'Iowan Old Style', 'Palatino Linotype', Palatino, 'URW Palladio L',
+    'Book Antiqua', Georgia, serif;
+  --font-sans:
+    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+
+  /*
+   * Fluid type. Each step interpolates between a phone and a desktop width, so
+   * there is no breakpoint where the type suddenly jumps.
+   */
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: clamp(0.9375rem, 0.9rem + 0.15vw, 1rem);
+  --text-md: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+  --text-lg: clamp(1.125rem, 1.05rem + 0.4vw, 1.375rem);
+  --text-xl: clamp(1.375rem, 1.2rem + 0.8vw, 1.875rem);
+  --text-2xl: clamp(1.75rem, 1.4rem + 1.6vw, 2.75rem);
+
+  --leading-tight: 1.15;
+  --leading-snug: 1.35;
+  --leading-body: 1.6;
+  --leading-loose: 1.75;
+
+  --tracking-tight: -0.02em;
+  --tracking-wide: 0.06em;
+  --tracking-caps: 0.1em;
+
+  /* --- Space ------------------------------------------------------------ */
+
+  /* A 4px base. Every margin and padding in the app is one of these. */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+
+  /* Page gutters grow with the viewport rather than stepping at a breakpoint. */
+  --gutter: clamp(var(--space-4), 4vw, var(--space-6));
+  --measure: 68ch; /* comfortable reading width for long reflections */
+  --shell-max: 1180px;
+
+  /* --- Shape ------------------------------------------------------------ */
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-pill: 999px;
+
+  /* --- Motion ----------------------------------------------------------- */
+
+  --ease: cubic-bezier(0.2, 0, 0.1, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --fast: 120ms;
+  --normal: 220ms;
+  --slow: 380ms;
+
+  /* --- Light theme ------------------------------------------------------ */
+
+  color-scheme: light;
+
+  --paper: #f7f1e6;
+  --surface: #fffbf4;
+  --surface-2: #f2eadc;
+  --surface-sunk: #efe6d6;
+
+  --ink: #2b241c;
+  --ink-soft: #52483c;
+  --muted: #6f6455;
+  --faint: #96887a;
+
+  --line: #e2d6c3;
+  --line-strong: #cfbfa7;
+
+  --accent: #3f5d4e;
+  --accent-hover: #33503f;
+  --accent-soft: #e6efe8;
+  --accent-ink: #2a4436;
+  --on-accent: #fdfbf6;
+
+  --ok: #2f6a4a;
+  --ok-soft: #e3f0e7;
+  --warn: #8a5a2b;
+  --warn-soft: #f6ead9;
+  --danger: #9a3a30;
+  --danger-soft: #f8e5e1;
+
+  /*
+   * The C.H.A.T. sections. Each hue is chosen for what the section *is*:
+   * Context is the cool, factual ground; Heart is warm and personal;
+   * Application is the amber of something to be acted on; Testimony is the
+   * green of the accent itself, because a testimony is where the loop lands.
+   */
+  --context: #3d5a80;
+  --context-soft: #e4ebf4;
+  --heart: #9c4a5c;
+  --heart-soft: #f6e6e9;
+  --application: #8a5a2b;
+  --application-soft: #f7ead7;
+  --testimony: #3f5d4e;
+  --testimony-soft: #e5efe8;
+
+  /* AI provenance, which the data model already tracks and the UI must show. */
+  --ai-assisted: #6a5f9c;
+  --ai-assisted-soft: #ebe8f6;
+  --ai-generated: #8a5a2b;
+  --ai-generated-soft: #f7ead7;
+
+  --shadow-sm: 0 1px 2px rgba(43, 36, 28, 0.06), 0 1px 3px rgba(43, 36, 28, 0.05);
+  --shadow-md: 0 2px 4px rgba(43, 36, 28, 0.05), 0 8px 20px rgba(43, 36, 28, 0.08);
+  --shadow-lg: 0 4px 8px rgba(43, 36, 28, 0.05), 0 20px 44px rgba(43, 36, 28, 0.12);
+  --ring: 0 0 0 3px rgba(63, 93, 78, 0.25);
+}
+
+/*
+ * Dark theme.
+ *
+ * Only the tokens change; not one component rule is written twice. The dark
+ * palette keeps the warm cast rather than going blue-grey, so the two themes
+ * read as the same product at different times of day — and the section hues are
+ * lifted in lightness to stay legible on a dark ground, which the light values
+ * would not be.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --paper: #17140f;
+    --surface: #201c16;
+    --surface-2: #29241d;
+    --surface-sunk: #131009;
+
+    --ink: #f0e9dd;
+    --ink-soft: #ddd3c4;
+    --muted: #a89b8a;
+    --faint: #7d7264;
+
+    --line: #352f26;
+    --line-strong: #4a4235;
+
+    --accent: #8fc0a4;
+    --accent-hover: #a7d2b7;
+    --accent-soft: #23302a;
+    --accent-ink: #b9dcc6;
+    --on-accent: #12211a;
+
+    --ok: #7fc39a;
+    --ok-soft: #1f2f26;
+    --warn: #d9a066;
+    --warn-soft: #322619;
+    --danger: #e08d80;
+    --danger-soft: #35211e;
+
+    --context: #8fb0d9;
+    --context-soft: #1e2836;
+    --heart: #d98fa2;
+    --heart-soft: #331f26;
+    --application: #d9a066;
+    --application-soft: #322619;
+    --testimony: #8fc0a4;
+    --testimony-soft: #1f2e26;
+
+    --ai-assisted: #a99fdd;
+    --ai-assisted-soft: #262238;
+    --ai-generated: #d9a066;
+    --ai-generated-soft: #322619;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.4), 0 10px 24px rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 4px 10px rgba(0, 0, 0, 0.45), 0 24px 50px rgba(0, 0, 0, 0.5);
+    --ring: 0 0 0 3px rgba(143, 192, 164, 0.3);
+  }
+}

@@ -4,33 +4,84 @@
   grid-template-rows: auto 1fr auto;
 }
 
+/* Present only to a keyboard, and only once it is wanted. */
+.skip {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 10;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: var(--on-accent);
+  text-decoration: none;
+  transform: translateY(-150%);
+  transition: transform var(--fast) var(--ease);
+}
+
+.skip:focus-visible {
+  transform: translateY(0);
+}
+
 .header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  border-bottom: 1px solid var(--line);
+  /* Translucent so content scrolling underneath is felt rather than hidden. */
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: saturate(180%) blur(12px);
+}
+
+.headerInner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.9rem 1.1rem;
-  border-bottom: 1px solid var(--line);
-  background: var(--paper-raised);
-  position: sticky;
-  top: 0;
-  z-index: 2;
+  gap: var(--space-4);
+  width: min(var(--shell-max), 100%);
+  margin-inline: auto;
+  padding: var(--space-3) var(--gutter);
 }
 
 .brand {
+  display: grid;
+  gap: 0.1rem;
   min-width: 0;
+  text-decoration: none;
+  color: inherit;
 }
 
 .wordmark {
-  font-family: var(--serif);
-  font-size: 1.15rem;
+  display: flex;
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+}
+
+/*
+ * Each letter in its section's colour. This is the only place the four hues
+ * appear together, and it is what makes them legible as a system everywhere
+ * else.
+ */
+.context {
+  color: var(--context);
+}
+.heart {
+  color: var(--heart);
+}
+.application {
+  color: var(--application);
+}
+.testimony {
+  color: var(--testimony);
 }
 
 .tagline {
-  color: var(--muted);
-  font-size: 0.78rem;
+  color: var(--faint);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-wide);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -38,70 +89,157 @@
 
 .desktopNav {
   display: none;
-  gap: 0.35rem;
+  gap: var(--space-1);
 }
 
 .navLink {
-  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.5rem 0.85rem;
+  border-radius: var(--radius-pill);
   color: var(--muted);
-  padding: 0.45rem 0.7rem;
-  border-radius: 999px;
-  font-size: 0.92rem;
+  font-size: var(--text-sm);
+  font-weight: 550;
+  text-decoration: none;
+  transition:
+    background var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.navLink:hover {
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
 .navLink.active {
-  color: var(--sage);
-  background: var(--sage-soft);
-  font-weight: 600;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-weight: 650;
+}
+
+.navIcon {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex: none;
 }
 
 .meta {
   display: flex;
   align-items: center;
-  gap: 0.7rem;
+  gap: var(--space-2);
+  flex: none;
 }
 
-.signOut,
+.who {
+  display: none;
+  max-width: 16ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--faint);
+  font-size: var(--text-xs);
+}
+
+.signOutLabel {
+  display: none;
+}
+
 .loading {
-  font-size: 0.78rem;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-4);
+  min-height: 100svh;
   color: var(--muted);
 }
 
-.signOut {
-  background: transparent;
-  border: 0;
-  cursor: pointer;
+.spinner {
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
 }
 
-.loading {
-  padding: 2rem;
-  text-align: center;
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
 }
 
 .main {
-  width: min(1180px, calc(100% - 2rem));
-  margin: 1.25rem auto 5.5rem;
+  width: min(var(--shell-max), 100%);
+  margin-inline: auto;
+  padding: var(--space-5) var(--gutter);
+  /* Clears the bottom bar, plus the home indicator on a notched phone. */
+  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
 }
 
 .mobileNav {
   position: sticky;
   bottom: 0;
+  z-index: 5;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 0.15rem;
-  padding: 0.45rem 0.5rem calc(0.45rem + env(safe-area-inset-bottom));
   border-top: 1px solid var(--line);
-  background: var(--paper-raised);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: saturate(180%) blur(12px);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
-.mobileNav .navLink {
-  text-align: center;
-  font-size: 0.78rem;
+.mobileLink {
+  display: grid;
+  justify-items: center;
+  gap: 0.2rem;
+  padding: var(--space-2) var(--space-1) calc(var(--space-2) + 2px);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 550;
+  text-decoration: none;
+  position: relative;
+  transition: color var(--fast) var(--ease);
 }
 
-@media (min-width: 800px) {
+.mobileLink.active {
+  color: var(--accent);
+}
+
+/* A short rule above the active item, drawn rather than implied by colour. */
+.mobileLink.active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 1.75rem;
+  height: 2px;
+  border-radius: 0 0 var(--radius-pill) var(--radius-pill);
+  background: var(--accent);
+}
+
+.mobileIcon {
+  width: 1.35rem;
+  height: 1.35rem;
+  transition: transform var(--normal) var(--ease-out);
+}
+
+.mobileLink.active .mobileIcon {
+  transform: translateY(-1px) scale(1.06);
+}
+
+@media (min-width: 640px) {
+  .signOutLabel {
+    display: inline;
+  }
+}
+
+@media (min-width: 860px) {
   .desktopNav {
     display: flex;
+  }
+
+  .who {
+    display: inline;
   }
 
   .mobileNav {
@@ -109,6 +247,7 @@
   }
 
   .main {
-    margin-bottom: 2rem;
+    padding-block: var(--space-6);
+    padding-bottom: var(--space-7);
   }
 }

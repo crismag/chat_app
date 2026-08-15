@@ -1,66 +1,7 @@
-:root {
-  --ink: #2b241c;
-  --muted: #6d6256;
-  --paper: #f6efe4;
-  --paper-raised: #fffaf3;
-  --line: #e4d8c8;
-  --sage: #3f5d4e;
-  --sage-soft: #e7efe9;
-  --ok: #2f6a4a;
-  --warn: #8a5a2b;
-  --serif: "Iowan Old Style", Palatino, "Palatino Linotype", "Times New Roman", serif;
-  --sans: "Segoe UI", system-ui, sans-serif;
-  --shadow: 0 10px 24px rgba(43, 36, 28, 0.08);
-
-  color: var(--ink);
-  background: var(--paper);
-  font: 16px/1.5 var(--sans);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-}
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-html,
-body,
-#root {
-  min-height: 100%;
-}
-
-body {
-  margin: 0;
-}
-
-h1,
-h2,
-h3 {
-  font-family: var(--serif);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-  margin: 0;
-}
-
-p {
-  margin: 0;
-}
-
-a {
-  color: inherit;
-}
-
-button,
-input,
-textarea {
-  font: inherit;
-}
-
-:focus-visible {
-  outline: 2px solid var(--sage);
-  outline-offset: 3px;
-}
+/*
+ * Entry point for styling. Order matters: tokens define the vocabulary, base
+ * applies it to bare elements, ui builds the shared components on top.
+ */
+@import './styles/tokens.css';
+@import './styles/base.css';
+@import './styles/ui.css';

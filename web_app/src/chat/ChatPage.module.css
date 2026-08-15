@@ -92,3 +92,188 @@
 .proposal {
   margin-bottom: 0.8rem;
 }
+
+/* ---------------------------------------------------------------------------
+ * Design-system pass.
+ *
+ * Appended rather than rewritten so the layout above is untouched — this only
+ * replaces the ad-hoc colours and spacing with tokens, and gives the four
+ * C.H.A.T. sections the identity they carry everywhere else in the app.
+ * ------------------------------------------------------------------------ */
+
+.workspace {
+  gap: var(--space-4);
+}
+
+.sidebar,
+.thread,
+.sections {
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+/*
+ * The panel headings were set at the global h2 size, which is tuned for a page
+ * title and overflowed a 200px column. In a side panel they are labels.
+ */
+/*
+ * Panel headings. These were inheriting the global h2 size, which is tuned for
+ * a page title and overflowed a 200px column — the word "Conversation" ran past
+ * its own card. In a side panel a heading is a label, so it is sized like one.
+ */
+.sidebar h1,
+.sidebar h2,
+.sections h1,
+.sections h2 {
+  font-size: var(--text-md);
+  letter-spacing: 0.02em;
+  margin-bottom: var(--space-3);
+}
+
+.sidebar input,
+.sections textarea,
+.composer textarea,
+.composer input {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  transition:
+    border-color var(--fast) var(--ease),
+    box-shadow var(--fast) var(--ease);
+}
+
+.sidebar input:focus-visible,
+.sections textarea:focus-visible,
+.composer textarea:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+
+.sidebar button,
+.composer button,
+.actions button {
+  min-height: 2.4rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 550;
+  transition:
+    background var(--fast) var(--ease),
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.sidebar button:hover,
+.composer button:hover,
+.actions button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* The one primary action in each panel reads as the primary action. */
+.sidebar form button[type='submit'],
+.composer button[type='submit'] {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--on-accent);
+}
+
+.sidebar form button[type='submit']:hover,
+.composer button[type='submit']:hover {
+  background: var(--accent-hover);
+  color: var(--on-accent);
+}
+
+.list button {
+  width: 100%;
+  text-align: left;
+  border-radius: var(--radius-md);
+}
+
+.activeItem,
+.list .activeItem {
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: var(--accent-ink);
+  font-weight: 650;
+}
+
+/*
+ * The four sections, in order: Context, Heart, Application, Testimony.
+ *
+ * Each gets its letter's colour as a rule down the left edge and on its label.
+ * Nothing else in the panel changes — the point is that a user learns which
+ * section is which by shape and colour rather than by reading four headings
+ * every time.
+ */
+.sections label {
+  display: grid;
+  gap: var(--space-2);
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--line);
+  font-size: var(--text-sm);
+  font-weight: 650;
+  text-transform: capitalize;
+  letter-spacing: 0.01em;
+}
+
+.sections label:nth-of-type(1) {
+  border-left-color: var(--context);
+  color: var(--context);
+}
+.sections label:nth-of-type(2) {
+  border-left-color: var(--heart);
+  color: var(--heart);
+}
+.sections label:nth-of-type(3) {
+  border-left-color: var(--application);
+  color: var(--application);
+}
+.sections label:nth-of-type(4) {
+  border-left-color: var(--testimony);
+  color: var(--testimony);
+}
+
+/* The field itself stays neutral; only the label and rule carry the hue. */
+.sections label textarea {
+  color: var(--ink);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.messages {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.error {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+.proposal {
+  border: 1px dashed var(--ai-assisted);
+  border-radius: var(--radius-md);
+  background: var(--ai-assisted-soft);
+  padding: var(--space-3);
+}
+
+@media (max-width: 900px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+}

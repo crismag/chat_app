@@ -1,63 +1,189 @@
+/*
+ * The sign-in screen.
+ *
+ * Two panels on a wide viewport — the framework on the left, the form on the
+ * right — collapsing to one column on a phone, where the framework moves below
+ * the form. Someone on a phone came here to sign in; someone on a laptop has
+ * room to read first.
+ */
 .page {
-  background: var(--paper-raised);
+  display: grid;
+  gap: var(--space-6);
+  align-items: center;
+  min-height: 100svh;
+  width: min(var(--shell-max), 100%);
+  margin-inline: auto;
+  padding: var(--space-6) var(--gutter);
+}
+
+.aside {
+  order: 2;
+  display: grid;
+  gap: var(--space-4);
+  max-width: 34rem;
+}
+
+.wordmark {
+  display: flex;
+  font-family: var(--font-serif);
+  font-size: clamp(2rem, 1.4rem + 2.6vw, 3.25rem);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.context {
+  color: var(--context);
+}
+.heart {
+  color: var(--heart);
+}
+.application {
+  color: var(--application);
+}
+.testimony {
+  color: var(--testimony);
+}
+
+.asideTitle {
+  font-size: var(--text-xl);
+  color: var(--ink);
+  max-width: 20ch;
+}
+
+.letters {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.letterRow {
+  display: grid;
+  grid-template-columns: 2rem 1fr;
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.letterMark {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-md);
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+/*
+ * Each letter sits on its own tinted chip. The same four colours run through
+ * the rest of the app, so this doubles as the legend for them.
+ */
+.letterMark.context {
+  background: var(--context-soft);
+  color: var(--context);
+}
+.letterMark.heart {
+  background: var(--heart-soft);
+  color: var(--heart);
+}
+.letterMark.application {
+  background: var(--application-soft);
+  color: var(--application);
+}
+.letterMark.testimony {
+  background: var(--testimony-soft);
+  color: var(--testimony);
+}
+
+.letterRow dd {
+  margin: 0;
+  display: grid;
+  gap: 0.1rem;
+}
+
+.letterRow dd strong {
+  font-size: var(--text-base);
+  color: var(--ink);
+}
+
+.letterRow dd span {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  line-height: var(--leading-snug);
+}
+
+.panel {
+  order: 1;
+  display: grid;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 26rem;
+  margin-inline: auto;
+  padding: var(--space-6);
   border: 1px solid var(--line);
-  border-radius: 1.1rem;
-  padding: 1.5rem;
-  box-shadow: var(--shadow);
-  max-width: 28rem;
-  margin: 2rem auto;
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
 }
 
-.kicker {
-  color: var(--sage);
-  font-size: 0.78rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  margin-bottom: 0.45rem;
-}
-
-.lead,
-.error {
-  margin-top: 0.7rem;
-}
-
-.error {
-  color: var(--warn);
+.lead {
+  color: var(--muted);
+  font-size: var(--text-sm);
 }
 
 .form {
   display: grid;
-  gap: 0.85rem;
-  margin-top: 1.1rem;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
 }
 
-.form label {
-  display: grid;
-  gap: 0.3rem;
-  font-size: 0.92rem;
+.form button[type='submit'] {
+  width: 100%;
+  margin-top: var(--space-1);
 }
 
-.form input,
-.form textarea,
-.form select,
-.form button {
-  border: 1px solid var(--line);
-  border-radius: 0.7rem;
-  padding: 0.6rem 0.75rem;
-  background: #fff;
+.error {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--text-sm);
 }
 
-.form button,
-.link {
-  background: var(--sage);
-  color: #fff;
-  border: 0;
-  cursor: pointer;
+.switch {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  text-align: center;
 }
 
 .link {
-  margin-top: 0.9rem;
-  background: transparent;
-  color: var(--sage);
   padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.link:hover {
+  color: var(--accent-hover);
+}
+
+@media (min-width: 900px) {
+  .page {
+    grid-template-columns: 1fr minmax(0, 26rem);
+    gap: var(--space-8);
+  }
+
+  .aside {
+    order: 0;
+  }
+
+  .panel {
+    order: 0;
+    margin-inline: 0;
+  }
 }
