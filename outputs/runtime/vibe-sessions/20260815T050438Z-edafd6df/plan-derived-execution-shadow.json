@@ -1,0 +1,176 @@
+{
+  "generated_at": "2026-08-15T05:04:42Z",
+  "run_id": "20260815T050438Z-edafd6df",
+  "execution_plan_path": "/mnt/ai/workspaces/chat_app/docs/plans/2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri-execution-plan.md",
+  "candidate_unit_count": 19,
+  "executable_unit_count": 1,
+  "specialist_dispatch_unit_count": 9,
+  "advisory_only_unit_count": 6,
+  "ambiguous_unit_count": 3,
+  "unsafe_unit_count": 0,
+  "non_executable_narrative_count": 0,
+  "units": [
+    {
+      "unit_id": "shadow-01",
+      "source_section": "Wave Plan",
+      "line": "- Wave 1: design confirmation and implementation preparation",
+      "classification": "advisory_only_unit",
+      "reason": "narrative_bullet_without_executable_command",
+      "extracted_commands": []
+    },
+    {
+      "unit_id": "shadow-02",
+      "source_section": "Wave Plan",
+      "line": "- Wave 2: implementation and targeted verification",
+      "classification": "advisory_only_unit",
+      "reason": "narrative_bullet_without_executable_command",
+      "extracted_commands": []
+    },
+    {
+      "unit_id": "shadow-03",
+      "source_section": "Wave Plan",
+      "line": "- Wave 3: cleanup and residual-risk review",
+      "classification": "advisory_only_unit",
+      "reason": "narrative_bullet_without_executable_command",
+      "extracted_commands": []
+    },
+    {
+      "unit_id": "shadow-04",
+      "source_section": "Specialist Skill Dispatch Plan",
+      "line": "- Specialist routing is mandatory and bounded inside governed `vibe`; it does not transfer runtime authority away from vibe.",
+      "classification": "specialist_dispatch_unit",
+      "reason": "bounded_native_specialist_dispatch_declared",
+      "extracted_commands": [
+        "vibe"
+      ]
+    },
+    {
+      "unit_id": "shadow-05",
+      "source_section": "Specialist Skill Dispatch Plan",
+      "line": "- This section lists only effective approved dispatch; non-adopted router candidates and local suggestions remain packet/audit data, not user-facing execution requirements.",
+      "classification": "specialist_dispatch_unit",
+      "reason": "bounded_native_specialist_dispatch_declared",
+      "extracted_commands": []
+    },
+    {
+      "unit_id": "shadow-06",
+      "source_section": "Specialist Skill Dispatch Plan",
+      "line": "- Before specialist execution starts, governed `vibe` emits one unified disclosure for the effective `approved_dispatch` set using each skill's real `native_skill_entrypoint`.",
+      "classification": "specialist_dispatch_unit",
+      "reason": "bounded_native_specialist_dispatch_declared",
+      "extracted_commands": [
+        "vibe",
+        "approved_dispatch",
+        "native_skill_entrypoint"
+      ]
+    },
+    {
+      "unit_id": "shadow-07",
+      "source_section": "Specialist Skill Dispatch Plan",
+      "line": "- Each specialist must be invoked through its native workflow, input contract, and validation style.",
+      "classification": "specialist_dispatch_unit",
+      "reason": "bounded_native_specialist_dispatch_declared",
+      "extracted_commands": []
+    },
+    {
+      "unit_id": "shadow-08",
+      "source_section": "Specialist Skill Dispatch Plan",
+      "line": "- Specialist outputs remain subordinate to the frozen requirement and the governed plan.",
+      "classification": "specialist_dispatch_unit",
+      "reason": "bounded_native_specialist_dispatch_declared",
+      "extracted_commands": []
+    },
+    {
+      "unit_id": "shadow-09",
+      "source_section": "Specialist Skill Dispatch Plan",
+      "line": "- Dispatch scrapling as specialist_assist.",
+      "classification": "specialist_dispatch_unit",
+      "reason": "bounded_native_specialist_dispatch_declared",
+      "extracted_commands": []
+    },
+    {
+      "unit_id": "shadow-10",
+      "source_section": "Specialist Skill Dispatch Plan",
+      "line": "- Dispatch spreadsheet as specialist_assist.",
+      "classification": "specialist_dispatch_unit",
+      "reason": "bounded_native_specialist_dispatch_declared",
+      "extracted_commands": []
+    },
+    {
+      "unit_id": "shadow-11",
+      "source_section": "Specialist Consultation",
+      "line": "- Consulted Skill: scrapling",
+      "classification": "specialist_dispatch_unit",
+      "reason": "specialist_consultation_or_lifecycle_declared",
+      "extracted_commands": []
+    },
+    {
+      "unit_id": "shadow-12",
+      "source_section": "Specialist Consultation",
+      "line": "- Consulted Skill: spreadsheet",
+      "classification": "specialist_dispatch_unit",
+      "reason": "specialist_consultation_or_lifecycle_declared",
+      "extracted_commands": []
+    },
+    {
+      "unit_id": "shadow-13",
+      "source_section": "Verification Commands",
+      "line": "- Run targeted repo verification for changed surfaces.",
+      "classification": "ambiguous_unit",
+      "reason": "verification intent present but command not frozen",
+      "extracted_commands": []
+    },
+    {
+      "unit_id": "shadow-14",
+      "source_section": "Verification Commands",
+      "line": "- Run runtime contract gate before claiming completion.",
+      "classification": "ambiguous_unit",
+      "reason": "verification intent present but command not frozen",
+      "extracted_commands": []
+    },
+    {
+      "unit_id": "shadow-15",
+      "source_section": "Verification Commands",
+      "line": "- Review the delivery-acceptance report emitted during `phase_cleanup` before using full completion language.",
+      "classification": "executable_unit",
+      "reason": "inline_command_detected",
+      "extracted_commands": [
+        "phase_cleanup"
+      ]
+    },
+    {
+      "unit_id": "shadow-16",
+      "source_section": "Verification Commands",
+      "line": "- Re-run mirror sync and parity validation before release claims.",
+      "classification": "ambiguous_unit",
+      "reason": "verification intent present but command not frozen",
+      "extracted_commands": []
+    },
+    {
+      "unit_id": "shadow-17",
+      "source_section": "Phase Cleanup Contract",
+      "line": "- Remove temp artifacts created by the wave.",
+      "classification": "advisory_only_unit",
+      "reason": "cleanup requirement declared but execution delegated to cleanup stage",
+      "extracted_commands": []
+    },
+    {
+      "unit_id": "shadow-18",
+      "source_section": "Phase Cleanup Contract",
+      "line": "- Run node audit and cleanup when needed.",
+      "classification": "advisory_only_unit",
+      "reason": "cleanup requirement declared but execution delegated to cleanup stage",
+      "extracted_commands": []
+    },
+    {
+      "unit_id": "shadow-19",
+      "source_section": "Phase Cleanup Contract",
+      "line": "- Write cleanup receipt before completion.",
+      "classification": "advisory_only_unit",
+      "reason": "cleanup requirement declared but execution delegated to cleanup stage",
+      "extracted_commands": []
+    }
+  ],
+  "proof_class": "structure",
+  "promotion_suitable": false
+}

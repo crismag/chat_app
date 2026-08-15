@@ -89,31 +89,51 @@ The intended baseline is:
 - **Web UI:** React
 - **Build tooling:** Node.js
 - **Mobile packaging:** Capacitor
-- **Backend:** API service, initially expected to be FastAPI/Python or TypeScript depending on implementation needs
+- **Backend:** TypeScript API (Hono) sharing types with the web app
 - **Database:** PostgreSQL
 - **Visual renderer:** React + HTML/CSS templates with image export
 - **AI:** provider abstraction so text and image providers can be changed without rewriting product logic
 
 The goal is one shared product implementation, not three independent applications.
 
-## Target repository shape
+## Current repository shape
 
 ```text
 chat_app/
 ├── web_app/                 # React + TypeScript product UI
-├── api/                     # Backend API and domain services
-├── packages/                # Optional shared packages as the codebase grows
-│   ├── shared/
-│   └── create-engine/
-├── android/                 # Capacitor-generated Android native shell
-├── ios/                     # Capacitor-generated iOS native shell
+├── api/                     # Hono/TypeScript API
+├── packages/
+│   └── shared/              # Shared types and domain constants
 ├── docs/
 │   └── development/
+├── .github/workflows/
+├── package.json
 ├── .gitignore
 └── README.md
 ```
 
-`android/` and `ios/` are native integration layers, not independent application implementations. Most product development should happen in `web_app/`, shared packages, and the backend.
+`android/` and `ios/` will be added in the mobile packaging phase. They are native integration layers, not independent application implementations. Most product development should happen in `web_app/`, shared packages, and the backend.
+
+## Local development
+
+Requires Node.js 22+.
+
+```bash
+npm install
+npm run dev
+```
+
+- Web: http://localhost:5173
+- API health: http://localhost:8000/api/health
+
+Useful commands:
+
+```bash
+npm test
+npm run lint
+npm run typecheck
+npm run build
+```
 
 ## Initial MVP
 
@@ -147,6 +167,6 @@ Start with:
 
 ## Status
 
-**Foundation / pre-scaffold.**
+**Phase 0 foundation scaffold.**
 
-Product boundaries and architectural direction are being established before framework-generated files and implementation are added.
+The web app and API start locally. Product areas other than the shell and API health check are visible as placeholders and are not implemented yet.

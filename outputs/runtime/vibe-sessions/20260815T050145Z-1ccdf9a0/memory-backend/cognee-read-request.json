@@ -1,0 +1,22 @@
+{
+  "lane": "cognee",
+  "stage": "skeleton_check",
+  "task": "implement full C.H.A.T. web application React TypeScript Vite; private Scripture conversation library community create-engine; Context Heart Application Testimony; existing Phase 0 scaffold",
+  "top_k": 3,
+  "max_chars_per_item": 220,
+  "keywords": [
+    "implement",
+    "full",
+    "web",
+    "application",
+    "react",
+    "typescript",
+    "vite",
+    "private",
+    "scripture",
+    "conversation",
+    "library",
+    "community"
+  ],
+  "project_key_source": null
+}

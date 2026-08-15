@@ -121,11 +121,12 @@ The UI should communicate what operation is being requested. "Fix grammar" and "
 
 The original user message must remain recoverable.
 
-Particular care is required for testimony:
+Particular care is required for Heart and Testimony:
 
-- AI must not invent a personal experience for the user.
+- AI must not invent how a passage touched the user, or invent a personal experience, declaration, commitment, or prayer.
+- Heart must not be silently manufactured when the user has not expressed it.
 - AI may improve wording after user initiation.
-- AI-generated testimony-like text must not be represented as something the user actually experienced.
+- AI-generated testimony-like text must not be represented as something the user actually experienced or believes.
 - A user should be able to keep the original wording at any point.
 
 ## Library

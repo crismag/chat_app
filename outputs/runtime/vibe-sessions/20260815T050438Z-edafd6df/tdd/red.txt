@@ -1,0 +1,110 @@
+
+> api@0.1.0 test
+> vitest run
+
+
+ RUN  v4.1.10 /mnt/ai/workspaces/chat_app/api
+
+ ❯ src/app.test.ts (7 tests | 6 failed) 21ms
+     × a user can create a conversation, leave, and continue it 4ms
+     × another user cannot retrieve a private conversation 2ms
+     × only an explicit publish makes an entry community-visible 1ms
+     × extract leaves Heart and Testimony empty when the user did not express them 1ms
+     × grammar assistance preserves the original message 1ms
+     × finds the owner conversation by scripture reference and hides others 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/app.test.ts > private conversation loop > a user can create a conversation, leave, and continue it
+AssertionError: expected 404 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 404
+
+ ❯ src/app.test.ts:47:28
+     45|       }),
+     46|     });
+     47|     expect(created.status).toBe(201);
+       |                            ^
+     48|     const conversation = await created.json();
+     49|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  src/app.test.ts > private conversation loop > another user cannot retrieve a private conversation
+SyntaxError: Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+ ❯ src/app.test.ts:90:26
+     88|       body: JSON.stringify({ title: 'Private reflection' }),
+     89|     });
+     90|     const conversation = await created.json();
+       |                          ^
+     91|
+     92|     const stolen = await app.request(`/api/conversations/${conversatio…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  src/app.test.ts > publication and community > only an explicit publish makes an entry community-visible
+SyntaxError: Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+ ❯ src/app.test.ts:116:26
+    114|       body: JSON.stringify({ title: 'To share later' }),
+    115|     });
+    116|     const conversation = await created.json();
+       |                          ^
+    117|
+    118|     const before = await app.request('/api/community', {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  src/app.test.ts > C.H.A.T. extraction authorship > extract leaves Heart and Testimony empty when the user did not express them
+SyntaxError: Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+ ❯ src/app.test.ts:151:26
+    149|       body: JSON.stringify({ title: 'Psalm 23' }),
+    150|     });
+    151|     const conversation = await created.json();
+       |                          ^
+    152|
+    153|     await app.request(`/api/conversations/${conversation.id}/messages`…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  src/app.test.ts > C.H.A.T. extraction authorship > grammar assistance preserves the original message
+SyntaxError: Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+ ❯ src/app.test.ts:184:26
+    182|       body: JSON.stringify({ title: 'Draft' }),
+    183|     });
+    184|     const conversation = await created.json();
+       |                          ^
+    185|     const posted = await app.request(
+    186|       `/api/conversations/${conversation.id}/messages`,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  src/app.test.ts > library search > finds the owner conversation by scripture reference and hides others
+SyntaxError: Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)
+ ❯ src/app.test.ts:234:12
+    232|       headers: { Cookie: owner.cookie },
+    233|     });
+    234|     expect(await mine.json()).toEqual([
+       |            ^
+    235|       expect.objectContaining({ scriptureReference: 'John 15:5' }),
+    236|     ]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 1 passed (7)
+   Start at  01:07:31
+   Duration  111ms (transform 17ms, setup 0ms, import 30ms, tests 21ms, environment 0ms)
+
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /mnt/ai/workspaces/chat_app/api
+npm error workspace api@0.1.0
+npm error location /mnt/ai/workspaces/chat_app/api
+npm error command failed
+npm error command sh -c vitest run
+EXIT:1

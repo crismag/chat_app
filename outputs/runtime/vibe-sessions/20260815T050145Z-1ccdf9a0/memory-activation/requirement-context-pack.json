@@ -1,0 +1,34 @@
+{
+  "stage": "requirement_doc",
+  "source_stage": "bounded_memory_recall",
+  "owner": "state_store",
+  "disclosure_level": "decision_focused",
+  "generated_at": "2026-08-15T05:01:50Z",
+  "capsule_count": 1,
+  "selected_capsules": [
+    {
+      "capsule_id": "970df6176e87c6d4",
+      "owner": "Cognee",
+      "lane": "cognee",
+      "kind": "entity_relation_ingest",
+      "updated_at": "2026-05-07T13:45:57Z",
+      "title": "Cognee relation: design-react-vite-typescript-tailwind-cris-archon-ui-cockpit-fro specified_by 2026-05-07-design-react-vite-typescript-tailw...",
+      "why_now": "Matched Cognee memory for requirement_doc.",
+      "expansion_ref": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050145Z-1ccdf9a0/memory-backend/cognee-read-response.json#970df6176e87c6d4",
+      "summary_lines": [
+        "Cognee relation: design-react-vite-typescript-tailwind-cris-archon-ui-cockpit-fro specified_by 2026-05-07-design-react-vite-typescript-tailwind-cris-archon-ui-cockpit-fro.md",
+        "specified_by"
+      ]
+    }
+  ],
+  "items": [
+    "Cognee relation: design-react-vite-typescript-tailwind-cris-archon-ui-cockpit-fro specified_by 2026-05-07-design-react-vite-typescript-tailwind-cris-archon-ui-cockpit-fro.md",
+    "specified_by"
+  ],
+  "estimated_tokens": 47,
+  "budget": {
+    "top_k": 2,
+    "max_tokens": 120,
+    "max_chars_per_item": 260
+  }
+}

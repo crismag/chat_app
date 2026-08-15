@@ -1,0 +1,20 @@
+{
+  "stage": "phase_cleanup",
+  "fold_kind": "deepagent_memory_fold_local",
+  "generated_at": "2026-08-15T05:04:44Z",
+  "working_memory": [
+    "Requirement doc: /mnt/ai/workspaces/chat_app/docs/requirements/2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri.md",
+    "Execution plan: /mnt/ai/workspaces/chat_app/docs/plans/2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri-execution-plan.md",
+    "Runtime status: completed_with_failures"
+  ],
+  "tool_memory": [
+    "Execution manifest: /mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/execution-manifest.json",
+    "Cleanup receipt: /mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/cleanup-receipt.json"
+  ],
+  "evidence_anchors": [
+    "/mnt/ai/workspaces/chat_app/docs/requirements/2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri.md",
+    "/mnt/ai/workspaces/chat_app/docs/plans/2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri-execution-plan.md",
+    "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/execution-manifest.json",
+    "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/cleanup-receipt.json"
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "lane_id": "lane-release-install-runtime-coherence-gate",
+  "lane_kind": "execution_unit",
+  "lane_root": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/child-lanes/lane-release-install-runtime-coherence-gate",
+  "run_id": "lane-release-install-runtime-coherence-gate",
+  "mode": "interactive_governed",
+  "governance_scope": "child",
+  "root_run_id": "20260815T050438Z-edafd6df",
+  "parent_run_id": "20260815T050438Z-edafd6df",
+  "parent_unit_id": "release-install-runtime-coherence-gate",
+  "requirement_doc_path": "/mnt/ai/workspaces/chat_app/docs/requirements/2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri.md",
+  "execution_plan_path": "/mnt/ai/workspaces/chat_app/docs/plans/2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri-execution-plan.md",
+  "repo_root": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe",
+  "default_timeout_seconds": 240,
+  "parallelizable": false,
+  "write_scope": "scripts/verify",
+  "review_mode": "two_stage_after_unit",
+  "delegation_envelope_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/child-lanes/lane-release-install-runtime-coherence-gate/delegation-envelope.json",
+  "tokens": {
+    "${EXECUTION_PLAN}": "/mnt/ai/workspaces/chat_app/docs/plans/2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri-execution-plan.md",
+    "${TARGET_ROOT}": "/home/cris/.cursor",
+    "${REQUIREMENT_DOC}": "/mnt/ai/workspaces/chat_app/docs/requirements/2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri.md",
+    "${SESSION_ROOT}": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df",
+    "${REPO_ROOT}": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe",
+    "${RUN_ID}": "20260815T050438Z-edafd6df",
+    "${ROOT_RUN_ID}": "20260815T050438Z-edafd6df"
+  },
+  "unit": {
+    "unit_id": "release-install-runtime-coherence-gate",
+    "kind": "powershell_file",
+    "parallelizable": true,
+    "write_scope": "scripts/verify",
+    "script_path": "scripts/verify/vibe-release-install-runtime-coherence-gate.ps1",
+    "arguments": [],
+    "cwd": "${REPO_ROOT}",
+    "timeout_seconds": 240,
+    "expected_exit_code": 0,
+    "expected_artifacts": []
+  },
+  "dispatch": null
+}

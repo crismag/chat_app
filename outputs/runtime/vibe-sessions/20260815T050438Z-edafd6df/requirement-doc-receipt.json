@@ -1,0 +1,27 @@
+{
+  "stage": "requirement_doc",
+  "run_id": "20260815T050438Z-edafd6df",
+  "governance_scope": "root",
+  "mode": "interactive_governed",
+  "requirement_doc_path": "/mnt/ai/workspaces/chat_app/docs/requirements/2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri.md",
+  "child_requirement_handoff_path": null,
+  "canonical_write_allowed": true,
+  "inherited_requirement_doc_path": null,
+  "runtime_input_packet_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/runtime-input-packet.json",
+  "code_task_tdd_decision": {
+    "mode": "required",
+    "source": "runtime_inference",
+    "reason": "The task includes implementation or defect-correction intent that requires code-task TDD evidence.",
+    "exception": null
+  },
+  "discussion_consultation_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/discussion-specialist-consultation.json",
+  "discussion_consultation_count": 0,
+  "discussion_consultation_user_disclosure_count": 2,
+  "memory_context_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/memory-activation/requirement-context-pack.json",
+  "memory_context_item_count": 2,
+  "memory_context_estimated_tokens": 59,
+  "memory_disclosure_level": "decision_focused",
+  "memory_capsule_count": 1,
+  "generated_at": "2026-08-15T05:04:41Z",
+  "specialist_lifecycle_disclosure_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/specialist-lifecycle-disclosure.json"
+}

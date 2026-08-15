@@ -1,0 +1,218 @@
+{
+  "enabled": true,
+  "policy_version": 1,
+  "policy_id": "specialist-consultation-v1",
+  "window_id": "planning",
+  "stage": "requirement_doc",
+  "candidate_skill_ids": [
+    "scrapling",
+    "spreadsheet"
+  ],
+  "approved_consultation": [
+    {
+      "skill_id": "scrapling",
+      "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+      "native_skill_description": "\"CLI-first web scraping & content extraction with optional MCP server. Use when you have target URLs and need clean, selector-based outputs (html/md/txt).\"",
+      "consultation_reason": "top ranked specialist candidate from pack 'web-scraping' via fallback_task_default",
+      "consultation_scope": "improve plan sequencing, verification coverage, rollback notes, and ownership boundaries before plan freeze",
+      "consultation_role": "planning_consultant",
+      "consultation_stage": "requirement_doc",
+      "write_scope": "read_only",
+      "review_mode": "native_contract",
+      "required_inputs": [
+        "bounded specialist subtask contract",
+        "frozen requirement context",
+        "relevant source files or domain artifacts"
+      ],
+      "expected_outputs": [
+        "bounded specialist findings or code changes",
+        "verification notes aligned with the specialist skill"
+      ],
+      "verification_expectation": "Preserve the specialist skill's native workflow, boundaries, and validation style.",
+      "native_usage_required": true,
+      "must_preserve_workflow": true,
+      "contract_complete": true,
+      "contract_missing_fields": null,
+      "source_reason": "top ranked specialist candidate from pack 'web-scraping' via fallback_task_default",
+      "dispatch_phase": "in_execution",
+      "execution_priority": 50,
+      "rank": 1,
+      "confidence": 0.306,
+      "consultation_bucket": "primary"
+    },
+    {
+      "skill_id": "spreadsheet",
+      "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+      "native_skill_description": "\"Use when tasks involve creating, editing, analyzing, or formatting spreadsheets (`.xlsx`, `.csv`, `.tsv`) using Python (`openpyxl`, `pandas`), especially when formulas, references, and formatting need to be preserved and verified.\"",
+      "consultation_reason": "top ranked specialist candidate from pack 'docs-media' via fallback_task_default",
+      "consultation_scope": "improve plan sequencing, verification coverage, rollback notes, and ownership boundaries before plan freeze",
+      "consultation_role": "planning_consultant",
+      "consultation_stage": "requirement_doc",
+      "write_scope": "read_only",
+      "review_mode": "native_contract",
+      "required_inputs": [
+        "bounded specialist subtask contract",
+        "frozen requirement context",
+        "relevant source files or domain artifacts"
+      ],
+      "expected_outputs": [
+        "bounded specialist findings or code changes",
+        "verification notes aligned with the specialist skill"
+      ],
+      "verification_expectation": "Preserve the specialist skill's native workflow, boundaries, and validation style.",
+      "native_usage_required": true,
+      "must_preserve_workflow": true,
+      "contract_complete": true,
+      "contract_missing_fields": null,
+      "source_reason": "top ranked specialist candidate from pack 'docs-media' via fallback_task_default",
+      "dispatch_phase": "in_execution",
+      "execution_priority": 50,
+      "rank": 2,
+      "confidence": 0.2275,
+      "consultation_bucket": "primary"
+    }
+  ],
+  "deferred_to_execution": [],
+  "blocked": [],
+  "degraded": [],
+  "consulted_units": [],
+  "routed_units": [
+    {
+      "unit_id": "consult-planning-scrapling",
+      "kind": "specialist_consultation",
+      "status": "routed_pending_current_session",
+      "verification_passed": false,
+      "skill_id": "scrapling",
+      "consultation_window_id": "planning",
+      "consultation_stage": "requirement_doc",
+      "live_native_execution": false,
+      "degraded": false,
+      "blocked": false,
+      "direct_route": true,
+      "consultation_mode": "direct_current_session_route",
+      "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+      "summary": "Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(scrapling) unless that skill name is explicitly visible in the host registry.",
+      "consultation_notes": [
+        "No hidden host subprocess was launched for this specialist.",
+        "The current host session should load the specialist entrypoint directly and keep vibe as the only runtime authority.",
+        "Do not translate native_skill_entrypoint into Skill(scrapling) unless the host already exposes that skill name."
+      ],
+      "adoption_notes": [
+        "Use the specialist path already frozen in native_skill_entrypoint for same-session loading.",
+        "Do not replace vibe governance; absorb specialist guidance back into the governed artifact flow.",
+        "When same-session loading is path-resolved, prefer the declared native_skill_entrypoint over a host skill-name lookup."
+      ],
+      "verification_notes": [
+        "consultation_mode:direct_current_session_route",
+        "hidden_host_subprocess:false",
+        "native_skill_entrypoint:/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md"
+      ],
+      "observed_changed_files": [],
+      "response_json_path": null,
+      "prompt_path": null,
+      "schema_path": null,
+      "result_reason": "pending_direct_current_session_route",
+      "result_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/consultation-results/consult-planning-scrapling.json"
+    },
+    {
+      "unit_id": "consult-planning-spreadsheet",
+      "kind": "specialist_consultation",
+      "status": "routed_pending_current_session",
+      "verification_passed": false,
+      "skill_id": "spreadsheet",
+      "consultation_window_id": "planning",
+      "consultation_stage": "requirement_doc",
+      "live_native_execution": false,
+      "degraded": false,
+      "blocked": false,
+      "direct_route": true,
+      "consultation_mode": "direct_current_session_route",
+      "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+      "summary": "Specialist was routed for direct current-session consultation. Load /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md in the current host session instead of launching a hidden host subprocess. Do not replace this path with Skill(spreadsheet) unless that skill name is explicitly visible in the host registry.",
+      "consultation_notes": [
+        "No hidden host subprocess was launched for this specialist.",
+        "The current host session should load the specialist entrypoint directly and keep vibe as the only runtime authority.",
+        "Do not translate native_skill_entrypoint into Skill(spreadsheet) unless the host already exposes that skill name."
+      ],
+      "adoption_notes": [
+        "Use the specialist path already frozen in native_skill_entrypoint for same-session loading.",
+        "Do not replace vibe governance; absorb specialist guidance back into the governed artifact flow.",
+        "When same-session loading is path-resolved, prefer the declared native_skill_entrypoint over a host skill-name lookup."
+      ],
+      "verification_notes": [
+        "consultation_mode:direct_current_session_route",
+        "hidden_host_subprocess:false",
+        "native_skill_entrypoint:/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md"
+      ],
+      "observed_changed_files": [],
+      "response_json_path": null,
+      "prompt_path": null,
+      "schema_path": null,
+      "result_reason": "pending_direct_current_session_route",
+      "result_path": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/consultation-results/consult-planning-spreadsheet.json"
+    }
+  ],
+  "user_disclosures": [
+    {
+      "skill_id": "scrapling",
+      "why_now": "top ranked specialist candidate from pack 'web-scraping' via fallback_task_default",
+      "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+      "native_skill_description": "\"CLI-first web scraping & content extraction with optional MCP server. Use when you have target URLs and need clean, selector-based outputs (html/md/txt).\"",
+      "consultation_stage": "requirement_doc",
+      "consultation_window_id": "planning",
+      "rendered_text": "Consulting scrapling now during planning because top ranked specialist candidate from pack 'web-scraping' via fallback_task_default. Loaded from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md."
+    },
+    {
+      "skill_id": "spreadsheet",
+      "why_now": "top ranked specialist candidate from pack 'docs-media' via fallback_task_default",
+      "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+      "native_skill_description": "\"Use when tasks involve creating, editing, analyzing, or formatting spreadsheets (`.xlsx`, `.csv`, `.tsv`) using Python (`openpyxl`, `pandas`), especially when formulas, references, and formatting need to be preserved and verified.\"",
+      "consultation_stage": "requirement_doc",
+      "consultation_window_id": "planning",
+      "rendered_text": "Consulting spreadsheet now during planning because top ranked specialist candidate from pack 'docs-media' via fallback_task_default. Loaded from /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md."
+    }
+  ],
+  "summary": {
+    "window_id": "planning",
+    "stage": "requirement_doc",
+    "approved_consultation_count": 2,
+    "deferred_to_execution_count": 0,
+    "blocked_count": 0,
+    "degraded_count": 0,
+    "consulted_unit_count": 0,
+    "routed_unit_count": 2,
+    "user_disclosure_count": 2,
+    "approved_skill_ids": [
+      "scrapling",
+      "spreadsheet"
+    ],
+    "deferred_skill_ids": [],
+    "blocked_skill_ids": [],
+    "degraded_skill_ids": [],
+    "consulted_skill_ids": [],
+    "routed_skill_ids": [
+      "scrapling",
+      "spreadsheet"
+    ]
+  },
+  "freeze_gate": {
+    "passed": true,
+    "errors": [],
+    "approved_skill_ids": [
+      "scrapling",
+      "spreadsheet"
+    ],
+    "consulted_skill_ids": [],
+    "routed_skill_ids": [
+      "scrapling",
+      "spreadsheet"
+    ],
+    "degraded_skill_ids": [],
+    "deferred_skill_ids": [],
+    "blocked_skill_ids": [],
+    "disclosed_skill_ids": [
+      "scrapling",
+      "spreadsheet"
+    ]
+  }
+}

@@ -1,0 +1,94 @@
+.workspace {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 900px) {
+  .workspace {
+    grid-template-columns: 15rem minmax(0, 1fr) 16rem;
+    align-items: start;
+  }
+}
+
+.sidebar,
+.thread,
+.sections,
+.proposal {
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 1rem;
+}
+
+.stack,
+.composer,
+.sections {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0.8rem 0 0;
+}
+
+.list button,
+.actions button,
+.composer button,
+.stack button,
+.thread header button {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 0.6rem;
+  padding: 0.45rem 0.6rem;
+  cursor: pointer;
+}
+
+.activeItem {
+  background: var(--sage-soft);
+  color: var(--sage);
+}
+
+.messages {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.8rem;
+}
+
+.actions button {
+  width: auto;
+}
+
+.composer textarea,
+.sections textarea,
+.stack input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  padding: 0.55rem;
+  min-height: 4.5rem;
+}
+
+.stack input {
+  min-height: 0;
+}
+
+.error {
+  color: var(--warn);
+}
+
+.proposal {
+  margin-bottom: 0.8rem;
+}

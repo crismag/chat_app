@@ -1,0 +1,71 @@
+{
+  "task": "implement full C.H.A.T. web application React TypeScript Vite; private Scripture... Deliverable: Governed implementation artifacts, verification evidence, and cleanup receipts. Constraints: Do not bypass the fixed six-stage governed runtime.; Do not widen scope silently beyond the frozen requirement document.. Update: implement full C.H.A.T. web application React TypeScript Vite; private Scripture conversation library community create-engine; Context Heart Application Testimony; existing Phase 0 scaffold",
+  "relations": [
+    {
+      "source": "implement-full-c-h-a-t-web-application-react-typescript-vite-pri",
+      "relation": "specified_by",
+      "target": "2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri.md",
+      "evidence_paths": [
+        "/mnt/ai/workspaces/chat_app/docs/requirements/2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri.md"
+      ],
+      "keywords": [
+        "implement",
+        "full",
+        "web",
+        "application",
+        "react",
+        "typescript",
+        "vite",
+        "private",
+        "scripture",
+        "deliverable",
+        "governed",
+        "implementation"
+      ]
+    },
+    {
+      "source": "implement-full-c-h-a-t-web-application-react-typescript-vite-pri",
+      "relation": "planned_in",
+      "target": "2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri-execution-plan.md",
+      "evidence_paths": [
+        "/mnt/ai/workspaces/chat_app/docs/plans/2026-08-15-implement-full-c-h-a-t-web-application-react-typescript-vite-pri-execution-plan.md"
+      ],
+      "keywords": [
+        "implement",
+        "full",
+        "web",
+        "application",
+        "react",
+        "typescript",
+        "vite",
+        "private",
+        "scripture",
+        "deliverable",
+        "governed",
+        "implementation"
+      ]
+    },
+    {
+      "source": "implement-full-c-h-a-t-web-application-react-typescript-vite-pri",
+      "relation": "executed_as",
+      "target": "execution-manifest.json",
+      "evidence_paths": [
+        "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/execution-manifest.json"
+      ],
+      "keywords": [
+        "implement",
+        "full",
+        "web",
+        "application",
+        "react",
+        "typescript",
+        "vite",
+        "private",
+        "scripture",
+        "deliverable",
+        "governed",
+        "implementation"
+      ]
+    }
+  ]
+}

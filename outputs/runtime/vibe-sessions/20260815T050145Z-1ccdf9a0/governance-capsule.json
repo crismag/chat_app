@@ -1,0 +1,18 @@
+{
+  "run_id": "20260815T050145Z-1ccdf9a0",
+  "root_run_id": "20260815T050145Z-1ccdf9a0",
+  "governance_scope": "root",
+  "runtime_selected_skill": "vibe",
+  "state_machine_version": "governed-runtime-v1",
+  "allowed_stage_sequence": [
+    "skeleton_check",
+    "deep_interview",
+    "requirement_doc",
+    "xl_plan",
+    "plan_execute",
+    "phase_cleanup"
+  ],
+  "requirement_truth_owner": "root_governed",
+  "plan_truth_owner": "root_governed",
+  "created_at": "2026-08-15T05:01:47Z"
+}

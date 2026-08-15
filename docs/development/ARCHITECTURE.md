@@ -52,7 +52,7 @@ If future requirements demand a genuinely independent native application, the re
 - TypeScript
 - React
 - Vite unless a concrete need for server-side rendering changes the decision
-- modern CSS strategy, potentially CSS modules, Tailwind, or a small design-system layer
+- CSS custom properties plus CSS modules for the initial design shell
 - responsive behavior from phone widths through desktop
 
 ### Product modules
@@ -111,7 +111,11 @@ Initial responsibilities:
 - generated-asset metadata;
 - storage references.
 
-FastAPI/Python is a reasonable initial choice if Python AI/tooling is useful. A TypeScript backend is also valid if keeping one language across the application becomes more valuable. This choice should not change the client-facing domain model.
+**Decision (Phase 0):** the API is TypeScript on Node, using Hono.
+
+Keeping one language across `web_app/`, `api/`, and `packages/shared/` is more valuable at this stage than a Python stack. AI providers will still sit behind an HTTP abstraction, so this choice does not lock the product to a particular model vendor.
+
+A later Python service remains possible if a specific AI/tooling need appears. It should not change the client-facing domain model.
 
 ## Database
 
@@ -139,6 +143,27 @@ AIInteraction
 ```
 
 Do not over-normalize the earliest implementation. The schema should preserve history and authorship while allowing iteration.
+
+## Authentication
+
+**Decision (Phase 0):** Phase 1 will use first-party email and password authentication with server-side sessions.
+
+Chosen model:
+
+- email + password registration and login;
+- session records stored by the API;
+- HTTP-only cookies rather than tokens in `localStorage`;
+- the same session API for Web and later Capacitor WebViews;
+- authorization checked on every data boundary, not only in the UI.
+
+Not required for MVP:
+
+- OAuth / social login;
+- magic links;
+- passkeys;
+- biometrics.
+
+If Capacitor WebViews later need help persisting the session cookie, add a small native secure-storage adapter around this same session model. Do not introduce a second auth protocol.
 
 ## Privacy boundary
 
@@ -170,13 +195,20 @@ A future data model may support section provenance, for example:
 
 ```text
 ChatSection
-- type: CONTEXT | HIGHLIGHT | APPLICATION | TESTIMONY
+- type: CONTEXT | HEART | APPLICATION | TESTIMONY
 - content
 - source_message_ids[]
 - author_origin: USER | AI_ASSISTED | AI_GENERATED
 - created_at
 - updated_at
 ```
+
+Section meaning:
+
+- **Context** is the person's understanding of the passage. AI may assist with historical, literary, or textual background, but the stored section represents the person's understanding.
+- **Heart** is personal reflection on how the passage touched, convicted, encouraged, challenged, or affected the person. Do not silently manufacture it.
+- **Application** is how the person says the passage applies to them and how they intend to respond.
+- **Testimony** may be a testimony, declaration of faith or conviction, commitment, prayer, or statement of belief. It is not limited to recounting a past event, and must never be invented for the user.
 
 This provides traceability without making the UI complicated.
 

@@ -1,0 +1,346 @@
+{
+  "generated_at": "2026-08-15T05:04:42Z",
+  "run_id": "20260815T050438Z-edafd6df",
+  "governance_scope": "root",
+  "grade": "L",
+  "profile_id": "repo_safe_execution_closure",
+  "delegation_mode": "serial_child_lanes",
+  "review_mode": "two_stage_after_unit",
+  "specialist_execution_mode": "native_bounded_units",
+  "max_parallel_units": 1,
+  "specialist_phase_bindings": {
+    "pre_execution": [],
+    "in_execution": [
+      {
+        "skill_id": "scrapling",
+        "source": "route_ranked",
+        "pack_id": "web-scraping",
+        "rank": 1,
+        "confidence": 0.306,
+        "reason": "top ranked specialist candidate from pack 'web-scraping' via fallback_task_default",
+        "task_type": "coding",
+        "recommended_scope": "bounded specialist assistance inside vibe-governed runtime",
+        "bounded_role": "specialist_assist",
+        "native_usage_required": true,
+        "must_preserve_workflow": true,
+        "required_inputs": [
+          "bounded specialist subtask contract",
+          "frozen requirement context",
+          "relevant source files or domain artifacts"
+        ],
+        "expected_outputs": [
+          "bounded specialist findings or code changes",
+          "verification notes aligned with the specialist skill"
+        ],
+        "verification_expectation": "Preserve the specialist skill's native workflow, boundaries, and validation style.",
+        "binding_profile": "default",
+        "dispatch_phase": "in_execution",
+        "execution_priority": 50,
+        "lane_policy": "inherit_grade",
+        "parallelizable_in_root_xl": true,
+        "write_scope": "specialist:scrapling",
+        "review_mode": "native_contract",
+        "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+        "skill_root": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling",
+        "native_skill_description": "\"CLI-first web scraping & content extraction with optional MCP server. Use when you have target URLs and need clean, selector-based outputs (html/md/txt).\"",
+        "visibility_class": "path_resolved",
+        "usage_required": true,
+        "invocation_reason": "top ranked specialist candidate from pack 'web-scraping' via fallback_task_default",
+        "expected_contribution": "specialist_assist",
+        "progressive_load_policy": [
+          "Open the specialist /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md entrypoint first.",
+          "If this specialist is disclosed only by native_skill_entrypoint, keep same-session loading path-based and do not replace it with Skill(scrapling) unless that skill name is explicitly host-visible in the current session."
+        ],
+        "promotion_eligible": true,
+        "destructive": false,
+        "destructive_reason_codes": [],
+        "rollback_possible": false,
+        "snapshot_required": false,
+        "contract_complete": true,
+        "contract_missing_fields": [],
+        "recommended_promotion_action": "auto_dispatch"
+      },
+      {
+        "skill_id": "spreadsheet",
+        "source": "route_ranked",
+        "pack_id": "docs-media",
+        "rank": 2,
+        "confidence": 0.2275,
+        "reason": "top ranked specialist candidate from pack 'docs-media' via fallback_task_default",
+        "task_type": "coding",
+        "recommended_scope": "bounded specialist assistance inside vibe-governed runtime",
+        "bounded_role": "specialist_assist",
+        "native_usage_required": true,
+        "must_preserve_workflow": true,
+        "required_inputs": [
+          "bounded specialist subtask contract",
+          "frozen requirement context",
+          "relevant source files or domain artifacts"
+        ],
+        "expected_outputs": [
+          "bounded specialist findings or code changes",
+          "verification notes aligned with the specialist skill"
+        ],
+        "verification_expectation": "Preserve the specialist skill's native workflow, boundaries, and validation style.",
+        "binding_profile": "default",
+        "dispatch_phase": "in_execution",
+        "execution_priority": 50,
+        "lane_policy": "inherit_grade",
+        "parallelizable_in_root_xl": true,
+        "write_scope": "specialist:spreadsheet",
+        "review_mode": "native_contract",
+        "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+        "skill_root": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet",
+        "native_skill_description": "\"Use when tasks involve creating, editing, analyzing, or formatting spreadsheets (`.xlsx`, `.csv`, `.tsv`) using Python (`openpyxl`, `pandas`), especially when formulas, references, and formatting need to be preserved and verified.\"",
+        "visibility_class": "path_resolved",
+        "usage_required": true,
+        "invocation_reason": "top ranked specialist candidate from pack 'docs-media' via fallback_task_default",
+        "expected_contribution": "specialist_assist",
+        "progressive_load_policy": [
+          "Open the specialist /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md entrypoint first.",
+          "If this specialist is disclosed only by native_skill_entrypoint, keep same-session loading path-based and do not replace it with Skill(spreadsheet) unless that skill name is explicitly host-visible in the current session."
+        ],
+        "promotion_eligible": true,
+        "destructive": false,
+        "destructive_reason_codes": [],
+        "rollback_possible": false,
+        "snapshot_required": false,
+        "contract_complete": true,
+        "contract_missing_fields": [],
+        "recommended_promotion_action": "auto_dispatch"
+      }
+    ],
+    "post_execution": [],
+    "verification": []
+  },
+  "parallelizable_specialist_unit_count": 2,
+  "waves": [
+    {
+      "wave_id": "wave-1",
+      "description": "Execute governed runtime proof units against repo-safe local commands.",
+      "steps": [
+        {
+          "step_id": "wave-1-step-1",
+          "execution_mode": "sequential",
+          "review_mode": "two_stage_after_unit",
+          "max_parallel_units": 1,
+          "units": [
+            {
+              "lane_id": "lane-runtime-neutral-freshness-gate-tests",
+              "lane_kind": "execution_unit",
+              "source_unit_id": "runtime-neutral-freshness-gate-tests",
+              "parallelizable": false,
+              "write_scope": "tests/runtime_neutral",
+              "review_mode": "two_stage_after_unit",
+              "unit": {
+                "unit_id": "runtime-neutral-freshness-gate-tests",
+                "kind": "python_command",
+                "parallelizable": true,
+                "write_scope": "tests/runtime_neutral",
+                "command": "${VGO_PYTHON}",
+                "arguments": [
+                  "-m",
+                  "unittest",
+                  "discover",
+                  "-s",
+                  "tests/runtime_neutral",
+                  "-p",
+                  "test_freshness_gate.py",
+                  "-v"
+                ],
+                "cwd": "${REPO_ROOT}",
+                "timeout_seconds": 240,
+                "expected_exit_code": 0,
+                "expected_artifacts": []
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "wave-1-step-2",
+          "execution_mode": "sequential",
+          "review_mode": "two_stage_after_unit",
+          "max_parallel_units": 1,
+          "units": [
+            {
+              "lane_id": "lane-release-install-runtime-coherence-gate",
+              "lane_kind": "execution_unit",
+              "source_unit_id": "release-install-runtime-coherence-gate",
+              "parallelizable": false,
+              "write_scope": "scripts/verify",
+              "review_mode": "two_stage_after_unit",
+              "unit": {
+                "unit_id": "release-install-runtime-coherence-gate",
+                "kind": "powershell_file",
+                "parallelizable": true,
+                "write_scope": "scripts/verify",
+                "script_path": "scripts/verify/vibe-release-install-runtime-coherence-gate.ps1",
+                "arguments": [],
+                "cwd": "${REPO_ROOT}",
+                "timeout_seconds": 240,
+                "expected_exit_code": 0,
+                "expected_artifacts": []
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "wave-1-specialist-in_execution-group-1-serial-1",
+          "execution_mode": "sequential",
+          "review_mode": "native_contract",
+          "max_parallel_units": 1,
+          "phase_id": "ungrouped",
+          "stage_order": 9999,
+          "stage_type": "",
+          "stage_label": "",
+          "units": [
+            {
+              "lane_id": "specialist-in_execution-ungrouped-scrapling",
+              "lane_kind": "specialist_dispatch",
+              "source_unit_id": "scrapling",
+              "specialist_skill_id": "scrapling",
+              "dispatch_phase": "in_execution",
+              "binding_profile": "default",
+              "lane_policy": "inherit_grade",
+              "execution_priority": 50,
+              "parallelizable": false,
+              "write_scope": "specialist:scrapling",
+              "review_mode": "native_contract",
+              "phase_id": "ungrouped",
+              "stage_order": 9999,
+              "stage_type": null,
+              "stage_label": null,
+              "dispatch": {
+                "skill_id": "scrapling",
+                "source": "route_ranked",
+                "pack_id": "web-scraping",
+                "rank": 1,
+                "confidence": 0.306,
+                "reason": "top ranked specialist candidate from pack 'web-scraping' via fallback_task_default",
+                "task_type": "coding",
+                "recommended_scope": "bounded specialist assistance inside vibe-governed runtime",
+                "bounded_role": "specialist_assist",
+                "native_usage_required": true,
+                "must_preserve_workflow": true,
+                "required_inputs": [
+                  "bounded specialist subtask contract",
+                  "frozen requirement context",
+                  "relevant source files or domain artifacts"
+                ],
+                "expected_outputs": [
+                  "bounded specialist findings or code changes",
+                  "verification notes aligned with the specialist skill"
+                ],
+                "verification_expectation": "Preserve the specialist skill's native workflow, boundaries, and validation style.",
+                "binding_profile": "default",
+                "dispatch_phase": "in_execution",
+                "execution_priority": 50,
+                "lane_policy": "inherit_grade",
+                "parallelizable_in_root_xl": true,
+                "write_scope": "specialist:scrapling",
+                "review_mode": "native_contract",
+                "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md",
+                "skill_root": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling",
+                "native_skill_description": "\"CLI-first web scraping & content extraction with optional MCP server. Use when you have target URLs and need clean, selector-based outputs (html/md/txt).\"",
+                "visibility_class": "path_resolved",
+                "usage_required": true,
+                "invocation_reason": "top ranked specialist candidate from pack 'web-scraping' via fallback_task_default",
+                "expected_contribution": "specialist_assist",
+                "progressive_load_policy": [
+                  "Open the specialist /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/scrapling/SKILL.runtime-mirror.md entrypoint first.",
+                  "If this specialist is disclosed only by native_skill_entrypoint, keep same-session loading path-based and do not replace it with Skill(scrapling) unless that skill name is explicitly host-visible in the current session."
+                ],
+                "promotion_eligible": true,
+                "destructive": false,
+                "destructive_reason_codes": [],
+                "rollback_possible": false,
+                "snapshot_required": false,
+                "contract_complete": true,
+                "contract_missing_fields": [],
+                "recommended_promotion_action": "auto_dispatch"
+              }
+            }
+          ]
+        },
+        {
+          "step_id": "wave-1-specialist-in_execution-group-1-serial-2",
+          "execution_mode": "sequential",
+          "review_mode": "native_contract",
+          "max_parallel_units": 1,
+          "phase_id": "ungrouped",
+          "stage_order": 9999,
+          "stage_type": "",
+          "stage_label": "",
+          "units": [
+            {
+              "lane_id": "specialist-in_execution-ungrouped-spreadsheet",
+              "lane_kind": "specialist_dispatch",
+              "source_unit_id": "spreadsheet",
+              "specialist_skill_id": "spreadsheet",
+              "dispatch_phase": "in_execution",
+              "binding_profile": "default",
+              "lane_policy": "inherit_grade",
+              "execution_priority": 50,
+              "parallelizable": false,
+              "write_scope": "specialist:spreadsheet",
+              "review_mode": "native_contract",
+              "phase_id": "ungrouped",
+              "stage_order": 9999,
+              "stage_type": null,
+              "stage_label": null,
+              "dispatch": {
+                "skill_id": "spreadsheet",
+                "source": "route_ranked",
+                "pack_id": "docs-media",
+                "rank": 2,
+                "confidence": 0.2275,
+                "reason": "top ranked specialist candidate from pack 'docs-media' via fallback_task_default",
+                "task_type": "coding",
+                "recommended_scope": "bounded specialist assistance inside vibe-governed runtime",
+                "bounded_role": "specialist_assist",
+                "native_usage_required": true,
+                "must_preserve_workflow": true,
+                "required_inputs": [
+                  "bounded specialist subtask contract",
+                  "frozen requirement context",
+                  "relevant source files or domain artifacts"
+                ],
+                "expected_outputs": [
+                  "bounded specialist findings or code changes",
+                  "verification notes aligned with the specialist skill"
+                ],
+                "verification_expectation": "Preserve the specialist skill's native workflow, boundaries, and validation style.",
+                "binding_profile": "default",
+                "dispatch_phase": "in_execution",
+                "execution_priority": 50,
+                "lane_policy": "inherit_grade",
+                "parallelizable_in_root_xl": true,
+                "write_scope": "specialist:spreadsheet",
+                "review_mode": "native_contract",
+                "native_skill_entrypoint": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md",
+                "skill_root": "/mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet",
+                "native_skill_description": "\"Use when tasks involve creating, editing, analyzing, or formatting spreadsheets (`.xlsx`, `.csv`, `.tsv`) using Python (`openpyxl`, `pandas`), especially when formulas, references, and formatting need to be preserved and verified.\"",
+                "visibility_class": "path_resolved",
+                "usage_required": true,
+                "invocation_reason": "top ranked specialist candidate from pack 'docs-media' via fallback_task_default",
+                "expected_contribution": "specialist_assist",
+                "progressive_load_policy": [
+                  "Open the specialist /mnt/CRISHDD1/home_configs/.codex/skills/vibe/bundled/skills/spreadsheet/SKILL.runtime-mirror.md entrypoint first.",
+                  "If this specialist is disclosed only by native_skill_entrypoint, keep same-session loading path-based and do not replace it with Skill(spreadsheet) unless that skill name is explicitly host-visible in the current session."
+                ],
+                "promotion_eligible": true,
+                "destructive": false,
+                "destructive_reason_codes": [],
+                "rollback_possible": false,
+                "snapshot_required": false,
+                "contract_complete": true,
+                "contract_missing_fields": [],
+                "recommended_promotion_action": "auto_dispatch"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

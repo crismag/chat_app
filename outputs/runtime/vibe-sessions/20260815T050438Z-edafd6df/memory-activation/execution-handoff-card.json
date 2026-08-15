@@ -1,0 +1,12 @@
+{
+  "stage": "plan_execute",
+  "owner": "state_store",
+  "status": "fallback_local_artifact",
+  "generated_at": "2026-08-15T05:04:44Z",
+  "source_execution_manifest": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050438Z-edafd6df/execution-manifest.json",
+  "items": [
+    "Execution status: completed_with_failures",
+    "Executed units: 4; failures: 1",
+    "Specialist execution status: direct_current_session_routed"
+  ]
+}

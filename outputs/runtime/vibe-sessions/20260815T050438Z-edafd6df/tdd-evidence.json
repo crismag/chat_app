@@ -1,0 +1,23 @@
+{
+  "status": "passing",
+  "state": "passing",
+  "notes": "Failing-first API tests were recorded in tdd/red.txt before the conversation, library, community, publication, and C.H.A.T. extraction routes existed. After implementation, targeted web and API tests passed in tdd/green.txt. Behavior-to-test mapping is in tdd/mapping.md. No TDD exception was used.",
+  "evidence_paths": [
+    "tdd/red.txt",
+    "tdd/green.txt",
+    "tdd/mapping.md"
+  ],
+  "red_phase_evidence_paths": [
+    "tdd/red.txt"
+  ],
+  "green_phase_evidence_paths": [
+    "tdd/green.txt"
+  ],
+  "covered_code_task_tdd_evidence_requirements": [
+    "Record failing-first evidence for the changed behavior before implementation or defect correction.",
+    "Record the green rerun that proves the targeted behavior passed after implementation.",
+    "Map the changed behavior to targeted verification evidence; generic suite success alone is insufficient.",
+    "If automated failing-first evidence is not appropriate, freeze and honor an explicit code-task TDD exception instead of silently skipping the requirement."
+  ],
+  "covered_code_task_tdd_exceptions": []
+}

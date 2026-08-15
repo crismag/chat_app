@@ -1,0 +1,35 @@
+{
+  "stage": "requirement_doc",
+  "source_stage": "bounded_memory_recall",
+  "owner": "state_store",
+  "disclosure_level": "decision_focused",
+  "generated_at": "2026-08-15T05:02:55Z",
+  "capsule_count": 1,
+  "selected_capsules": [
+    {
+      "capsule_id": "13e6f9a816280849",
+      "owner": "state_store",
+      "lane": null,
+      "kind": "fallback_digest",
+      "updated_at": null,
+      "title": "Task focus: implement full C.H.A.T. web application React TypeScript Vite; private Scripture... Deliverable: Governed implementation artifac...",
+      "why_now": "Matched state_store memory for requirement_doc.",
+      "expansion_ref": "/mnt/ai/workspaces/chat_app/outputs/runtime/vibe-sessions/20260815T050252Z-03c65145/memory-activation/skeleton-local-digest.json#13e6f9a816280849",
+      "summary_lines": [
+        "Task focus: implement full C.H.A.T. web application React TypeScript Vite; private Scripture... Deliverable: Governed implementation artifacts, verification evidence, and cleanup receipts. Constraints: Do not bypass the...",
+        "Git branch: ",
+        "All required governed runtime prerequisite paths are present."
+      ]
+    }
+  ],
+  "items": [
+    "Task focus: implement full C.H.A.T. web application React TypeScript Vite; private Scripture... Deliverable: Governed implementation artifacts, verification evidence, and cleanup receipts. Constraints: Do not bypass the...",
+    "Git branch: "
+  ],
+  "estimated_tokens": 59,
+  "budget": {
+    "top_k": 2,
+    "max_tokens": 120,
+    "max_chars_per_item": 260
+  }
+}
