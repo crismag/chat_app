@@ -36,8 +36,10 @@ import { AiService, type AiServiceOptions } from './ai/service.ts';
 import { createBibleRoutes } from './bible/routes.ts';
 import { createPassageStore } from './bible/passage-store.ts';
 import { BibleService } from './bible/service.ts';
-import { createProfileRoutes } from './profile/routes.ts';
+import { createProfileRoutes, ensureProfile } from './profile/routes.ts';
 import { createProfileStore } from './profile/store.ts';
+import { createCommunityRoutes } from './community/routes.ts';
+import { createCommunityStore } from './community/store.ts';
 import { createStudioCreationStore } from './create/store.ts';
 import { readStudioCreation } from './create/validation.ts';
 import { createStudioImageRoutes } from './create/image-routes.ts';
@@ -359,11 +361,51 @@ export function createApp(
    * `profile/store.ts` is what makes "authorisation before retrieval" checkable
    * in one place instead of spread across a route, a mapper and a component.
    */
+  const profiles = createProfileStore(store);
+
   app.route(
     '/api/profiles',
     createProfileRoutes({
       currentUser: (c) => currentUser(c),
-      profiles: createProfileStore(store),
+      profiles,
+    }),
+  );
+
+  /*
+   * Community, mounted the same way and for the same reasons.
+   *
+   * The module owns its tables, its migration and — the part that matters — the
+   * single visibility predicate that decides which publications a request may
+   * see. Everything it needs from this file arrives as a function, so it never
+   * learns what a store is, and `reflection` is visibly read-only: publishing
+   * copies a reflection into a publication and issues no write against the
+   * author's private source material.
+   *
+   * It is handed `null` when the backing cannot carry membership, and answers
+   * 503 rather than pretending. Membership that disappears on restart is not
+   * membership.
+   */
+  app.route(
+    '/api',
+    createCommunityRoutes({
+      currentUser: (c) => currentUser(c),
+      store: createCommunityStore(store),
+      reflection: (userId, conversationId) => {
+        const conversation = store.conversations.get(conversationId);
+        if (!conversation || conversation.userId !== userId) return null;
+        const stored = store.sections.get(conversationId);
+        return {
+          format: conversation.format,
+          title: conversation.title,
+          scriptureReference: conversation.scriptureReference,
+          sections:
+            conversation.format === CHAT_FORMATS.CONDENSED
+              ? condensedFromStore(stored)
+              : sectionsFromStore(stored),
+        };
+      },
+      userIdByEmail: (email) => store.usersByEmail.get(email) ?? null,
+      ensureIdentity: (user) => ensureProfile(profiles, user),
     }),
   );
 

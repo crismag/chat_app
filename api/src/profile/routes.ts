@@ -71,7 +71,7 @@ function nowIso(): string {
  * Deriving it on first read gives the same result for every existing account
  * too, which a registration-time hook would not.
  */
-function ensureProfile(profiles: ProfileStore, user: ProfileUser): StoredProfile {
+export function ensureProfile(profiles: ProfileStore, user: ProfileUser): StoredProfile {
   const existing = profiles.byUserId(user.id);
   if (existing) return existing;
 

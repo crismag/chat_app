@@ -1,0 +1,948 @@
+/*
+ * Community storage, and the queries that decide who may see what.
+ *
+ * ── Why this owns its tables ────────────────────────────────────────────────
+ *
+ * Same reasoning as the Bible connector and the profile module: the schema, the
+ * migration and the queries live in this directory, so the feature is one
+ * directory to read and one set of tables to drop, and adding it does not mean
+ * editing a schema file another piece of work is in the middle of.
+ *
+ * ── The rule this file exists to enforce ────────────────────────────────────
+ *
+ * **Authorisation is applied before or during retrieval, never as a filter
+ * afterwards.**
+ *
+ * The dangerous shape is the obvious one: select the publications, hand them to
+ * a route, and let the route drop the ones the viewer may not see. That leaks
+ * through whatever the route forgets — and the things it forgets are always the
+ * same two, named in the specification because they are the channels that leak
+ * after everything visible has been secured: **counts** and **AI answers**. A
+ * count computed over all rows and printed beside a filtered list says "and
+ * eleven more you may not see" in a single integer.
+ *
+ * So there is exactly one visibility predicate in this file — `VISIBLE_TO` — and
+ * it is interpolated into the WHERE clause of **every** statement that touches
+ * `publications`: the feed, the single fetch, the search, the tag facets, the
+ * counts, and the reaction and save lookups that hang off them. Section text is
+ * reached only *through* a publication that already passed it, by join, so an
+ * unauthorised reflection's words are never loaded into this process at all.
+ *
+ * ── Why there is no in-memory implementation ────────────────────────────────
+ *
+ * The profile module carries two implementations of its store so the suite can
+ * run against `MemoryStore`. That is a reasonable trade for a read-only public
+ * surface; it is a bad one here. Two implementations of an authorisation
+ * predicate is precisely the arrangement this repository has already been
+ * burned by — `store.ts` records it: "the same call merged in one store and
+ * replaced in the other, and the tests ran against the forgiving one." An
+ * access check that passes its tests in the lenient backing and fails in the
+ * real one is worse than no test.
+ *
+ * There is therefore one implementation, over SQLite, and the tests run against
+ * it with `:memory:` — the same statements, the same predicate, a clean
+ * database per test. Membership cannot live in a `Map` anyway: membership that
+ * disappears on restart is not membership.
+ */
+
+import { randomUUID } from 'node:crypto';
+import type { DatabaseSync } from 'node:sqlite';
+import {
+  COMMUNITY_ROLES,
+  MEMBERSHIP_STATES,
+  MODERATION_STATES,
+  REPORT_STATES,
+  type Audience,
+  type CommunityRole,
+  type MembershipState,
+  type ModerationState,
+} from '@chat/shared';
+
+/* ------------------------------------------------------------------- types */
+
+export type StoredCommunity = {
+  id: string;
+  name: string;
+  description: string;
+  createdByUserId: string;
+  createdAt: string;
+  closedAt: string | null;
+};
+
+export type StoredMembership = {
+  communityId: string;
+  userId: string;
+  role: CommunityRole;
+  state: MembershipState;
+  mutedAt: string | null;
+  invitedByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PublicationSection = {
+  type: string;
+  content: string;
+  authorOrigin: string;
+};
+
+export type PublicationHashtag = { tag: string; label: string };
+
+/**
+ * A publication as the viewer who asked for it may see it.
+ *
+ * Note what this shape does not carry: no `authorUserId` for anyone but the
+ * author's own use, no save *count*, no report list, no membership roster. A
+ * field cannot leak from a shape that never held it, and the shape is built by
+ * the query rather than trimmed afterwards.
+ *
+ * `savedByViewer` is per-requester by construction. There is no
+ * `saveCount` anywhere in this file — **the author must never see who saved a
+ * publication or how many private saves it has**, and the way to guarantee
+ * that is to never compute the number.
+ */
+export type PublicationView = {
+  id: string;
+  audience: Audience;
+  community: { id: string; name: string } | null;
+  author: { handle: string; displayName: string };
+  isAuthor: boolean;
+  format: string;
+  title: string;
+  scriptureReference: string | null;
+  caption: string;
+  sections: PublicationSection[];
+  hashtags: PublicationHashtag[];
+  encouragedCount: number;
+  encouragedByViewer: boolean;
+  savedByViewer: boolean;
+  moderationState: ModerationState;
+  /** Present only for a viewer who may act on it — the author or a moderator. */
+  canModerate: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type NewPublication = {
+  authorUserId: string;
+  conversationId: string;
+  audience: Audience;
+  communityId: string | null;
+  caption: string;
+  /** Which section types the author chose to include, in order. */
+  sectionTypes: readonly string[];
+  hashtags: readonly PublicationHashtag[];
+};
+
+export type FeedScope = 'shared' | 'public' | 'mine';
+
+export type FeedQuery = {
+  scope: FeedScope;
+  query?: string;
+  tag?: string;
+  communityId?: string;
+};
+
+/* -------------------------------------------------------------- migration */
+
+function migrate(db: DatabaseSync): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS communities (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      createdByUserId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      createdAt TEXT NOT NULL,
+      closedAt TEXT
+    );
+
+    /*
+     * Membership. One row per person per community, carrying both the role and
+     * the lifecycle state — and mutedAt as a timestamp rather than a state,
+     * so a mute restricts publishing without disturbing the meaning of
+     * "currently active member", which is what every access check compares to.
+     */
+    CREATE TABLE IF NOT EXISTS community_members (
+      communityId TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+      userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role TEXT NOT NULL DEFAULT 'member',
+      state TEXT NOT NULL,
+      mutedAt TEXT,
+      invitedByUserId TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      PRIMARY KEY (communityId, userId)
+    );
+
+    /*
+     * A publication is a *copy*, not a pointer.
+     *
+     * Title, Scripture reference, caption and the chosen section text are
+     * written here at publish time and never read back through to the
+     * reflection. That is what makes two of the rules true at once: choosing
+     * which sections appear cannot mutate the source reflection, and separate
+     * audiences get separate publications with their own captions, dates,
+     * reactions and moderation state — because they are separate rows.
+     *
+     * audience is one value. There is no second audience column and no join
+     * table, so "exactly one audience per publication" is a property of the
+     * schema rather than a rule someone has to remember.
+     */
+    CREATE TABLE IF NOT EXISTS publications (
+      id TEXT PRIMARY KEY,
+      authorUserId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      conversationId TEXT NOT NULL,
+      audience TEXT NOT NULL,
+      communityId TEXT REFERENCES communities(id) ON DELETE CASCADE,
+      format TEXT NOT NULL,
+      title TEXT NOT NULL,
+      scriptureReference TEXT,
+      caption TEXT NOT NULL DEFAULT '',
+      moderationState TEXT NOT NULL DEFAULT 'visible',
+      hiddenByUserId TEXT,
+      hiddenAt TEXT,
+      deletedAt TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS publication_sections (
+      publicationId TEXT NOT NULL REFERENCES publications(id) ON DELETE CASCADE,
+      position INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      content TEXT NOT NULL,
+      authorOrigin TEXT NOT NULL,
+      PRIMARY KEY (publicationId, type)
+    );
+
+    /*
+     * Tags are stored folded *and* as typed. The folded value is what a filter
+     * compares; the label is what the card shows. Neither grants access to
+     * anything — there is no query in this file that reads a tag and returns a
+     * permission, and there must never be one.
+     */
+    CREATE TABLE IF NOT EXISTS publication_tags (
+      publicationId TEXT NOT NULL REFERENCES publications(id) ON DELETE CASCADE,
+      tag TEXT NOT NULL,
+      label TEXT NOT NULL,
+      PRIMARY KEY (publicationId, tag)
+    );
+
+    /*
+     * One row per person per publication. The primary key is the "one per user"
+     * rule — a second Encouraged cannot be inserted, so the count cannot be
+     * inflated by a client that sends the request twice.
+     */
+    CREATE TABLE IF NOT EXISTS publication_reactions (
+      publicationId TEXT NOT NULL REFERENCES publications(id) ON DELETE CASCADE,
+      userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      createdAt TEXT NOT NULL,
+      PRIMARY KEY (publicationId, userId)
+    );
+
+    /* A private bookmark. Read only ever by the person who made it. */
+    CREATE TABLE IF NOT EXISTS publication_saves (
+      publicationId TEXT NOT NULL REFERENCES publications(id) ON DELETE CASCADE,
+      userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      createdAt TEXT NOT NULL,
+      PRIMARY KEY (publicationId, userId)
+    );
+
+    CREATE TABLE IF NOT EXISTS publication_reports (
+      id TEXT PRIMARY KEY,
+      publicationId TEXT NOT NULL REFERENCES publications(id) ON DELETE CASCADE,
+      reporterUserId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      reason TEXT NOT NULL,
+      detail TEXT NOT NULL DEFAULT '',
+      state TEXT NOT NULL DEFAULT 'open',
+      createdAt TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_members_user ON community_members(userId, state);
+    CREATE INDEX IF NOT EXISTS idx_pubs_author ON publications(authorUserId);
+    CREATE INDEX IF NOT EXISTS idx_pubs_audience ON publications(audience, communityId);
+    CREATE INDEX IF NOT EXISTS idx_pub_tags ON publication_tags(tag);
+    CREATE INDEX IF NOT EXISTS idx_reports_open ON publication_reports(publicationId, state);
+  `);
+}
+
+/* ---------------------------------------------------- the one predicate */
+
+/**
+ * The visibility predicate. **This is the whole authorisation model.**
+ *
+ * It is a SQL fragment rather than a function returning rows, so it can be
+ * pasted into the WHERE clause of every statement that reads publications — the
+ * feed, the single fetch, the search, the counts. A predicate that has to be
+ * *called* can be forgotten; a predicate that is part of the query cannot be,
+ * because the query does not compile without it.
+ *
+ * It takes the viewer's id twice (`?1` is used repeatedly by position, so
+ * callers bind it once) and admits exactly three things:
+ *
+ *  1. the viewer's own publications, at any audience, including `only_me`;
+ *  2. public publications that are not hidden;
+ *  3. community publications that are not hidden, **where the viewer holds an
+ *     `active` membership in that community right now**.
+ *
+ * The membership test is an `EXISTS` against the live row, evaluated on every
+ * statement — so a removed member loses access on their next request and an old
+ * URL preserves nothing. There is no cached grant, no token carrying a
+ * membership claim, and no place for one.
+ *
+ * A deleted publication is invisible to everyone including its author; the row
+ * survives for an open report to point at, which is the difference between
+ * hiding and erasing.
+ */
+const VISIBLE_TO = `
+  p.deletedAt IS NULL
+  AND (
+    p.authorUserId = ?1
+    OR (
+      p.moderationState = 'visible'
+      AND (
+        p.audience = 'public'
+        OR (
+          p.audience = 'community'
+          AND EXISTS (
+            SELECT 1 FROM community_members AS m
+             WHERE m.communityId = p.communityId
+               AND m.userId = ?1
+               AND m.state = 'active'
+          )
+        )
+      )
+    )
+  )
+`;
+
+/**
+ * The same predicate for a community's *own* page.
+ *
+ * A community publication is visible to an active member; the author of a
+ * hidden one still sees it, so they know what happened to it.
+ */
+const SCOPE_SHARED = `p.audience = 'community'`;
+const SCOPE_PUBLIC = `p.audience = 'public'`;
+const SCOPE_MINE = `p.authorUserId = ?1`;
+
+type Row = Record<string, unknown>;
+
+/* ------------------------------------------------------------------ store */
+
+export class CommunityStore {
+  private readonly db: DatabaseSync;
+
+  constructor(db: DatabaseSync) {
+    this.db = db;
+    migrate(db);
+  }
+
+  /* ------------------------------------------------------- communities */
+
+  createCommunity(input: {
+    name: string;
+    description: string;
+    createdByUserId: string;
+  }): StoredCommunity {
+    const timestamp = new Date().toISOString();
+    const community: StoredCommunity = {
+      id: randomUUID(),
+      name: input.name,
+      description: input.description,
+      createdByUserId: input.createdByUserId,
+      createdAt: timestamp,
+      closedAt: null,
+    };
+
+    this.db.exec('BEGIN');
+    try {
+      this.db
+        .prepare(
+          `INSERT INTO communities (id, name, description, createdByUserId, createdAt, closedAt)
+           VALUES (?, ?, ?, ?, ?, NULL)`,
+        )
+        .run(
+          community.id,
+          community.name,
+          community.description,
+          community.createdByUserId,
+          community.createdAt,
+        );
+      /*
+       * The creator is the owner, active immediately. "Every community must
+       * have at least one owner" is enforced by never creating one without.
+       */
+      this.db
+        .prepare(
+          `INSERT INTO community_members
+             (communityId, userId, role, state, mutedAt, invitedByUserId, createdAt, updatedAt)
+           VALUES (?, ?, ?, ?, NULL, NULL, ?, ?)`,
+        )
+        .run(
+          community.id,
+          input.createdByUserId,
+          COMMUNITY_ROLES.OWNER,
+          MEMBERSHIP_STATES.ACTIVE,
+          timestamp,
+          timestamp,
+        );
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+    return community;
+  }
+
+  community(id: string): StoredCommunity | null {
+    const row = this.db.prepare('SELECT * FROM communities WHERE id = ?').get(id) as
+      | Row
+      | undefined;
+    return row ? (row as unknown as StoredCommunity) : null;
+  }
+
+  /**
+   * The viewer's membership, read fresh.
+   *
+   * Every caller that needs to know whether someone may do something calls
+   * this rather than trusting anything the request carried. There is no
+   * membership cache — a removed member must lose access immediately, and the
+   * cheapest way to guarantee "immediately" is to never remember.
+   */
+  membership(communityId: string, userId: string): StoredMembership | null {
+    const row = this.db
+      .prepare('SELECT * FROM community_members WHERE communityId = ? AND userId = ?')
+      .get(communityId, userId) as Row | undefined;
+    return row ? (row as unknown as StoredMembership) : null;
+  }
+
+  /** Communities the viewer is an active member of. Never a directory. */
+  myCommunities(userId: string): (StoredCommunity & {
+    role: CommunityRole;
+    memberCount: number;
+  })[] {
+    return this.db
+      .prepare(
+        `SELECT c.*, m.role AS role,
+                (SELECT COUNT(*) FROM community_members AS x
+                  WHERE x.communityId = c.id AND x.state = 'active') AS memberCount
+           FROM communities AS c
+           JOIN community_members AS m ON m.communityId = c.id
+          WHERE m.userId = ? AND m.state = 'active'
+          ORDER BY c.name COLLATE NOCASE`,
+      )
+      .all(userId) as unknown as (StoredCommunity & {
+      role: CommunityRole;
+      memberCount: number;
+    })[];
+  }
+
+  /** Invitations addressed to this person and not yet answered. */
+  myInvitations(userId: string): (StoredCommunity & { invitedAt: string })[] {
+    return this.db
+      .prepare(
+        `SELECT c.*, m.createdAt AS invitedAt
+           FROM communities AS c
+           JOIN community_members AS m ON m.communityId = c.id
+          WHERE m.userId = ? AND m.state = 'invited'
+          ORDER BY m.createdAt DESC`,
+      )
+      .all(userId) as unknown as (StoredCommunity & { invitedAt: string })[];
+  }
+
+  members(communityId: string): (StoredMembership & {
+    handle: string | null;
+    displayName: string | null;
+  })[] {
+    return this.db
+      .prepare(
+        `SELECT m.*, pr.handle AS handle, pr.displayName AS displayName
+           FROM community_members AS m
+           LEFT JOIN profiles AS pr ON pr.userId = m.userId
+          WHERE m.communityId = ?
+          ORDER BY m.role, m.createdAt`,
+      )
+      .all(communityId) as unknown as (StoredMembership & {
+      handle: string | null;
+      displayName: string | null;
+    })[];
+  }
+
+  /** Invite, re-invite, or change a membership. One write, stated plainly. */
+  setMembership(input: {
+    communityId: string;
+    userId: string;
+    role?: CommunityRole;
+    state: MembershipState;
+    mutedAt?: string | null;
+    invitedByUserId?: string | null;
+  }): void {
+    const timestamp = new Date().toISOString();
+    const existing = this.membership(input.communityId, input.userId);
+    this.db
+      .prepare(
+        `INSERT INTO community_members
+           (communityId, userId, role, state, mutedAt, invitedByUserId, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(communityId, userId) DO UPDATE SET
+           role = excluded.role,
+           state = excluded.state,
+           mutedAt = excluded.mutedAt,
+           updatedAt = excluded.updatedAt`,
+      )
+      .run(
+        input.communityId,
+        input.userId,
+        input.role ?? existing?.role ?? COMMUNITY_ROLES.MEMBER,
+        input.state,
+        input.mutedAt === undefined ? (existing?.mutedAt ?? null) : input.mutedAt,
+        input.invitedByUserId ?? existing?.invitedByUserId ?? null,
+        existing?.createdAt ?? timestamp,
+        timestamp,
+      );
+  }
+
+  /** How many owners a community has, so the last one cannot be demoted away. */
+  ownerCount(communityId: string): number {
+    const row = this.db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM community_members
+          WHERE communityId = ? AND role = 'owner' AND state = 'active'`,
+      )
+      .get(communityId) as Row | undefined;
+    return Number(row?.['n'] ?? 0);
+  }
+
+  /* ------------------------------------------------------ publications */
+
+  /**
+   * Publish — a copy is taken, and the reflection is not touched.
+   *
+   * The section rows written here are the publication's own presentation. The
+   * author chose which sections appear; that choice writes *these* rows and
+   * issues no write at all against `sections`. `authorOrigin` is copied across
+   * with the text, so provenance survives into published content rather than
+   * being reset by the act of sharing it.
+   */
+  publish(
+    input: NewPublication,
+    source: {
+      format: string;
+      title: string;
+      scriptureReference: string | null;
+      sections: Record<string, { content: string; authorOrigin: string }>;
+    },
+  ): string {
+    const id = randomUUID();
+    const timestamp = new Date().toISOString();
+
+    this.db.exec('BEGIN');
+    try {
+      this.db
+        .prepare(
+          `INSERT INTO publications
+             (id, authorUserId, conversationId, audience, communityId, format, title,
+              scriptureReference, caption, moderationState, hiddenByUserId, hiddenAt,
+              deletedAt, createdAt, updatedAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?)`,
+        )
+        .run(
+          id,
+          input.authorUserId,
+          input.conversationId,
+          input.audience,
+          input.communityId,
+          source.format,
+          source.title,
+          source.scriptureReference,
+          input.caption,
+          MODERATION_STATES.VISIBLE,
+          timestamp,
+          timestamp,
+        );
+
+      const insertSection = this.db.prepare(
+        `INSERT INTO publication_sections (publicationId, position, type, content, authorOrigin)
+         VALUES (?, ?, ?, ?, ?)`,
+      );
+      input.sectionTypes.forEach((type, position) => {
+        const section = source.sections[type];
+        if (!section || !section.content.trim()) return;
+        insertSection.run(id, position, type, section.content, section.authorOrigin);
+      });
+
+      const insertTag = this.db.prepare(
+        `INSERT INTO publication_tags (publicationId, tag, label) VALUES (?, ?, ?)
+         ON CONFLICT(publicationId, tag) DO NOTHING`,
+      );
+      for (const hashtag of input.hashtags) {
+        insertTag.run(id, hashtag.tag, hashtag.label);
+      }
+
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+    return id;
+  }
+
+  /**
+   * One publication, if this viewer may see it.
+   *
+   * `null` covers every reason equally — no such publication, hidden, deleted,
+   * a community the viewer never belonged to, a community they were removed
+   * from. The route turns all of them into the same 404, because saying "this
+   * exists but you may not see it" is itself a disclosure: it confirms a
+   * community publication is there to someone who was told nothing.
+   */
+  publication(viewerUserId: string, id: string): PublicationView | null {
+    const row = this.db
+      .prepare(`${SELECT_PUBLICATION} WHERE ${VISIBLE_TO} AND p.id = ?2`)
+      .get(viewerUserId, id) as Row | undefined;
+    if (!row) return null;
+    return this.hydrate(viewerUserId, row);
+  }
+
+  /**
+   * The feed for a scope, authorised during retrieval.
+   *
+   * Search is applied inside the same statement as the visibility predicate,
+   * so an unauthorised publication is never a candidate to be matched — its
+   * title, its excerpt, its Scripture reference and its hashtags are not read,
+   * not scored and not returned. Filtering after a search would have made the
+   * search itself the leak.
+   */
+  feed(viewerUserId: string, options: FeedQuery): PublicationView[] {
+    const clauses: string[] = [VISIBLE_TO];
+    const params: unknown[] = [viewerUserId];
+
+    if (options.scope === 'public') clauses.push(SCOPE_PUBLIC);
+    else if (options.scope === 'shared') clauses.push(SCOPE_SHARED);
+    else clauses.push(SCOPE_MINE);
+
+    if (options.communityId) {
+      params.push(options.communityId);
+      clauses.push(`p.communityId = ?${params.length}`);
+    }
+
+    if (options.tag) {
+      params.push(options.tag);
+      clauses.push(
+        `EXISTS (SELECT 1 FROM publication_tags AS t
+                  WHERE t.publicationId = p.id AND t.tag = ?${params.length})`,
+      );
+    }
+
+    if (options.query) {
+      /*
+       * The search terms are bound once and referenced by position, so the
+       * same value serves the title, the reference, the caption, the section
+       * text and the tags without five copies drifting apart.
+       */
+      params.push(`%${options.query.toLowerCase()}%`);
+      const like = `?${params.length}`;
+      clauses.push(`(
+        lower(p.title) LIKE ${like}
+        OR lower(COALESCE(p.scriptureReference, '')) LIKE ${like}
+        OR lower(p.caption) LIKE ${like}
+        OR EXISTS (SELECT 1 FROM publication_sections AS s
+                    WHERE s.publicationId = p.id AND lower(s.content) LIKE ${like})
+        OR EXISTS (SELECT 1 FROM publication_tags AS t
+                    WHERE t.publicationId = p.id AND lower(t.label) LIKE ${like})
+        OR lower(COALESCE(author.displayName, '')) LIKE ${like}
+        OR lower(COALESCE(author.handle, '')) LIKE ${like}
+      )`);
+    }
+
+    const rows = this.db
+      .prepare(
+        `${SELECT_PUBLICATION} WHERE ${clauses.join(' AND ')} ORDER BY p.createdAt DESC LIMIT 100`,
+      )
+      .all(...(params as never[])) as Row[];
+
+    return rows.map((row) => this.hydrate(viewerUserId, row));
+  }
+
+  /**
+   * The hashtags a viewer may actually be offered.
+   *
+   * Derived from the same predicate as the feed, so a chip cannot advertise a
+   * tag that exists only on content the viewer cannot open. A filter chip is a
+   * count with a name on it, and counts leak.
+   */
+  hashtagsFor(viewerUserId: string, scope: FeedScope): PublicationHashtag[] {
+    const scopeClause =
+      scope === 'public' ? SCOPE_PUBLIC : scope === 'shared' ? SCOPE_SHARED : SCOPE_MINE;
+    return this.db
+      .prepare(
+        `SELECT t.tag AS tag, MIN(t.label) AS label, COUNT(*) AS n
+           FROM publication_tags AS t
+           JOIN publications AS p ON p.id = t.publicationId
+          WHERE ${VISIBLE_TO} AND ${scopeClause}
+          GROUP BY t.tag
+          ORDER BY n DESC, t.tag
+          LIMIT 12`,
+      )
+      .all(viewerUserId) as unknown as PublicationHashtag[];
+  }
+
+  /* --------------------------------------------------------- reactions */
+
+  /**
+   * Encouraged, toggled.
+   *
+   * The insert is `ON CONFLICT DO NOTHING`, so pressing it twice is pressing it
+   * once — the primary key is what makes "one per user per publication" true
+   * rather than a rule the client is trusted to keep. Removing is a delete.
+   *
+   * Authorisation is the caller's `publication()` call: encouraging something
+   * requires being able to see it, and that check is the same predicate.
+   */
+  setEncouraged(publicationId: string, userId: string, encouraged: boolean): void {
+    if (encouraged) {
+      this.db
+        .prepare(
+          `INSERT INTO publication_reactions (publicationId, userId, createdAt)
+           VALUES (?, ?, ?) ON CONFLICT(publicationId, userId) DO NOTHING`,
+        )
+        .run(publicationId, userId, new Date().toISOString());
+      return;
+    }
+    this.db
+      .prepare('DELETE FROM publication_reactions WHERE publicationId = ? AND userId = ?')
+      .run(publicationId, userId);
+  }
+
+  /**
+   * Save, a private bookmark.
+   *
+   * There is deliberately no `saveCount` method on this class and no query
+   * anywhere in this file that aggregates this table. The author must never
+   * learn who saved their publication or how many did — and the reliable way
+   * to keep a number secret is for no code path to be able to produce it.
+   */
+  setSaved(publicationId: string, userId: string, saved: boolean): void {
+    if (saved) {
+      this.db
+        .prepare(
+          `INSERT INTO publication_saves (publicationId, userId, createdAt)
+           VALUES (?, ?, ?) ON CONFLICT(publicationId, userId) DO NOTHING`,
+        )
+        .run(publicationId, userId, new Date().toISOString());
+      return;
+    }
+    this.db
+      .prepare('DELETE FROM publication_saves WHERE publicationId = ? AND userId = ?')
+      .run(publicationId, userId);
+  }
+
+  /** The viewer's own saved publications, authorised the same way. */
+  savedFeed(viewerUserId: string): PublicationView[] {
+    const rows = this.db
+      .prepare(
+        `${SELECT_PUBLICATION}
+          WHERE ${VISIBLE_TO}
+            AND EXISTS (SELECT 1 FROM publication_saves AS sv
+                         WHERE sv.publicationId = p.id AND sv.userId = ?1)
+          ORDER BY p.createdAt DESC LIMIT 100`,
+      )
+      .all(viewerUserId) as Row[];
+    return rows.map((row) => this.hydrate(viewerUserId, row));
+  }
+
+  /* -------------------------------------------------------- moderation */
+
+  /** Raw row access for the routes' authorisation decisions. Never served. */
+  raw(id: string): {
+    id: string;
+    authorUserId: string;
+    audience: Audience;
+    communityId: string | null;
+    moderationState: ModerationState;
+    deletedAt: string | null;
+  } | null {
+    const row = this.db
+      .prepare(
+        `SELECT id, authorUserId, audience, communityId, moderationState, deletedAt
+           FROM publications WHERE id = ?`,
+      )
+      .get(id) as Row | undefined;
+    return row ? (row as never) : null;
+  }
+
+  setHidden(publicationId: string, byUserId: string, hidden: boolean): void {
+    const timestamp = new Date().toISOString();
+    this.db
+      .prepare(
+        `UPDATE publications
+            SET moderationState = ?, hiddenByUserId = ?, hiddenAt = ?, updatedAt = ?
+          WHERE id = ?`,
+      )
+      .run(
+        hidden ? MODERATION_STATES.HIDDEN : MODERATION_STATES.VISIBLE,
+        hidden ? byUserId : null,
+        hidden ? timestamp : null,
+        timestamp,
+        publicationId,
+      );
+  }
+
+  /**
+   * Delete — a tombstone, not a DROP.
+   *
+   * `deletedAt` takes the row out of every read (the visibility predicate tests
+   * it first, before anything else), while the text, the reactions and the
+   * reports stay on disk. A route refuses this outright while a report is
+   * open; the separation exists so that refusal is meaningful rather than
+   * cosmetic, because a delete that had already erased the section rows would
+   * leave nothing for a reviewer to look at.
+   */
+  softDelete(publicationId: string): void {
+    const timestamp = new Date().toISOString();
+    this.db
+      .prepare('UPDATE publications SET deletedAt = ?, updatedAt = ? WHERE id = ?')
+      .run(timestamp, timestamp, publicationId);
+  }
+
+  addReport(input: {
+    publicationId: string;
+    reporterUserId: string;
+    reason: string;
+    detail: string;
+  }): { id: string } {
+    const id = randomUUID();
+    this.db
+      .prepare(
+        `INSERT INTO publication_reports
+           (id, publicationId, reporterUserId, reason, detail, state, createdAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        input.publicationId,
+        input.reporterUserId,
+        input.reason,
+        input.detail,
+        REPORT_STATES.OPEN,
+        new Date().toISOString(),
+      );
+    return { id };
+  }
+
+  /** Whether evidence is attached to this publication that must be preserved. */
+  openReportCount(publicationId: string): number {
+    const row = this.db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM publication_reports
+          WHERE publicationId = ? AND state = 'open'`,
+      )
+      .get(publicationId) as Row | undefined;
+    return Number(row?.['n'] ?? 0);
+  }
+
+  /* ----------------------------------------------------------- private */
+
+  /**
+   * Turn an authorised row into the view.
+   *
+   * Everything here runs *after* the row has already passed `VISIBLE_TO`, so
+   * these follow-up reads cannot widen what was returned — they can only
+   * describe a publication the viewer was already entitled to. Section text is
+   * fetched by publication id, and the only ids reaching this point are ones
+   * the predicate admitted.
+   */
+  private hydrate(viewerUserId: string, row: Row): PublicationView {
+    const id = String(row['id']);
+    const sections = this.db
+      .prepare(
+        `SELECT type, content, authorOrigin FROM publication_sections
+          WHERE publicationId = ? ORDER BY position`,
+      )
+      .all(id) as unknown as PublicationSection[];
+    const hashtags = this.db
+      .prepare('SELECT tag, label FROM publication_tags WHERE publicationId = ? ORDER BY tag')
+      .all(id) as unknown as PublicationHashtag[];
+
+    const isAuthor = String(row['authorUserId']) === viewerUserId;
+    const communityId = row['communityId'] ? String(row['communityId']) : null;
+    const viewerRole = communityId
+      ? (this.membership(communityId, viewerUserId)?.role ?? null)
+      : null;
+
+    return {
+      id,
+      audience: String(row['audience']) as Audience,
+      community: communityId
+        ? { id: communityId, name: String(row['communityName'] ?? 'Community') }
+        : null,
+      author: {
+        handle: String(row['authorHandle'] ?? ''),
+        displayName: String(row['authorDisplayName'] ?? 'A C.H.A.T. writer'),
+      },
+      isAuthor,
+      format: String(row['format']),
+      title: String(row['title']),
+      scriptureReference: row['scriptureReference']
+        ? String(row['scriptureReference'])
+        : null,
+      caption: String(row['caption'] ?? ''),
+      sections,
+      hashtags,
+      encouragedCount: Number(row['encouragedCount'] ?? 0),
+      encouragedByViewer: Number(row['encouragedByViewer'] ?? 0) > 0,
+      /* Per-viewer by construction. No aggregate of this table exists. */
+      savedByViewer: Number(row['savedByViewer'] ?? 0) > 0,
+      moderationState: String(row['moderationState']) as ModerationState,
+      canModerate:
+        isAuthor ||
+        viewerRole === COMMUNITY_ROLES.OWNER ||
+        viewerRole === COMMUNITY_ROLES.MODERATOR,
+      createdAt: String(row['createdAt']),
+      updatedAt: String(row['updatedAt']),
+    };
+  }
+}
+
+/**
+ * The one projection every read uses.
+ *
+ * The Encouraged count is a correlated subquery *inside* the authorised
+ * statement rather than a second pass, so it counts reactions on a row the
+ * viewer was already entitled to and cannot become the channel that reports the
+ * existence of one they were not. The same is true of the viewer's own
+ * reaction and save flags: per-viewer, computed here, never aggregated.
+ */
+const SELECT_PUBLICATION = `
+  SELECT p.*,
+         c.name AS communityName,
+         author.handle AS authorHandle,
+         author.displayName AS authorDisplayName,
+         (SELECT COUNT(*) FROM publication_reactions AS r WHERE r.publicationId = p.id)
+           AS encouragedCount,
+         (SELECT COUNT(*) FROM publication_reactions AS r
+           WHERE r.publicationId = p.id AND r.userId = ?1) AS encouragedByViewer,
+         (SELECT COUNT(*) FROM publication_saves AS sv
+           WHERE sv.publicationId = p.id AND sv.userId = ?1) AS savedByViewer
+    FROM publications AS p
+    LEFT JOIN communities AS c ON c.id = p.communityId
+    LEFT JOIN profiles AS author ON author.userId = p.authorUserId
+`;
+
+/**
+ * A store when the backing can carry one, and `null` when it cannot.
+ *
+ * `MemoryStore` has no database handle. Rather than build a second
+ * authorisation implementation over it — the arrangement this module's header
+ * explains at length — Community reports itself unavailable, and the routes
+ * answer 503 with a sentence saying why. Every existing test that hands in
+ * `MemoryStore` keeps working; none of them touch Community.
+ */
+export function createCommunityStore(store: unknown): CommunityStore | null {
+  const handle = (store as { db?: DatabaseSync }).db;
+  if (handle && typeof handle.prepare === 'function') {
+    return new CommunityStore(handle);
+  }
+  return null;
+}
