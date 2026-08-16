@@ -25,11 +25,17 @@ chat_app/
 │   └── create-engine/        # Reusable layout/style/rendering logic when extracted
 ├── android/                  # Capacitor-generated Android shell
 ├── ios/                      # Capacitor-generated iOS shell
+├── scripts/verify/           # Browser-driven checks against a running dev server
 ├── docs/
-│   └── development/
+│   ├── development/
+│   └── examples/             # Observed real-world usage the design answers to
+├── .env.example
 ├── .gitignore
 └── README.md
 ```
+
+`android/` and `ios/` do not exist yet; they arrive in the mobile packaging
+phase. Everything else above is present.
 
 ### Why not `mobile/android` and `mobile/ios`?
 
@@ -57,22 +63,25 @@ If future requirements demand a genuinely independent native application, the re
 
 ### Product modules
 
-Suggested logical modules:
+What is there, which is close to the original sketch but not identical to it:
 
 ```text
 web_app/src/
-├── app/
-├── auth/
-├── chat/
-├── scripture/
-├── library/
-├── search/
-├── ai/
-├── community/
-├── create/
-├── profile/
-└── shared/
+├── app/           # routing
+├── auth/          # sign in / register, session context
+├── bible/         # passage card, translation picker (the old "scripture/")
+├── chat/          # the Reflect page: card, conversation panel, sheets
+├── reflections/   # the personal list (the old "library/")
+├── community/     # published entries
+├── create/        # visual export
+├── shared/        # layout shell, API client, icons, design tokens
+└── styles/
 ```
+
+Search has no module of its own — it is part of `reflections/`, against
+`GET /api/reflections`. There is no `ai/` module: assistance is rendered by the
+components it belongs to, in `chat/`. `library/` still exists on disk but
+nothing routes to it; `/library` redirects to `/reflections`.
 
 Avoid premature micro-frontends or excessive package extraction. Start cohesive; extract shared packages when there is real reuse.
 
@@ -119,7 +128,29 @@ A later Python service remains possible if a specific AI/tooling need appears. I
 
 ## Database
 
-PostgreSQL is the preferred initial relational database.
+**Decision (Phase 1): SQLite, through Node's built-in `node:sqlite`.**
+
+PostgreSQL remains the preferred database for a deployed multi-instance
+product, and nothing here should make moving to it hard. It is not what runs
+today. `node:sqlite` needs no native build step, no service to start and no
+container, which is the whole reason it won: a contributor clones the
+repository and the storage layer is simply there.
+
+What is actually implemented, in `api/src/db.ts`:
+
+- one file, `chat.sqlite`, overridable with `DATABASE_PATH`;
+- `PRAGMA journal_mode = WAL` and `PRAGMA foreign_keys = ON`;
+- tables `users`, `sessions`, `conversations`, `messages`, `sections`, plus
+  `reflection_passages` owned by the Bible connector
+  (`api/src/bible/passage-store.ts`);
+- idempotent migrations run on every construction — `CREATE TABLE IF NOT
+  EXISTS`, a `PRAGMA table_info` guard before each added column, and a
+  transactional rename of the `context` section type to `content`.
+
+`MemoryStore` (`api/src/store.ts`) implements the same interface and is what the
+test suite uses. **Nothing user-facing is in-memory.** The caches that are —
+the Bible catalog and passage caches, and the rate-limit windows — are named as
+caches and are documented as per-process.
 
 Potential core entities:
 
@@ -155,6 +186,22 @@ Chosen model:
 - HTTP-only cookies rather than tokens in `localStorage`;
 - the same session API for Web and later Capacitor WebViews;
 - authorization checked on every data boundary, not only in the UI.
+
+**Built (Phase 1).** `POST /api/auth/register`, `POST /api/auth/login`,
+`POST /api/auth/logout`, `GET /api/auth/me`, all in `api/src/app.ts`:
+
+- passwords are `scrypt` with a per-user 16-byte random salt, stored as
+  `salt:hash` and compared with `timingSafeEqual`; minimum length 8;
+- the session cookie is **`chat_session`**: `httpOnly`, `sameSite=Lax`,
+  `path=/`, and **`secure` whenever `NODE_ENV === 'production'`** — so it is
+  sent in the clear only in development, deliberately, because a `secure`
+  cookie never arrives over plain-HTTP `localhost`;
+- **sessions expire.** `expiresAt` is 30 days out, stored on the row, and
+  checked on every read — an expired row is deleted and the request is
+  anonymous. Expiry is lazy: there is no sweeper, and `MemoryStore` (tests
+  only) does not enforce it at all;
+- ownership is re-checked on every conversation route, not inherited from the
+  session alone.
 
 Not required for MVP:
 
@@ -214,25 +261,72 @@ This provides traceability without making the UI complicated.
 
 ## AI architecture
 
-Use a provider abstraction rather than coupling product logic directly to one vendor.
-
-Example conceptual service:
+Use a provider abstraction rather than coupling product logic directly to one
+vendor. That is no longer aspirational: it is built, and the provider behind the
+seam is **Google Gemini**, model `gemini-3.5-flash-lite`.
 
 ```text
-AIService
-├── explain()
-├── grammar()
-├── polish()
-├── summarize()
-├── extractChat()
-├── suggestRelatedScripture()
-├── prepareSocialVersion()
-└── generateBackgroundPrompt()
+CHAT UI  →  /api/ai/*  →  AiService  →  AIProvider  →  GeminiProvider
+                                          (seam)
 ```
 
-Image generation should be a separate capability from text assistance.
+`AIProvider` (`api/src/ai/types.ts`) has four methods and no free-form prompt
+parameter, so there is no argument through which it could be asked to do
+something outside the reflection it belongs to:
+
+```text
+AIProvider
+├── generateReflectionGuidance()   POST /api/ai/reflection-guidance
+├── improveReflectionWriting()     POST /api/ai/improve-writing
+├── discussReflection()            POST /api/ai/reflection-chat
+└── suggestReflectionTitles()      POST /api/conversations/:id/ai (suggest_title)
+```
+
+Gating, input ceilings, timeout, single retry, rate limiting and logging live
+**above** the seam in `AiService`, so a second adapter inherits them. The SDK is
+imported in exactly one file, and lazily, so a server running without assistance
+never loads it.
+
+`api/src/ai.ts` is the deterministic remainder — no model, no network, no key.
+It is the title heuristic that answers when the provider cannot, the named
+transforms behind the legacy `POST /api/conversations/:id/ai`, and the
+store→DTO shaping. It used to be all of the assistance; treat it now as the
+floor beneath it.
+
+Assistance is **off by default** (`AI_ENABLED=false`). Setup, configuration,
+failure modes, prompt and schema design, privacy and logging, and how to add
+another provider are all in [`AI_PROVIDER.md`](./AI_PROVIDER.md). The
+conversation panel's own brief is in
+[`REFLECTION_CHAT.md`](./REFLECTION_CHAT.md).
+
+Image generation should be a separate capability from text assistance. None
+exists yet.
 
 Do not make AI provider response formats part of the domain model.
+
+## Scripture retrieval
+
+A second connector, built to the same shape as the AI one and deliberately
+separate from it: `api/src/bible/`, provider `youversion`, with `YVP_APP_KEY`
+read only inside the adapter.
+
+- `GET /api/bible/translations` assembles a catalog from the languages in
+  `BIBLE_LANGUAGES` — default `en,tl,ceb,es,fr,de,zh`, which produced **47
+  translations across 7 languages** when verified against the key on
+  2026-08-16. The provider has no "list every Bible" call, so that list *is* the
+  catalog: a language nobody adds is a language whose Bibles do not exist here.
+- `GET /api/bible/passages` looks a reference up. `GET`/`PUT`/`DELETE
+  /api/bible/reflections/:id/passage` store the chosen passage against the
+  reflection, in its own `reflection_passages` table, and it is read back from
+  storage rather than re-fetched.
+- **On by default** (`BIBLE_ENABLED=true`), unlike assistance: a lookup sends a
+  reference and nothing anyone wrote, and a Bible app whose Bible has to be
+  switched on is a broken Bible app.
+- Passage **text** is never put in an AI prompt unless
+  `BIBLE_SCRIPTURE_IN_PROMPTS` says so, and it does not by default. The
+  reference always is. That is a licensing decision, not an engineering one.
+- The retrieved passage belongs in **Content**, which is the connector's whole
+  point: Content is the section that holds Scripture.
 
 ## Create engine architecture
 
@@ -301,7 +395,10 @@ Storage policy should be revisited before large-scale public usage.
 
 ## Search
 
-Start with PostgreSQL-backed structured and text search.
+Start with structured and text search in the relational store — SQLite today,
+PostgreSQL if and when the product moves there. `GET /api/reflections` does this
+now: a `q` term, a `filter` of `all` / `drafts` / `completed` / `published`, and
+a `sort` of `recent` / `title`.
 
 Search dimensions can include:
 

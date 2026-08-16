@@ -63,8 +63,8 @@ Only explicit publishing makes an entry visible to the platform community.
 ### C.H.A.T.
 Conversational Scripture study, reflection, AI assistance, and structured C/H/A/T views.
 
-### Library
-Persistent conversation history, Scripture references, tags, collections, search, and personal testimony history.
+### Reflections
+Persistent conversation history, Scripture references, tags, collections, search, and personal testimony history. (Named Library once; `GET /api/library` is now only an alias of `GET /api/reflections`.)
 
 ### Community
 Discovery of only those C.H.A.T.s that users explicitly publish. Future community features may include saves, reactions, comments, following, and discussion.
@@ -90,9 +90,10 @@ The intended baseline is:
 - **Build tooling:** Node.js
 - **Mobile packaging:** Capacitor
 - **Backend:** TypeScript API (Hono) sharing types with the web app
-- **Database:** PostgreSQL
+- **Database:** SQLite today, through Node's built-in `node:sqlite` — no service to run and no native build step. PostgreSQL remains the intended destination for a deployed multi-instance product.
 - **Visual renderer:** React + HTML/CSS templates with image export
-- **AI:** provider abstraction so text and image providers can be changed without rewriting product logic
+- **AI:** provider abstraction so text and image providers can be changed without rewriting product logic. Google Gemini (`gemini-3.5-flash-lite`) sits behind it today, off unless switched on.
+- **Scripture:** YouVersion Platform API behind its own connector — 47 translations across 7 languages, on by default
 
 The goal is one shared product implementation, not three independent applications.
 
@@ -101,12 +102,17 @@ The goal is one shared product implementation, not three independent application
 ```text
 chat_app/
 ├── web_app/                 # React + TypeScript product UI
-├── api/                     # Hono/TypeScript API
+├── api/                     # Hono/TypeScript API, AI and Bible connectors
 ├── packages/
-│   └── shared/              # Shared types and domain constants
+│   └── shared/              # Shared types, domain constants and format limits
+├── scripts/verify/          # Browser-driven checks against a running dev server
 ├── docs/
-│   └── development/
+│   ├── development/         # The implementation contract
+│   ├── examples/            # Real reflections the design answers to
+│   ├── plans/               # Frozen source transcripts — do not edit
+│   └── requirements/        # Frozen source transcripts — do not edit
 ├── .github/workflows/
+├── .env.example
 ├── package.json
 ├── .gitignore
 └── README.md
@@ -126,6 +132,26 @@ npm run dev
 - Web: http://localhost:5173
 - API health: http://localhost:8000/api/health
 
+The app starts, and the whole manual writing workflow works, with no keys at
+all. To turn on the optional connectors, copy `.env.example` to `.env`
+(gitignored) and fill it in, or export the variables in the shell that runs the
+API:
+
+```bash
+# AI assistance — off unless switched on
+AI_ENABLED=true AI_PROVIDER=gemini GEMINI_API_KEY=… npm run dev
+
+# Scripture lookup — on by default, but needs its key to do anything
+YVP_APP_KEY=… npm run dev
+```
+
+Check what took:
+
+```bash
+curl -s localhost:8000/api/ai/status
+curl -s localhost:8000/api/bible/status
+```
+
 Useful commands:
 
 ```bash
@@ -134,6 +160,9 @@ npm run lint
 npm run typecheck
 npm run build
 ```
+
+Browser checks against a running dev server live in `scripts/verify/`; see
+[`scripts/verify/README.md`](scripts/verify/README.md).
 
 ## Initial MVP
 
@@ -164,9 +193,30 @@ Start with:
 4. [`docs/development/DEVELOPMENT_INSTRUCTIONS.md`](docs/development/DEVELOPMENT_INSTRUCTIONS.md)
 5. [`docs/development/MVP_PLAN.md`](docs/development/MVP_PLAN.md)
 6. [`docs/development/AI_AND_CONTENT_RULES.md`](docs/development/AI_AND_CONTENT_RULES.md)
+7. [`docs/development/AI_PROVIDER.md`](docs/development/AI_PROVIDER.md)
+8. [`docs/development/REFLECTION_CHAT.md`](docs/development/REFLECTION_CHAT.md)
+
+The evidence behind the Content section is in
+[`docs/examples/REAL_CHAT_SAMPLES.md`](docs/examples/REAL_CHAT_SAMPLES.md), and
+should be read before anyone redesigns it again.
+
+`docs/plans/` and `docs/requirements/` transcribe frozen source statements.
+They record what was asked for at a point in time and are deliberately not kept
+in step with the code.
 
 ## Status
 
-**Phase 0 foundation scaffold.**
+**Phases 0–3 built; 4 partly; 5–8 not.**
 
-The web app and API start locally. Product areas other than the shell and API health check are visible as placeholders and are not implemented yet.
+What works end to end: register and sign in, write and re-open private
+reflections that persist across restarts, look a passage up in one of 47
+translations, write the four sections with live length feedback, and — with a
+key configured — ask for guidance, ask for better wording, hold a bounded
+conversation beside the card, and get title suggestions.
+
+What does not: **Community** is a list of unclickable titles, and **Create** is
+an unstyled developer stub. Neither is ready to be seen.
+
+An honest, page-by-page account of what is incomplete, inert or misleading is in
+[`docs/development/PRODUCT_READINESS.md`](docs/development/PRODUCT_READINESS.md).
+Read it before showing this to anyone outside the project.

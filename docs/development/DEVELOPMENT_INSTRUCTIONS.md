@@ -74,6 +74,19 @@ Generate topical background
 
 Do not expose one ambiguous "Improve" action that unpredictably changes meaning.
 
+**What was actually built**, which is a smaller and differently-shaped set:
+**Ask me questions** and **Improve wording** under each section, **Discuss in
+chat** beside them, the conversation chips **Explain simply** / **Historical
+context** / **Ask me a question** / **Draft {Section}**, and **Suggest title**.
+Grammar, polish, shorten and summarize survive only as named actions on the
+legacy `POST /api/conversations/:id/ai`, with no control pointing at them.
+
+"Improve wording" is not the banned ambiguous "Improve": it shows the original
+and the suggestion side by side under the headings *Your words* and
+*Suggested*, changes nothing until the author presses *Use this in {Section}*,
+and leaves an undo. The rule was against silent unpredictable rewriting, not
+against the word.
+
 AI provider implementation must remain behind a service abstraction.
 
 ## 6. Do not let AI render final text inside generated artwork

@@ -138,9 +138,15 @@ Particular care is required for Heart and Testimony:
 - AI-generated testimony-like text must not be represented as something the user actually experienced or believes.
 - A user should be able to keep the original wording at any point.
 
-## Library
+## Reflections
 
-The personal Library should eventually support retrieval by:
+The area is called **Reflections**. It was called Library, and the rename is
+not cosmetic: "library" describes a shelf of other people's books, and this is
+the person's own writing. `GET /api/library` remains only as an alias of
+`GET /api/reflections`, and `/library` in the web app redirects.
+
+Retrieval by text, filter and sort is built. It should eventually also support
+retrieval by:
 
 - full text;
 - Scripture reference;
@@ -214,6 +220,48 @@ AI image generation may produce a background inspired by:
 The image model should generally be asked for imagery with appropriate negative space and no rendered text.
 
 Final Scripture, quotation, testimony, typography, spacing, attribution, and branding should be rendered by the application's deterministic layout engine.
+
+## Length limits
+
+Two ceilings per field, and the numbers are a product decision rather than an
+implementation detail. They live in `packages/shared/src/formats.ts` and are
+enforced on both sides of the wire.
+
+**Full C.H.A.T.**
+
+| Field | Recommended | Hard |
+| --- | --- | --- |
+| Title | 60 | 100 |
+| Scripture reference | 60 | 100 |
+| Content | 700 | 1000 |
+| Heart | 700 | 1000 |
+| Application | 700 | 1000 |
+| Testimony | 700 | 1000 |
+| **Combined** (all four sections) | **2000** | **3200** |
+
+**Condensed C.H.A.T.**
+
+| Field | Recommended | Hard |
+| --- | --- | --- |
+| Title | 50 | 80 |
+| Scripture reference | 40 | 80 |
+| Verse | 280 | 350 |
+| Reflection | 400 | 550 |
+| **Combined** (verse + reflection) | **600** | **800** |
+
+Recommended is advice and never blocks anything; a Full C.H.A.T. over it is
+*Extended* and may be laid out across two pages, which the author is asked to
+allow. Hard is a refusal, and it blocks completion and publication.
+
+The section numbers were raised from 400/700 for Content and 300/600 for the
+other three, with a combined 1200/2400. Those were written before anyone looked
+at real reflections, and they lost to Scripture: Content holds the passage, and
+a quoted passage in a fuller translation — or in a language that needs more
+characters to say the same thing — passes 400 without trying. Habakkuk
+3:17-19 NLT is 428 characters and was being reported as over-long for being an
+ordinary verse. The combined ceiling had to rise with them, because it
+overrides the per-field ones: four sections at 700 is 2,800, and the old 2,400
+would have refused a reflection in which every section was individually fine.
 
 ## Long-content behavior
 

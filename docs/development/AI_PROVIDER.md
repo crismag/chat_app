@@ -13,10 +13,17 @@ This document is the mechanism; that one is the reason.
 > Human reflection, assisted by AI. The AI must not impersonate the user or
 > manufacture the user's faith, feelings, experience, prayer, or testimony.
 
-**C.H.A.T.** is **Content** (what is happening in and around the passage),
-**Heart** (how it personally touches the writer), **Application** (how it
-applies and what they may do), **Testimony** (their declaration of faith,
-conviction or prayer).
+**C.H.A.T.** is **Content** (the passage itself — the verse text, usually with
+its reference and translation, and an explanation after it only if the writer
+wants one), **Heart** (how it personally touches the writer), **Application**
+(how it applies and what they may do), **Testimony** (their declaration of
+faith, conviction or prayer).
+
+The C is **Content**, not Context, and it holds Scripture rather than
+commentary about Scripture. That is not a naming preference: it is what the
+roughly thirty reflections in
+[`docs/examples/REAL_CHAT_SAMPLES.md`](../examples/REAL_CHAT_SAMPLES.md)
+actually contain, without exception.
 
 The second section is **Heart**. It is never called "Highlight" — not in code,
 copy, prompts, schemas, tests or documentation. There is a regression test in
@@ -28,7 +35,7 @@ not being explicitly ruled out.
 
 ## What V1 does
 
-Three capabilities, each triggered by an explicit act:
+Four capabilities, each triggered by an explicit act, plus a status read:
 
 | Operation | Endpoint | What it returns |
 |---|---|---|
@@ -47,7 +54,7 @@ image generation.
 
 ### The conversation is bounded, and that is the feature
 
-The third capability is **not** open-ended chat. Three things fence it in, and
+The conversation is **not** open-ended chat. Three things fence it in, and
 all three are enforced rather than hoped for:
 
 1. **A fixed system instruction** it cannot be talked out of — the same one the
@@ -58,8 +65,11 @@ all three are enforced rather than hoped for:
    turns of its own thread. Nothing else is in scope, and nothing else is sent.
 
 Its job is to be the side helper for discussing, expanding and editing the
-C.H.A.T. items: what the passage means, thinking a section aloud, asking for a
-rewording, being asked a question back.
+C.H.A.T. items: background on the passage, thinking a section aloud, asking for
+a rewording, being asked a question back. Note the framing — the writer may ask
+anything about the passage, but the panel is not there to solicit a commentary
+*for the Content section*, because Content holds the passage rather than prose
+about it.
 
 Four properties hold, and each has a test:
 
@@ -191,7 +201,9 @@ CHAT UI  →  /api/ai/*  →  AiService  →  AIProvider  →  GeminiProvider
 | `api/src/ai/service.ts` | Gating, limits, timeout, retry policy, logging. |
 | `api/src/ai/rate-limit.ts` | Per-user and per-address sliding windows. |
 | `api/src/ai/logging.ts` | Allow-listed log fields and redaction. |
-| `api/src/ai/routes.ts` | The three endpoints. |
+| `api/src/ai/draft-target.ts` | Where a chat draft may go, decided from trusted sources only. |
+| `api/src/ai/routes.ts` | `/status`, `/reflection-guidance`, `/improve-writing`, `/reflection-chat`. |
+| `api/src/ai.ts` | **No model, no network, no key.** Deterministic string work: the title heuristic that is the floor beneath `suggest_title`, the named-action transforms behind `POST /api/conversations/:id/ai`, and the store→DTO shaping. It was the whole of assistance once; it is the fallback now. |
 | `api/src/ai/providers/fake.ts` | Deterministic stand-in for tests and verification. |
 | `api/src/ai/providers/gemini.ts` | **The only file that imports the SDK.** |
 
@@ -199,7 +211,9 @@ The SDK is imported in one file. It is never imported in UI components, route
 handlers, domain models or persistence code — and it is loaded lazily, so a
 server running without assistance does not load it at all.
 
-`AIProvider` has three methods and no free-form escape hatch. Even the
+`AIProvider` has four methods — `generateReflectionGuidance`,
+`improveReflectionWriting`, `discussReflection`, `suggestReflectionTitles` —
+and no free-form escape hatch. Even the
 conversational one is handed a passage, a set of sections and a thread rather
 than an instruction, so there is no parameter through which it could be asked
 to do something outside the reflection it belongs to. An interface that can be
@@ -479,6 +493,15 @@ Written down rather than discovered later.
   browser rather than per account: the same person on a second device sees it
   again. That is the safe direction to be wrong in, but it is not a consent
   record, and anything that needs to be auditable belongs on the user row.
+- **The disclosure sheet is modal, and it arrives on the first send.** With a
+  provider configured, a person's very first message raises an
+  `aria-modal` dialog over the whole card before the reply comes back. That is
+  correct for consent and wrong for a first impression, and it also breaks
+  browser checks written before it existed: `scripts/verify/reflect.mjs`
+  targets `AI_PROVIDER=fake` and, run against a live provider, fails one
+  assertion and then aborts on `ElementClickInterceptedError` because the
+  scrim is over the control it wants. Run it with the deterministic provider,
+  or dismiss the sheet first.
 - **No structured-output conformance has been measured against the live API.**
   The schema is what the docs specify and validation catches anything that
   disagrees, but how often a real model returns something the validator rejects
@@ -488,15 +511,28 @@ Written down rather than discovered later.
   written rather than repeating it, and it is more than the strict minimum for
   the request. It is bounded by `AI_MAX_INPUT_CHARS` and is the one place the
   minimum-fields rule is traded for answer quality.
-- **The Scripture reference field can lose keystrokes.** Typed immediately
-  after the first message creates a reflection, only the first character
-  survives — the field saved as `R` and live guidance came back asking which
-  book "R" was. Typed before the first message, or into an existing reflection,
-  it is fine. This predates the AI work and lives in the identity inputs rather
-  than in assistance, but it now matters more than it did: the reference is what
-  every AI request is scoped to, so a truncated one asks the model about the
-  wrong passage. `scripts/verify/ai-assist.mjs` sets the value directly and
-  asserts it landed, so verification cannot be fooled by it. **Not fixed.**
+- **The Scripture reference field loses keystrokes.** Typed immediately after
+  the first message creates a reflection, the characters entered before the
+  creation round-trip completes are thrown away and only the tail survives.
+  Reproduced on 2026-08-16 against the live provider by
+  `scripts/verify/readiness-reference.mjs`: typing `Psalm 23` a moment after
+  Send left the field reading **`alm 23`**, the stored `scriptureReference`
+  **`null`**, and the chat panel headed *"Reflect on alm 23"*. Typed before the
+  first message, or into an existing reflection, it is fine — the same script
+  checks that control case and it passes.
+
+  The cause is not a remount. `referenceDraft` (`web_app/src/chat/ChatPage.tsx`
+  L126) is set back to `null` twice while the creation is in flight — once at
+  L565 when `POST /conversations` resolves and again at L315 inside
+  `openConversation`, which still sees `switching === true` because `openedRef`
+  is assigned only after its own awaited GET (L303–306). The input's value falls
+  back to the server's copy when the draft is null (L1324), so each reset
+  silently replaces whatever has been typed since.
+
+  It now matters more than it did: the reference is what every AI request is
+  scoped to, so a mangled one asks the model about a passage that does not
+  exist. `scripts/verify/ai-assist.mjs` sets the value directly and asserts it
+  landed, so verification cannot be fooled by it. **Not fixed.**
 - **Chat history is bounded by turn count and characters, not by tokens.**
   Characters are a proxy. A long reflection in a language that tokenises poorly
   could still make a larger request than the budget implies.

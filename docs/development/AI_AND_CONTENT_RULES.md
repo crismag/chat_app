@@ -58,6 +58,8 @@ When a particular Bible translation is displayed or quoted, translation/source h
 
 Do not silently rewrite a verse and present the paraphrase as verbatim Scripture.
 
+This is enforced rather than intended. Passage text comes from the YouVersion connector, is stored against the reflection with its translation, copyright line and publisher link, and is never reconstructed from a model's memory — the server-side note behind "Draft Content" forbids exactly that, because a verse recalled by a model and labelled NIV is a false attribution to a named translation. Passage **text** is withheld from AI prompts entirely unless `BIBLE_SCRIPTURE_IN_PROMPTS` says otherwise, and it does not by default; the reference is always sent. That default is a licensing decision, not an engineering one.
+
 ## 4. Theological assistance
 
 AI explanations should be framed as assistance rather than as infallible theological authority.

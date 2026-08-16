@@ -21,6 +21,87 @@ node scripts/verify/<name>.mjs
 
 Screenshots and other output go to `scripts/verify/out/`, which is ignored.
 
+Several of these were written against `AI_PROVIDER=fake` and are documented as
+such below. Run one of those against a live provider and it can fail for a
+reason that has nothing to do with what it is checking — most often the
+first-use disclosure sheet, which is modal and lands over the card on the first
+send.
+
+## `smoke.mjs` — the app boots, authenticates and renders
+
+The shortest check there is: register a throwaway account, land signed in,
+screenshot, and print any severe console errors. Run it first when something is
+broken, because it tells you whether the problem is the app or the check.
+
+## `reflect.mjs` — Reflect, driven end to end
+
+The claims a unit test cannot make honestly: that a person can register and
+write without meeting a title form first, that the four sections stay away
+until something has been written, that the sidebar collapses and comes back,
+that only one section card is open at a time, and that saving says so without
+being asked. It ends by photographing the result at both widths, because the
+point of the redesign is how it looks.
+
+**Targets `AI_PROVIDER=fake`.** Against a live provider the first-use
+disclosure sheet opens over the card and the script aborts on
+`ElementClickInterceptedError` part-way through, so the checks after that point
+never run at all.
+
+```bash
+AI_ENABLED=true AI_PROVIDER=fake npm run dev
+node scripts/verify/reflect.mjs
+```
+
+## `reflect-integrity.mjs` — does anything on Reflect destroy what was written?
+
+The owner reported controls with no visible effect that were also clearing work
+in progress. This script does not reason about which ones: it types a sentence
+into a section, presses every control on the page one at a time, and reads the
+sentence back after each press, so a control that loses it fails here by name.
+
+It then checks what was missing rather than broken — a visible save state, a
+delete that deletes, a format that survives a reload, a title and a Scripture
+reference that can be set at all, and a share sheet that names the field at
+fault when the format gate refuses.
+
+## `reflections.mjs` — the list follows its container, not the window
+
+The claim a screenshot cannot make: that the page's layout responds to the
+width of its *container* rather than the width of the window. The interesting
+measurement holds the viewport at 1280, squeezes only the element the page sits
+inside, and reads back the computed `grid-template-columns` — because a
+viewport media query would keep answering "three columns" the whole way down,
+which is exactly the bug a collapsible sidebar otherwise produces.
+
+It creates its own fixtures and publishes some of them, so a development
+database it has been run against will contain published entries. That is where
+the rows on the Community page come from; they are real records, not seeded
+placeholders.
+
+## `readiness-tour.mjs` — every page, both widths, no assertions
+
+Signs up and walks Auth, Reflect, Reflections, Community, Create, the `/library`
+redirect and an unknown route, at 1280 and 390, printing the visible text and
+every control's accessible name. It claims almost nothing; it exists so a
+readiness review can be written from pictures rather than from source.
+
+## `readiness-use.mjs` — the same pages with something written in them
+
+Empty states are one story and populated ones are another. Sends a first
+message, then reports the assistance controls, the card's scroll region and the
+Create selects with a real reflection to choose from.
+
+## `readiness-reference.mjs` — the reference field losing keystrokes
+
+Types the Scripture reference character by character immediately after the first
+message creates the reflection, which is the only way to see the defect: setting
+the value directly is exactly what hides it. Also photographs the disclosure
+sheet over the card, and measures the card's scroll region with four full
+sections.
+
+It asserts the control case too — the same typing into an existing reflection,
+which works — so a fix can be told apart from a change in timing.
+
 ## `card-marks.mjs` — the decluttered card, from both sides
 
 The reflection card lost its C.H.A.T. letters, its section headings, "Not yet",

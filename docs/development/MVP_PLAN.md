@@ -6,7 +6,7 @@ Ship the smallest version of C.H.A.T. that proves users will return to their own
 
 ## Phase 0 — Foundation
 
-Status: scaffolded. The web app and API start locally; CI runs lint, typecheck, test, and build. Authentication is documented, not implemented.
+Status: **done.** The web app and API start locally; CI runs lint, typecheck, test and build. Authentication is implemented, not merely documented — see Phase 1.
 
 Deliverables:
 
@@ -28,6 +28,13 @@ Exit criteria:
 
 ## Phase 1 — Private conversation loop
 
+Status: **done.** Email/password registration and login with server-side
+sessions in a `chat_session` cookie; SQLite persistence via `node:sqlite`;
+conversations, messages and sections stored and re-openable; ownership checked
+on every route. The one known defect is the Scripture-reference field losing
+keystrokes when typed immediately after the first message — see the known
+limitations in [`AI_PROVIDER.md`](./AI_PROVIDER.md).
+
 Deliverables:
 
 - user authentication;
@@ -44,6 +51,19 @@ Exit criteria:
 A user can create several conversations, leave the app, return, and continue the correct conversation. Another user cannot retrieve those conversations.
 
 ## Phase 2 — AI assistance
+
+Status: **done, and larger than planned.** A provider seam with Gemini behind
+it (`gemini-3.5-flash-lite`), reflection guidance, improve writing, a bounded
+reflection conversation that can return labelled drafts, and title suggestion
+with a heuristic floor. Assistance is off by default and every failure is a
+typed outcome. The deliverables below were written as five named text
+operations; what shipped is a different and better-fenced set, and the ones not
+built (`shorten`, `summarize` as standalone controls) are not missed. See
+[`AI_PROVIDER.md`](./AI_PROVIDER.md) and
+[`REFLECTION_CHAT.md`](./REFLECTION_CHAT.md).
+
+A second connector, not in the original plan, arrived alongside it: YouVersion
+passage lookup, on by default, 47 translations across 7 languages.
 
 Deliverables:
 
@@ -62,6 +82,12 @@ A user can request assistance without silently losing or overwriting the origina
 
 ## Phase 3 — C.H.A.T. structure
 
+Status: **largely done.** The four sections are the page, editable directly,
+with provenance carried per section and extraction from the conversation
+offered as a proposal that writes nothing until accepted. The C was renamed
+from Context to Content and now holds the passage itself; stored writing was
+carried across by migration.
+
 Deliverables:
 
 - structured C/H/A/T view;
@@ -74,7 +100,16 @@ Exit criteria:
 
 A natural conversation can be transformed into a useful C.H.A.T. entry without forcing the original conversation itself into four rigid fields.
 
-## Phase 4 — Library and search
+## Phase 4 — Reflections and search
+
+The area is called **Reflections**, not Library. `GET /api/library` survives
+only as an alias of `GET /api/reflections`, and `/library` in the web app
+redirects.
+
+Status: **partly done.** The list, its filters (`all` / `drafts` / `completed`
+/ `published`), its sorts (`recent` / `title`) and a text query are built and
+open back into the right reflection. Search by book/chapter/verse, by date
+range, by tag and by section is not.
 
 Deliverables:
 
@@ -90,6 +125,13 @@ Exit criteria:
 A user with enough saved content to make browsing inconvenient can reliably recover an older reflection.
 
 ## Phase 5 — Create engine V1
+
+Status: **not started.** `web_app/src/create/CreatePage.tsx` exists and
+exports a PNG, but it is a developer stub: three unlabelled `<select>`s whose
+options are raw enum values, no styling, no live preview worth the name, and no
+layout or style system behind the names. Nothing in the deliverables below is
+built. It is reachable at `/create` and from the profile menu, which is more
+exposure than it has earned.
 
 Deliverables:
 
@@ -123,6 +165,8 @@ A user can choose content, apply a style/layout, produce a readable polished ima
 
 ## Phase 6 — Topical AI backgrounds
 
+Status: **not started.** No image provider exists and none is wired.
+
 Deliverables:
 
 - generate background intent from the selected content;
@@ -138,6 +182,13 @@ AI artwork enhances the composition without being responsible for rendering Scri
 
 ## Phase 7 — Internal publication/community
 
+Status: **backend done, frontend barely begun.** Publish and unpublish are
+implemented and validated server-side, and `GET /api/community` returns only
+records whose `publicationState` is `published`, so the privacy boundary holds
+where it matters. The Community page itself is thirty lines: a title and a
+reference per row, as plain `<span>`s. Nothing is clickable, no author is
+named, and there is no way to open a published entry.
+
 Deliverables:
 
 - explicit Publish to Community action;
@@ -152,6 +203,9 @@ Exit criteria:
 A user can have many private entries and selectively publish one without exposing the rest of the library.
 
 ## Phase 8 — Mobile packaging
+
+Status: **not started.** The web app is responsive down to 390px and has a
+bottom tab bar there, but there is no Capacitor project.
 
 Deliverables:
 

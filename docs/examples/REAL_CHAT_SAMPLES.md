@@ -14,10 +14,16 @@ Not a commentary on the passage. Not background. The verse text, usually with it
 reference and translation, and *sometimes* an explanation after it — but often
 nothing else at all.
 
-That is why "Context" was wrong as a name and why the app's model is wrong as a
-shape. The application currently treats the passage as a separate
-`scriptureReference` field and expects the C section to be prose *about* the
+That is why "Context" was wrong as a name and why the app's model was wrong as
+a shape. The application used to treat the passage as a separate
+`scriptureReference` field and to expect the C section to be prose *about* the
 passage. Every sample below does the opposite.
+
+The name was changed — the section is Content, and stored writing was carried
+across by a migration — and the copy, prompts and chip labels were rewritten
+around it. The separate `scriptureReference` field still exists, as the
+reference a lookup and an AI request are scoped to; what changed is that it no
+longer competes with C for the passage.
 
 ## What the samples show
 
@@ -139,7 +145,17 @@ the verse *is* the content, so the label is redundant to the author.
 
 ## What was previously assumed, and was wrong
 
-The prompts, chip labels and empty-state copy describe C as *"what does the
-passage mean?"* and offer *"Explain the background"* and *"Draft Context"*. That
-framing asks for a commentary nobody writes. The section is where the passage
-goes.
+The prompts, chip labels and empty-state copy described C as *"what does the
+passage mean?"* and offered *"Explain the background"* and *"Draft Context"*.
+That framing asked for a commentary nobody writes. The section is where the
+passage goes.
+
+**What changed.** The section prompt is now *"The passage itself. Add an
+explanation only if you want to."* The chip is *"Draft Content"*, and the
+server-side note behind it forbids quoting verse text from memory and asks for
+the passage as an author would write it. `api/src/ai/ai.test.ts` fails if the
+old commentary phrasing returns to the prompt.
+
+**What did not.** The chip is still called *"Draft Content"* — a name that
+describes composing prose, which is the habit this finding exists to break.
+*"Add passage"* would say what the button does. It has not been renamed.
