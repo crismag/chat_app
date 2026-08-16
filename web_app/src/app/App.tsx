@@ -7,12 +7,14 @@ import { ReflectionsPage } from '../reflections/ReflectionsPage.tsx'
 import { CommunityPage } from '../community/CommunityPage.tsx'
 import { CreatePage } from '../create/CreatePage.tsx'
 import { ProfilePage } from '../profile/ProfilePage.tsx'
+import { OpenSourceLicencesPage } from '../licenses/OpenSourceLicencesPage.tsx'
 
 export function App() {
   return (
     <AuthProvider>
       <Routes>
         <Route path="/login" element={<AuthPage />} />
+        <Route path="/open-source-licenses" element={<OpenSourceLicencesPage />} />
         <Route element={<AppShell />}>
           <Route path="/" element={<ChatPage />} />
           <Route path="/reflections" element={<ReflectionsPage />} />
