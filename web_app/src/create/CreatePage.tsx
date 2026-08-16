@@ -21,6 +21,12 @@ import {
   type StudioReflectionSource,
 } from './host-adapter.ts'
 import styles from './CreatePage.module.css'
+import {
+  createChatGeneratedAssetCallback,
+  fetchStudioGeneratedAssetStatus,
+  releaseChatStudioAssets,
+  resolveChatStudioAsset,
+} from './generated-assets.ts'
 
 interface StoredCreation {
   document: unknown
@@ -60,7 +66,19 @@ export function CreatePage() {
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [generatedAssetsEnabled, setGeneratedAssetsEnabled] = useState(false)
   const fields = useMemo(() => source ? availableReflectionFields(source) : [], [source])
+  const generatedAssetCallback = useMemo(
+    () => conversationId && generatedAssetsEnabled ? createChatGeneratedAssetCallback(conversationId) : undefined,
+    [conversationId, generatedAssetsEnabled],
+  )
+
+  useEffect(() => {
+    fetchStudioGeneratedAssetStatus()
+      .then(({ enabled }) => { setGeneratedAssetsEnabled(enabled) })
+      .catch(() => { setGeneratedAssetsEnabled(false) })
+    return releaseChatStudioAssets
+  }, [])
 
   useEffect(() => {
     api<ConversationSummary[]>('/conversations')
@@ -136,7 +154,11 @@ export function CreatePage() {
     setError(null)
     setMessage('Preparing PNG…')
     try {
-      const result = await exportStudioDocumentPage(nextDocument, { pageId, format: 'png', scale: 1 })
+      const result = await exportStudioDocumentPage(
+        nextDocument,
+        { pageId, format: 'png', scale: 1 },
+        { assetResolver: resolveChatStudioAsset },
+      )
       const url = URL.createObjectURL(result.blob)
       const link = window.document.createElement('a')
       link.href = url
@@ -212,6 +234,10 @@ export function CreatePage() {
             onDocumentChange={setDocument}
             onSave={save}
             onExport={exportPng}
+            assetResolver={resolveChatStudioAsset}
+            onRequestGeneratedAsset={generatedAssetCallback}
+            generatedAssetSafeArea={{ x: 0.12, y: 0.12, width: 0.76, height: 0.76 }}
+            generatedAssetMetadata={{ sourceApplication: 'chat_app', sourceReflectionId: conversationId }}
             onRenderResult={reportRender}
             capabilities={{ images: false }}
           />
