@@ -291,6 +291,141 @@ describe('C.H.A.T. extraction authorship', () => {
   });
 });
 
+/*
+ * Suggesting a title.
+ *
+ * A title is a label rather than a confession, so proposing one is legitimate
+ * where proposing a Testimony is not. The two properties that keep it safe are
+ * worth holding whatever ends up behind the seam: it must fit the format, and
+ * it must not write anything.
+ */
+describe('suggesting a title', () => {
+  async function withWriting(
+    app: ReturnType<typeof createApp>,
+    cookie: string,
+    content: string,
+    format: 'full' | 'condensed' = 'full',
+  ) {
+    const created = await app.request('/api/conversations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ scriptureReference: 'Romans 8:28', format }),
+    });
+    const conversation = await json<{ id: string; title: string }>(created);
+    await app.request(`/api/conversations/${conversation.id}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ content }),
+    });
+    return conversation;
+  }
+
+  const suggest = (app: ReturnType<typeof createApp>, cookie: string, id: string) =>
+    app.request(`/api/conversations/${id}/ai`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ action: 'suggest_title' }),
+    });
+
+  test('suggestions are drawn from what the author actually wrote', async () => {
+    const app = createApp(new MemoryStore());
+    const { cookie } = await register(app, 'ada@example.com');
+    const conversation = await withWriting(
+      app,
+      cookie,
+      'The week I could not see it. Nothing about this looked like good.',
+    );
+
+    const response = await suggest(app, cookie, conversation.id);
+    expect(response.status).toBe(200);
+    const body = await json<{ applied: boolean; suggestions: string[] }>(response);
+
+    expect(body.applied).toBe(false);
+    expect(body.suggestions.length).toBeGreaterThan(0);
+    expect(body.suggestions[0]).toContain('The week I could not see it');
+    // The passage is how most people name a reflection out loud.
+    expect(body.suggestions.some((s) => s.includes('Romans 8:28'))).toBe(true);
+  });
+
+  test('a suggestion never exceeds the format’s own title limit', async () => {
+    const app = createApp(new MemoryStore());
+    const { cookie } = await register(app, 'ada@example.com');
+
+    // One enormous sentence, so trimming is the only way anything fits.
+    const flood = `${'a very long clause about the passage '.repeat(30)}.`;
+
+    for (const [format, limits] of [
+      ['full', { recommended: 60, hard: 100 }],
+      ['condensed', { recommended: 50, hard: 80 }],
+    ] as const) {
+      const conversation = await withWriting(app, cookie, flood, format);
+      const body = await json<{ suggestions: string[] }>(
+        await suggest(app, cookie, conversation.id),
+      );
+
+      expect(body.suggestions.length).toBeGreaterThan(0);
+      for (const suggestion of body.suggestions) {
+        expect(suggestion.length).toBeLessThanOrEqual(limits.hard);
+        expect(suggestion.length).toBeLessThanOrEqual(limits.recommended);
+        expect(suggestion).not.toMatch(/\s$/);
+      }
+    }
+  });
+
+  test('suggesting never changes the stored title', async () => {
+    const app = createApp(new MemoryStore());
+    const { cookie } = await register(app, 'ada@example.com');
+    const conversation = await withWriting(app, cookie, 'Something I wrote down.');
+
+    await app.request(`/api/conversations/${conversation.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ title: 'The name I chose myself' }),
+    });
+
+    await suggest(app, cookie, conversation.id);
+    await suggest(app, cookie, conversation.id);
+
+    const after = await app.request(`/api/conversations/${conversation.id}`, {
+      headers: { Cookie: cookie },
+    });
+    expect((await json<{ title: string }>(after)).title).toBe('The name I chose myself');
+  });
+
+  test('with nothing written, it says so rather than inventing one', async () => {
+    const app = createApp(new MemoryStore());
+    const { cookie } = await register(app, 'ada@example.com');
+    const created = await app.request('/api/conversations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({}),
+    });
+    const conversation = await json<{ id: string }>(created);
+
+    const response = await suggest(app, cookie, conversation.id);
+    expect(response.status).toBe(422);
+    expect((await json<{ error: string }>(response)).error).toMatch(/not enough written/i);
+  });
+
+  test('when assistance is switched off it refuses, with a reason', async () => {
+    process.env['CHAT_AI_DISABLED'] = '1';
+    try {
+      const app = createApp(new MemoryStore());
+      const { cookie } = await register(app, 'ada@example.com');
+      const conversation = await withWriting(app, cookie, 'Something I wrote down.');
+
+      const response = await suggest(app, cookie, conversation.id);
+      expect(response.status).toBe(503);
+      expect((await json<{ error: string }>(response)).error).toMatch(/switched off/i);
+
+      const status = await app.request('/api/ai/status');
+      expect(await json<{ enabled: boolean }>(status)).toMatchObject({ enabled: false });
+    } finally {
+      delete process.env['CHAT_AI_DISABLED'];
+    }
+  });
+});
+
 describe('editing a reflection', () => {
   async function start(app: ReturnType<typeof createApp>, cookie: string) {
     const created = await app.request('/api/conversations', {

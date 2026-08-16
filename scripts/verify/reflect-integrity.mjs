@@ -204,6 +204,73 @@ try {
   check('the Scripture reference can be set and survives a reload',
     referenceValue === 'Romans 8:28', referenceValue);
 
+  /*
+   * Suggest title — an assist, and only an assist.
+   *
+   * It must produce something drawn from the writing, leave the existing title
+   * alone when declined, stick across a reload when accepted, and never take
+   * the field away from the person typing in it.
+   */
+  const titleBefore = await driver
+    .findElement(By.css('input[aria-label="Reflection title"]'))
+    .getAttribute('value');
+
+  await clickByText('Suggest title');
+  await until(async () => (await driver.findElements(By.css('[role=dialog]'))).length === 1, 10000);
+  await wait(700);
+  const suggestionSheet = await driver.findElement(By.css('[role=dialog]')).getText();
+  const options = await driver.findElements(By.css('input[name=title-suggestion]'));
+  check('Suggest title offers candidates to choose from', options.length > 0, `${options.length}`);
+  check('and the candidates are drawn from what was written',
+    /Romans 8:28/.test(suggestionSheet), suggestionSheet.split('\n').slice(2, 5).join(' | '));
+  check('it says plainly that nothing is used until it is chosen',
+    /until you choose it/i.test(suggestionSheet));
+  await shoot('reflect-1280-suggest-title');
+
+  // Declining must leave the author's own title exactly as it was.
+  await clickByText('Keep my title');
+  await wait(900);
+  const titleAfterDecline = await driver
+    .findElement(By.css('input[aria-label="Reflection title"]'))
+    .getAttribute('value');
+  check('declining leaves the existing title untouched',
+    titleAfterDecline === titleBefore, `${titleBefore} → ${titleAfterDecline}`);
+
+  // Accepting: pick a candidate deliberately, so choosing is what decides it.
+  await clickByText('Suggest title');
+  await until(async () => (await driver.findElements(By.css('[role=dialog]'))).length === 1, 10000);
+  await wait(700);
+  const choices = await driver.findElements(By.css('input[name=title-suggestion]'));
+  await driver.executeScript('arguments[0].click()', choices[choices.length > 1 ? 1 : 0]);
+  await wait(300);
+  const chosenValue = await driver
+    .findElement(By.css('input[aria-label="Title to use"]'))
+    .getAttribute('value');
+  await clickByText('Use this title');
+  await wait(1500);
+
+  await driver.navigate().refresh();
+  await until(async () => (await fieldArea('Heart')) !== null, 10000);
+  const titleAfterAccept = await driver
+    .findElement(By.css('input[aria-label="Reflection title"]'))
+    .getAttribute('value');
+  check('accepting a suggestion sets the title, and it survives a reload',
+    titleAfterAccept === chosenValue, `${chosenValue} → ${titleAfterAccept}`);
+  check('and the accepted title is inside the format limit',
+    titleAfterAccept.length > 0 && titleAfterAccept.length <= 100,
+    `${titleAfterAccept.length} chars`);
+
+  // The field is still the author's to type in directly.
+  const titleField = await driver.findElement(By.css('input[aria-label="Reflection title"]'));
+  await titleField.clear();
+  await titleField.sendKeys('The week I could not see it');
+  await titleField.sendKeys(Key.ENTER);
+  await wait(1200);
+  check('the title is still freely editable by hand',
+    (await driver
+      .findElement(By.css('input[aria-label="Reflection title"]'))
+      .getAttribute('value')) === 'The week I could not see it');
+
   // --- discussing a section in the chat ---------------------------------
   const before = (await driver.findElements(By.css('[class*=messages] li'))).length;
   for (const button of await driver.findElements(By.css('[class*=discussButton]'))) {

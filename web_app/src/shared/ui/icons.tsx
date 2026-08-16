@@ -49,6 +49,15 @@ export function CommunityIcon(props: IconProps) {
   )
 }
 
+export function SparkIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12 4.5 13.4 9l4.6 1.5-4.6 1.5L12 16.5 10.6 12 6 10.5 10.6 9 12 4.5Z" />
+      <path d="M18 4v3M19.5 5.5h-3" />
+    </svg>
+  )
+}
+
 export function TrashIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>

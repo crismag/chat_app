@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import {
   CHAT_FORMATS,
   FORMAT_LIMITS,
+  counterFor,
   validateChat,
   type ChatFormat,
   type ValidationResult,
@@ -442,6 +443,119 @@ export function FormatSheet({
           ) : null}
         </div>
       )}
+    </Sheet>
+  )
+}
+
+/* ------------------------------------------------------------------- title */
+
+/**
+ * A suggested name for the work, offered rather than applied.
+ *
+ * The author picks from candidates drawn out of their own writing, edits the
+ * one they picked if they want to, and only then does it become the title. An
+ * existing name is named alongside, because replacing something someone chose
+ * for themselves should be a visible decision and not a side effect of
+ * curiosity.
+ */
+export function TitleSuggestionSheet({
+  suggestions,
+  currentTitle,
+  format,
+  onClose,
+  onUse,
+}: {
+  suggestions: string[]
+  currentTitle: string
+  format: ChatFormat
+  onClose: () => void
+  onUse: (title: string) => Promise<void>
+}) {
+  const [chosen, setChosen] = useState(suggestions[0] ?? '')
+  const [busy, setBusy] = useState(false)
+  const counter = counterFor(format, 'title', chosen)
+  const limit = FORMAT_LIMITS[format].fields['title']
+  const tooLong = limit ? chosen.length > limit.hard : false
+
+  return (
+    <Sheet
+      title="Suggest a title"
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>
+            {currentTitle.trim() ? 'Keep my title' : 'Not now'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={busy || !chosen.trim() || tooLong}
+            onClick={() => {
+              setBusy(true)
+              void onUse(chosen.trim()).finally(() => setBusy(false))
+            }}
+          >
+            {busy ? 'Saving…' : 'Use this title'}
+          </button>
+        </>
+      }
+    >
+      <p className={styles.sheetLead}>
+        Drawn from your passage and your own writing. Nothing here is used until you choose
+        it, and you can edit it first.
+      </p>
+
+      {currentTitle.trim() ? (
+        <p className={styles.conversionNote}>
+          This reflection is currently called <strong>{currentTitle}</strong>. Choosing one of
+          these replaces that.
+        </p>
+      ) : null}
+
+      <ul className={styles.destinations}>
+        {suggestions.map((suggestion) => (
+          <li key={suggestion}>
+            <label className={styles.destination} data-selected={chosen === suggestion}>
+              <input
+                type="radio"
+                name="title-suggestion"
+                value={suggestion}
+                checked={chosen === suggestion}
+                onChange={() => setChosen(suggestion)}
+              />
+              <span className={styles.destinationText}>
+                <span className={styles.suggestionText}>{suggestion}</span>
+                <span className={styles.destinationDetail}>
+                  {suggestion.length} characters
+                </span>
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+
+      <label className={styles.suggestionEdit}>
+        <span className={styles.conversionHead}>Edit it before it is used</span>
+        <input
+          className={styles.suggestionInput}
+          value={chosen}
+          aria-label="Title to use"
+          onChange={(event) => setChosen(event.target.value)}
+        />
+      </label>
+
+      {counter ? (
+        <p className={styles.counter} data-status={counter.status} aria-live="polite">
+          {counter.length} / {counter.recommended} recommended · {counter.hard} maximum
+        </p>
+      ) : null}
+
+      {tooLong ? (
+        <p className={styles.conversionNote}>
+          That is longer than a title may be. Shorten it by{' '}
+          {limit ? chosen.length - limit.hard : 0} characters to use it.
+        </p>
+      ) : null}
     </Sheet>
   )
 }

@@ -23,10 +23,12 @@ import {
   type HealthResponse,
 } from '@chat/shared';
 import {
+  aiStatus,
   applyNamedAiAction,
   condensedFromStore,
   extractChatSections,
   sectionsFromStore,
+  suggestTitles,
 } from './ai.ts';
 import { SqliteStore } from './db.ts';
 import { MemoryStore, type StoredConversation } from './store.ts';
@@ -165,6 +167,14 @@ export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) 
     };
     return c.json(body);
   });
+
+  /*
+   * What assistance can do right now.
+   *
+   * The interface asks before it offers a control, so an unavailable one can
+   * be disabled with a reason on it rather than left live and doing nothing.
+   */
+  app.get('/api/ai/status', (c) => c.json(aiStatus()));
 
   app.post('/api/auth/register', async (c) => {
     const body = await c.req.json<{ email?: string; password?: string }>();
@@ -538,7 +548,51 @@ export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) 
       return c.json({ error: 'A named AI action is required.' }, 400);
     }
 
+    /*
+     * Unavailable is an answer, not a silence. A control that cannot work says
+     * why, here and in the interface, rather than appearing to do nothing.
+     */
+    const status = aiStatus();
+    if (!status.enabled) {
+      return c.json({ error: status.reason ?? 'Assistance is unavailable.', ai: status }, 503);
+    }
+
     const messages = store.messages.get(conversation.id) ?? [];
+
+    if (action === AI_ACTIONS.SUGGEST_TITLE) {
+      /*
+       * Suggesting a name for the work, from the work.
+       *
+       * Every candidate is built from what the author already wrote and fits
+       * the format's title limit before it leaves here, so nothing arrives in
+       * the field already too long. And nothing is written: the title changes
+       * only when the author picks one and PATCHes it themselves.
+       */
+      const suggestions = suggestTitles(conversation.format, {
+        scriptureReference: conversation.scriptureReference,
+        messages,
+        sections: store.sections.get(conversation.id),
+      });
+
+      if (suggestions.length === 0) {
+        return c.json(
+          {
+            error:
+              'There is not enough written yet to suggest a title. Write a little first.',
+          },
+          422,
+        );
+      }
+
+      return c.json({
+        action,
+        applied: false,
+        suggestions,
+        currentTitle: conversation.title,
+        origin: AUTHOR_ORIGINS.AI_GENERATED,
+        provider: status.provider,
+      });
+    }
 
     if (action === AI_ACTIONS.EXTRACT_CHAT) {
       /*

@@ -51,6 +51,16 @@ export const AI_ACTIONS = {
   SHORTEN: 'shorten',
   SUMMARIZE: 'summarize',
   EXTRACT_CHAT: 'extract_chat',
+  /*
+   * A title is a label, not a confession.
+   *
+   * The format rules forbid the model inventing Heart, Application or
+   * Testimony because those carry the author's own conviction, and writing
+   * them would be putting words in someone's mouth. A title makes no such
+   * claim — it is the handle a reflection is filed under — so suggesting one
+   * is legitimate where suggesting a testimony is not. It stays a suggestion.
+   */
+  SUGGEST_TITLE: 'suggest_title',
 } as const;
 
 export type AiAction = (typeof AI_ACTIONS)[keyof typeof AI_ACTIONS];

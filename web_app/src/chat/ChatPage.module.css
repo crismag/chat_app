@@ -436,6 +436,70 @@
 }
 
 /*
+ * An assist beside the name, not a control competing with it. Quiet at rest,
+ * and unmistakably unavailable when it cannot do anything — the reason travels
+ * with it, as a tooltip and as text a screen reader can reach.
+ */
+.suggestButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: none;
+  align-self: flex-end;
+  margin-bottom: 0.25rem;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.suggestButton:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.suggestButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.suggestionText {
+  font-family: var(--font-serif);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink);
+  line-height: var(--leading-snug);
+}
+
+.suggestionEdit {
+  display: grid;
+  gap: var(--space-1);
+}
+
+/* A title is one line. It borrowed the conversion textarea's 7rem and looked
+   like a place to write an essay. */
+.suggestionInput {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-serif);
+  font-size: var(--text-base);
+}
+
+.suggestionInput:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+
+/*
  * Saving, said in words and marked in colour — in that order, so the state is
  * never carried by the colour alone.
  */
@@ -1534,6 +1598,22 @@
 
   .artifactHeadMain {
     flex: 1 1 12rem;
+    flex-wrap: wrap;
+  }
+
+  /*
+   * On a phone the assist takes its own row. Sharing one with the title left
+   * the name of the reflection reading "Romans 8:28 me".
+   */
+  .identity {
+    flex: 1 1 10rem;
+  }
+
+  .suggestButton {
+    flex: 1 1 100%;
+    justify-content: center;
+    align-self: stretch;
+    margin-bottom: 0;
   }
 
   .artifactHeadSide {

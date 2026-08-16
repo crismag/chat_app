@@ -24,11 +24,18 @@ import {
   GlobeIcon,
   LockIcon,
   ShareIcon,
+  SparkIcon,
   TrashIcon,
 } from '../shared/ui/icons.tsx'
 import { ChatArtifact } from './ChatArtifact.tsx'
 import { ChatHelper } from './ChatHelper.tsx'
-import { DeleteSheet, FormatSheet, ShareSheet, type ShareAudience } from './ChatSheets.tsx'
+import {
+  DeleteSheet,
+  FormatSheet,
+  ShareSheet,
+  TitleSuggestionSheet,
+  type ShareAudience,
+} from './ChatSheets.tsx'
 import { ConversationSidebar } from './ConversationSidebar.tsx'
 import { deriveTitle, displayTitle } from './history.ts'
 import { fieldsFor } from './sections.ts'
@@ -89,6 +96,14 @@ export function ChatPage() {
 
   const [discussing, setDiscussing] = useState<FieldType | null>(null)
   const [proposal, setProposal] = useState<Proposal | null>(null)
+
+  /*
+   * What assistance can do, asked once rather than assumed. A control that
+   * cannot work has to be able to say why.
+   */
+  const [ai, setAi] = useState<{ enabled: boolean; reason?: string }>({ enabled: true })
+  const [suggesting, setSuggesting] = useState(false)
+  const [titleSuggestions, setTitleSuggestions] = useState<string[] | null>(null)
 
   const [shareOpen, setShareOpen] = useState(false)
   const [formatOpen, setFormatOpen] = useState(false)
@@ -462,6 +477,40 @@ export function ChatPage() {
     }
   }
 
+  /**
+   * Ask for a few candidate titles, and show them for review.
+   *
+   * A title is a label rather than a confession, so proposing one is fair game
+   * where proposing a Testimony would not be. It is still only a proposal:
+   * nothing is written until the author picks one, and picking is what the
+   * sheet is for.
+   */
+  async function suggestTitle() {
+    if (!activeId) return
+    setSuggesting(true)
+    setError(null)
+    try {
+      const result = await api<{ suggestions?: string[] }>(`/conversations/${activeId}/ai`, {
+        method: 'POST',
+        body: JSON.stringify({ action: AI_ACTIONS.SUGGEST_TITLE }),
+      })
+      if (result.suggestions?.length) {
+        setTitleSuggestions(result.suggestions)
+      } else {
+        setError('No title could be drawn from this yet. Write a little more first.')
+      }
+    } catch (caught: unknown) {
+      /* 503 means assistance went away underneath us; the button says so now. */
+      if (caught instanceof ApiError && caught.status === 503) {
+        const body = caught.body as { ai?: { reason?: string } }
+        setAi({ enabled: false, reason: body.ai?.reason ?? caught.message })
+      }
+      setError(caught instanceof Error ? caught.message : 'Unable to suggest a title')
+    } finally {
+      setSuggesting(false)
+    }
+  }
+
   /** Put a piece of text into a field, saying plainly where it came from. */
   async function putIntoField(field: FieldType, content: string, origin: string) {
     if (!activeId) return
@@ -589,6 +638,20 @@ export function ChatPage() {
   const hasWritten = detail !== null && detail.messages.length > 0
   const written = fields.filter((meta) => valueOf(meta.type).trim()).length
 
+  /*
+   * Why Suggest title cannot be pressed, when it cannot. `null` means it can —
+   * and every other value is a sentence the person can read, rather than a
+   * greyed-out control with no explanation attached to it.
+   */
+  const suggestReasonId = 'suggest-title-reason'
+  const suggestTitleReason: string | null = !detail
+    ? 'Start a reflection first — there is nothing to name yet.'
+    : !hasWritten
+      ? 'Write something first. A title is drawn from what you have written.'
+      : !ai.enabled
+        ? (ai.reason ?? 'Assistance is unavailable right now.')
+        : null
+
   const liveValidation = detail
     ? validateChat(format, {
         title: titleDraft ?? detail.title,
@@ -600,6 +663,15 @@ export function ChatPage() {
   useEffect(() => {
     if (!isNarrow) setHelperOpen(false)
   }, [isNarrow])
+
+  /* Asked once: whether assistance is there, and what to say when it is not. */
+  useEffect(() => {
+    api<{ enabled: boolean; reason?: string }>('/ai/status')
+      .then(setAi)
+      .catch(() =>
+        setAi({ enabled: false, reason: 'Assistance could not be reached right now.' }),
+      )
+  }, [])
 
   useEffect(() => {
     if (!helperOpen && !listOpen) return
@@ -765,35 +837,62 @@ export function ChatPage() {
                 }}
               />
             </div>
+
+            {/*
+              An assist, not a gate. The field beside it stays exactly as
+              editable as it was; this is for the moment when nothing comes to
+              mind. When it cannot work it says why, rather than sitting there
+              live and quietly doing nothing.
+            */}
+            <button
+              type="button"
+              className={styles.suggestButton}
+              disabled={suggestTitleReason !== null || suggesting}
+              title={suggestTitleReason ?? undefined}
+              aria-describedby={suggestTitleReason ? suggestReasonId : undefined}
+              onClick={() => void suggestTitle()}
+            >
+              <SparkIcon className={styles.tinyIcon} />
+              {suggesting ? 'Thinking…' : 'Suggest title'}
+            </button>
+            {suggestTitleReason ? (
+              <span className="sr-only" id={suggestReasonId}>
+                {suggestTitleReason}
+              </span>
+            ) : null}
           </div>
 
           <div className={styles.artifactHeadSide}>
-            {/* Saving, in words, where the work is. */}
-            <span
-              className={styles.saveState}
-              data-status={saveStatus}
-              role="status"
-            >
-              {saveLabel}
-            </span>
-            {saveState.status === 'failed' ? (
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => void saveAll()}
-              >
-                Try again
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                disabled={!hasUnsaved}
-                onClick={() => void saveAll()}
-              >
-                Save
-              </button>
-            )}
+            {/*
+              Saving, in words, where the work is — and only once there is
+              work. A blank page reporting "Saved" is a reassurance about
+              nothing.
+            */}
+            {detail ? (
+              <>
+                <span className={styles.saveState} data-status={saveStatus} role="status">
+                  {saveLabel}
+                </span>
+                {saveState.status === 'failed' ? (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => void saveAll()}
+                  >
+                    Try again
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={!hasUnsaved}
+                    onClick={() => void saveAll()}
+                  >
+                    Save
+                  </button>
+                )}
+              </>
+            ) : null}
 
             {detail ? (
               <span className={styles.privacy}>
@@ -1012,6 +1111,20 @@ export function ChatPage() {
           )}
           onClose={() => setFormatOpen(false)}
           onChoose={changeFormat}
+        />
+      ) : null}
+
+      {titleSuggestions && detail ? (
+        <TitleSuggestionSheet
+          suggestions={titleSuggestions}
+          currentTitle={displayTitleValue(detail.title, detail.scriptureReference)}
+          format={format}
+          /* Declining leaves the title exactly as it was. */
+          onClose={() => setTitleSuggestions(null)}
+          onUse={async (title) => {
+            const ok = await patchConversation({ title })
+            if (ok) setTitleSuggestions(null)
+          }}
         />
       ) : null}
 
