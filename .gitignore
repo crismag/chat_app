@@ -81,3 +81,8 @@ local-data/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
+
+# Local verification artifacts. Browser-driver scripts live in scripts/verify/
+# and are committed; what they produce is local noise and is not.
+scripts/verify/out/
+*.local.mjs

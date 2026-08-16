@@ -19,6 +19,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "selenium-webdriver": "^4.47.0"
   }
 }
