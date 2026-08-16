@@ -51,7 +51,7 @@ console.log(`Timeout: ${config.timeoutMs}ms\n`);
  */
 const SYNTHETIC = {
   passageReference: 'Psalm 23:1',
-  written: { context: 'This is placeholder text written for a connectivity test.' },
+  written: { content: 'This is placeholder text written for a connectivity test.' },
 };
 
 const provider = new GeminiProvider({ model: config.model, timeoutMs: config.timeoutMs });
@@ -78,7 +78,7 @@ async function timed(label, run) {
 
 const guidance = await timed('reflection guidance', () =>
   provider.generateReflectionGuidance(
-    { ...SYNTHETIC, sections: ['context', 'heart'] },
+    { ...SYNTHETIC, sections: ['content', 'heart'] },
     { requestId: 'live-smoke' },
   ),
 );
@@ -98,7 +98,7 @@ if (guidance) {
 const improved = await timed('improve writing', () =>
   provider.improveReflectionWriting(
     {
-      section: 'context',
+      section: 'content',
       text: 'this is  placeholder text written for a connectivity test and it has no  personal meaning',
       passageReference: SYNTHETIC.passageReference,
     },

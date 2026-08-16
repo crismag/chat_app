@@ -53,7 +53,7 @@ export type StoredMessage = {
  * both drafts, which the format rules require in both directions.
  */
 export type StoredSection = {
-  type: 'context' | 'heart' | 'application' | 'testimony' | 'verse' | 'reflection';
+  type: 'content' | 'heart' | 'application' | 'testimony' | 'verse' | 'reflection';
   content: string;
   authorOrigin: 'user' | 'ai_assisted' | 'ai_generated';
 };

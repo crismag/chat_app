@@ -268,9 +268,9 @@
   background: var(--muted);
 }
 
-.strip > span[data-section='context'][data-written='true'],
-.thumb > span[data-section='context'][data-written='true'] {
-  background: var(--context);
+.strip > span[data-section='content'][data-written='true'],
+.thumb > span[data-section='content'][data-written='true'] {
+  background: var(--content);
 }
 .strip > span[data-section='heart'][data-written='true'],
 .thumb > span[data-section='heart'][data-written='true'] {
@@ -381,10 +381,10 @@
 }
 
 /* Written sections are filled *and* bold-bordered; unwritten are outlines. */
-.marker[data-written='true'][data-section='context'] {
-  background: var(--context-soft);
-  border-color: var(--context);
-  color: var(--context);
+.marker[data-written='true'][data-section='content'] {
+  background: var(--content-soft);
+  border-color: var(--content);
+  color: var(--content);
 }
 .marker[data-written='true'][data-section='heart'] {
   background: var(--heart-soft);

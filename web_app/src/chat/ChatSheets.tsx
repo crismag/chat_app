@@ -344,7 +344,7 @@ export function FormatSheet({
               <span className={styles.currentTag}>Current</span>
             ) : null}
           </h3>
-          <p className={styles.formatShape}>Context · Heart · Application · Testimony</p>
+          <p className={styles.formatShape}>Content · Heart · Application · Testimony</p>
           <p className={styles.formatDetail}>
             All four sections, up to 1,200 characters together as a rule and 2,400 at most.
             One page, or two if you allow it.

@@ -238,9 +238,9 @@ try {
       await driver.executeScript('arguments[0].scrollIntoView({block:"center"})', useIn);
       await useIn.click();
       await wait(400);
-      const context = await buttonWith(driver, /^Context$/);
-      if (context) {
-        await context.click();
+      const content = await buttonWith(driver, /^Content$/);
+      if (content) {
+        await content.click();
         await until(async () => {
           const values = await driver.executeScript(
             `return [...document.querySelectorAll('[class*=fieldInput]')].map((el) => el.value)`,

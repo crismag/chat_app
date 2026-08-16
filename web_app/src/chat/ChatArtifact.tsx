@@ -282,7 +282,7 @@ export function ChatArtifact({
         <p className={styles.waitingBody}>
           {format === 'condensed'
             ? 'The verse and your reflection appear here once you have begun — drawn from the conversation beside you rather than asked for up front.'
-            : 'Context, Heart, Application and Testimony appear here once your reflection has begun — drawn from the conversation beside you rather than asked for up front.'}
+            : 'Content, Heart, Application and Testimony appear here once your reflection has begun — drawn from the conversation beside you rather than asked for up front.'}
         </p>
       </div>
     )

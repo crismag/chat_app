@@ -13,7 +13,7 @@ This document is the mechanism; that one is the reason.
 > Human reflection, assisted by AI. The AI must not impersonate the user or
 > manufacture the user's faith, feelings, experience, prayer, or testimony.
 
-**C.H.A.T.** is **Context** (what is happening in and around the passage),
+**C.H.A.T.** is **Content** (what is happening in and around the passage),
 **Heart** (how it personally touches the writer), **Application** (how it
 applies and what they may do), **Testimony** (their declaration of faith,
 conviction or prayer).
@@ -53,7 +53,7 @@ all three are enforced rather than hoped for:
 1. **A fixed system instruction** it cannot be talked out of — the same one the
    other two capabilities use, plus `CHAT_TASK`, which narrows rather than
    relaxes it.
-2. **The C.H.A.T. framework** — Context, Heart, Application, Testimony.
+2. **The C.H.A.T. framework** — Content, Heart, Application, Testimony.
 3. **This reflection only** — its passage, its four sections, and the recent
    turns of its own thread. Nothing else is in scope, and nothing else is sent.
 

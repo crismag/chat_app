@@ -84,7 +84,7 @@ test('Reflect opens on a question, and can be written in immediately', async () 
   expect(
     await screen.findByText('What passage are you reflecting on today?'),
   ).toBeInTheDocument()
-  expect(screen.getByText('Context · Heart · Application · Testimony')).toBeInTheDocument()
+  expect(screen.getByText('Content · Heart · Application · Testimony')).toBeInTheDocument()
   // No title form stands between someone and their first sentence.
   expect(screen.getByLabelText('Write your reflection')).toBeInTheDocument()
   /*
@@ -108,7 +108,7 @@ test('the four sections do not appear before anything has been written', async (
     await screen.findByText('What passage are you reflecting on today?'),
   ).toBeInTheDocument()
   expect(screen.getByText(/C.H.A.T. takes shape as you write/i)).toBeInTheDocument()
-  for (const name of ['Context', 'Heart', 'Application', 'Testimony']) {
+  for (const name of ['Content', 'Heart', 'Application', 'Testimony']) {
     expect(screen.queryByRole('button', { name: new RegExp(`^${name} `) })).toBeNull()
   }
 })

@@ -45,7 +45,7 @@ function mockFetch(items: unknown[] = reflections) {
       json: async () => ({
         messages: [{ id: 'm1', role: 'user', content: 'Today this passage reminded me…' }],
         sections: {
-          context: { type: 'context', content: 'Paul writes to a suffering church.' },
+          content: { type: 'content', content: 'Paul writes to a suffering church.' },
           heart: { type: 'heart', content: 'It met my fear.' },
           application: { type: 'application', content: '' },
           testimony: { type: 'testimony', content: '' },
@@ -81,7 +81,7 @@ test('lists reflections with the specified search placeholder', async () => {
 })
 
 /*
- * The markers say *which* sections exist, so a reflection with Context and
+ * The markers say *which* sections exist, so a reflection with Content and
  * Heart written must light C and H — not the first two boxes in the row. The
  * mocked detail leaves application and testimony empty, which is a case a bare
  * count cannot tell apart from any other 2 of 4.
@@ -98,7 +98,7 @@ test('fills the C.H.A.T. markers for the sections actually written', async () =>
         .filter((node) => node.getAttribute('data-written') === 'true')
         .map((node) => node.getAttribute('data-section')),
     )
-    expect([...written].sort()).toEqual(['context', 'heart'])
+    expect([...written].sort()).toEqual(['content', 'heart'])
   })
 })
 

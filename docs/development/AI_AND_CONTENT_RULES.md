@@ -70,7 +70,7 @@ Future product settings may allow users or communities to select preferred trans
 
 When extracting a structured C.H.A.T. from conversation:
 
-- Context may summarize relevant explanatory conversation and the person's understanding of the passage.
+- Content may summarize relevant explanatory conversation and the person's understanding of the passage.
 - Heart may organize what the user expressed about how the passage touched, convicted, encouraged, challenged, or affected them. It must not be silently manufactured by AI.
 - Application may summarize how the user said the passage applies to them and how they intend to respond.
 - Testimony may organize a user-authored testimony, declaration of faith or conviction, commitment, prayer, or statement of belief. It must rely on the user's expressed substance.

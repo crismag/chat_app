@@ -11,7 +11,7 @@
  *      are theirs.
  *   2. **It must not move.** The progress line occupies a reserved row whether
  *      or not it says anything, so a lookup starting and finishing does not
- *      shove Context, Heart, Application and Testimony up and down the page
+ *      shove Content, Heart, Application and Testimony up and down the page
  *      under a cursor already travelling toward them.
  *
  * Every value resolves to a token. Nothing here invents a colour.

@@ -33,7 +33,7 @@ This is the part most likely to be misread later, so it is written out in full.
 
 The assistant **does** generate drafts on request, **including for Heart and
 Testimony**. "Draft my Heart response", "Write a short prayer for Testimony",
-"Generate Context for this verse" all return real drafts.
+"Generate Content for this verse" all return real drafts.
 
 This does not contradict the content rules. The prohibition was against AI
 **silently authoring personal material and attributing it to the user**. Four
@@ -68,8 +68,8 @@ explicit action**.
    accessibility requires it. **Only explicit generated drafts carry a
    provenance label.**
 3. **Recognise explicit generation requests** and return real drafts in a
-   **distinct card**: heading "Context draft", the text, then
-   `[Add to Context] [Edit] [Try again]`. When the section is known the action
+   **distinct card**: heading "Content draft", the text, then
+   `[Add to Content] [Edit] [Try again]`. When the section is known the action
    is direct — not a second picker.
 4. **Insertion must be safe.** If the section already has text, offer
    **Append / Replace / Insert at cursor / Cancel**. Never assume replacement,
@@ -78,7 +78,7 @@ explicit action**.
    not a compound of historical + theological + personal. Build on the
    conversation instead of restating the same paragraph about Abraham, David
    and covenants.
-6. **Stop ending messages with "How would you put this into the Context
+6. **Stop ending messages with "How would you put this into the Content
    section?"** Section-directed questions only when relevant or requested.
 7. **Allow ordinary conversational detours.** The owner's example: the user says
    it is midnight with no food. A shallow acknowledgement that pivots straight
@@ -95,14 +95,14 @@ explicit action**.
 
   | Section | Chips |
   |---|---|
-  | Context | Explain the background · Ask a Context question · Draft Context · Check this interpretation |
+  | Content | Explain the background · Ask a Content question · Draft Content · Check this interpretation |
   | Heart | Ask a Heart question · Help me express this · Draft Heart · Make this more personal |
   | Application | Suggest a practical response · Make this specific · Draft Application · Ask an Application question |
   | Testimony | Help me write a prayer · Turn this into a declaration · Draft Testimony · Ask a faith question |
 
 - Scope is **guidance, not a hard restriction** — still answer reasonable
   adjacent questions.
-- After adding: state changes to **"✓ Added to Context"** with a **View** action
+- After adding: state changes to **"✓ Added to Content"** with a **View** action
   that focuses and scrolls the left editor to that section, and the destination
   section **briefly highlights**.
 
@@ -120,7 +120,7 @@ explicit action**.
 - **"↓ Latest"** when scrolled away, or when a reply arrives while reading
   older messages.
 - **State-aware chips.** Default: Explain simply / Historical context / Ask me a
-  question / Draft Context. **Polish and Shorten appear only when a draft or
+  question / Draft Content. **Polish and Shorten appear only when a draft or
   selection exists** — they are meaningless as conversation starters.
 - **Refine the scrollbar** (6–8px, low-contrast thumb, more contrast on hover,
   no overlay). **Do not change the scroll architecture.**
@@ -152,8 +152,8 @@ reflection"**, tooltip "Use in reflection". Revealed on hover **or focus**,
 never hover alone, and always present on touch; the visual mark is small but
 the target is 2.5rem.
 
-Activating it opens a menu headed **"Use this response"** listing Context /
-Heart / Application / Testimony with accessible labels "Use in Context" and so
+Activating it opens a menu headed **"Use this response"** listing Content /
+Heart / Application / Testimony with accessible labels "Use in Content" and so
 on, plus **Copy text**. It dismisses on selection, on Escape, and on an outside
 click, and focus returns to the trigger when it closes without a selection.
 Escape and outside-click are handled on the *document*, because a handler bound
@@ -177,7 +177,7 @@ known, do not ask the author to pick among four again. The actions are
 
 ### Insertion is a review state, never a commit
 
-"Review in Context" places the text into the section's **unsaved editing
+"Review in Content" places the text into the section's **unsaved editing
 buffer**. The editor shows it, the header says Unsaved, and the ordinary Save
 the author already uses is what commits it. Nothing generated is ever written
 down without them.
@@ -204,7 +204,7 @@ merge — because a preview computed differently from the thing it previews is
 worse than no preview at all.
 
 After success: the destination briefly flashes, a compact **"✓ Added to
-Context"** appears with a **View** action, and the page scrolls to the section
+Content"** appears with a **View** action, and the page scrolls to the section
 *unless the author is typing somewhere else*.
 
 ## Revision — the chips were inert
@@ -219,7 +219,7 @@ They now invoke **structured action identifiers**, not prompt text:
 | Explain simply | `explain_simply` | ordinary message |
 | Historical context | `historical_context` | ordinary message |
 | Ask me a question | `ask_reflection_question` | ordinary message, exactly one question |
-| Draft Context | `draft_section` + `section` | **draft card** |
+| Draft Content | `draft_section` + `section` | **draft card** |
 
 The client picks an identifier from a fixed list; the server looks up what it
 means. The prompt wording lives on the server and can change without a client

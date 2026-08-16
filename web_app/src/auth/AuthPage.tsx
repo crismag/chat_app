@@ -6,9 +6,9 @@ import styles from './AuthPage.module.css'
 const LETTERS = [
   {
     letter: 'C',
-    word: 'Context',
+    word: 'Content',
     blurb: 'What the passage is saying, and what is happening around it.',
-    tone: 'context',
+    tone: 'content',
   },
   {
     letter: 'H',
@@ -64,7 +64,7 @@ export function AuthPage() {
       */}
       <aside className={styles.aside}>
         <p className={styles.wordmark}>
-          <span className={styles.context}>C.</span>
+          <span className={styles.content}>C.</span>
           <span className={styles.heart}>H.</span>
           <span className={styles.application}>A.</span>
           <span className={styles.testimony}>T.</span>

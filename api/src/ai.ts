@@ -252,8 +252,8 @@ export function extractChatSections(
   const userText = collectUserText(messages);
 
   if (userText.trim()) {
-    sections[CHAT_SECTION_TYPES.CONTEXT] = {
-      type: CHAT_SECTION_TYPES.CONTEXT,
+    sections[CHAT_SECTION_TYPES.CONTENT] = {
+      type: CHAT_SECTION_TYPES.CONTENT,
       content: userText.trim(),
       authorOrigin: AUTHOR_ORIGINS.AI_ASSISTED,
     };

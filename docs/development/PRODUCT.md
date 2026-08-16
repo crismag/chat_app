@@ -2,7 +2,7 @@
 
 ## Product statement
 
-C.H.A.T. is a private-first conversational Scripture reflection application that helps users preserve meaningful conversations, organize them into **Context, Heart, Application, Testimony**, improve or explain content with optional AI assistance, find previous reflections, and create beautifully designed shareable visual content.
+C.H.A.T. is a private-first conversational Scripture reflection application that helps users preserve meaningful conversations, organize them into **Content, Heart, Application, Testimony**, improve or explain content with optional AI assistance, find previous reflections, and create beautifully designed shareable visual content.
 
 ## Core user problem
 
@@ -22,8 +22,8 @@ The application should make that loop feel simple enough for everyday use.
 
 ## C.H.A.T. framework
 
-### C — Context
-The person explains the context of the passage. This can include what is happening, who is involved, the surrounding circumstances, relevant verses, and what the person understands the passage to mean. AI may assist with historical, literary, biblical, or textual context, but the entry represents the person's understanding.
+### C — Content
+The person explains the content of the passage. This can include what is happening, who is involved, the surrounding circumstances, relevant verses, and what the person understands the passage to mean. AI may assist with historical, literary, biblical, or textual context, but the entry represents the person's understanding.
 
 ### H — Heart
 The person shares their heart and how the passage touches them. This includes what spoke to, affected, convicted, encouraged, challenged, or caused them to reflect. Heart is personal reflection and must not be silently manufactured by AI.

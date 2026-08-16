@@ -82,7 +82,17 @@ export interface DraftTarget {
  * phrasing is listed first.
  */
 const SECTION_WORDS: Record<AiGuidanceSection, RegExp[]> = {
-  context: [/\bcontext\b/, /\bbackground\b/, /\bwhat (?:is|was) happening\b/],
+  /*
+   * "context" stays in this list even though the section is now called
+   * Content. The section was renamed; the words authors reach for were not,
+   * and someone who types "draft the context" still means this section.
+   */
+  content: [
+    /\bcontent\b/,
+    /\bcontext\b/,
+    /\bbackground\b/,
+    /\bwhat (?:is|was) happening\b/,
+  ],
   heart: [/\bheart\b/, /\bhow (?:it|this) (?:touched|affected|moved)\b/],
   application: [/\bapplication\b/, /\bapply\b/, /\bpractical\b/, /\bwhat (?:should|can) i do\b/],
   testimony: [/\btestimony\b/, /\bprayer\b/, /\bpray\b/, /\bdeclaration\b/, /\bdeclare\b/],
@@ -168,7 +178,7 @@ export function resolveDraftTarget(input: {
 }): DraftTarget | null {
   /*
    * A structured action carries its own destination — "Draft Heart" is a
-   * different button from "Draft Context" — and the client picked it from a
+   * different button from "Draft Content" — and the client picked it from a
    * fixed list. It outranks the scope, because it is the more specific thing
    * the author just pressed.
    */

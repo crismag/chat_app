@@ -7,7 +7,7 @@ export type PublicationState =
   (typeof PUBLICATION_STATES)[keyof typeof PUBLICATION_STATES];
 
 export const CHAT_SECTION_TYPES = {
-  CONTEXT: 'context',
+  CONTENT: 'content',
   HEART: 'heart',
   APPLICATION: 'application',
   TESTIMONY: 'testimony',
@@ -110,8 +110,8 @@ export function isCommunityVisible(state: PublicationState): boolean {
 
 export function emptyChatSections(): Record<ChatSectionType, ChatSection> {
   return {
-    context: {
-      type: 'context',
+    content: {
+      type: 'content',
       content: '',
       authorOrigin: AUTHOR_ORIGINS.USER,
     },

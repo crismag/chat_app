@@ -91,6 +91,80 @@ function migrate(db: DatabaseSync): void {
    */
   addColumn(db, 'messages', 'draftText', 'TEXT');
   addColumn(db, 'messages', 'draftSection', 'TEXT');
+
+  renameContextSectionToContent(db);
+}
+
+/**
+ * The C of C.H.A.T. was renamed from Context to Content.
+ *
+ * `sections.type` stores that word literally, so a database written before the
+ * rename holds rows nothing in the running code will ever ask for again. Left
+ * alone, every reflection whose first section someone actually wrote would open
+ * with an empty Content card — the author's words still on disk, and invisible.
+ * That is data loss in every sense that matters to the person who wrote it.
+ *
+ * Three properties are load-bearing, and each is here on purpose:
+ *
+ *  - **Transactional.** Sections and the draft pointers on messages move
+ *    together or not at all. A half-migrated database is worse than an
+ *    unmigrated one, because the second run would look like it had nothing to
+ *    do for the half already moved.
+ *  - **Idempotent.** It runs on every start. After the first pass there are no
+ *    `'context'` rows left, so every later pass updates nothing.
+ *  - **Safe on a database that never held the old value.** A fresh install and
+ *    the `:memory:` database each test builds match no rows at all.
+ *
+ * The collision case is the one worth stating. `sections` is keyed by
+ * `(conversationId, type)`, so a conversation holding both an old `'context'`
+ * row and a new `'content'` row cannot have the first renamed onto the second.
+ * It should not exist — the code only ever wrote one of the two names — but if
+ * it does, the row carrying WRITING wins, and an empty row is what gets
+ * dropped. Nothing anyone typed is discarded to resolve a key conflict.
+ */
+function renameContextSectionToContent(db: DatabaseSync): void {
+  const pending = db
+    .prepare("SELECT COUNT(*) AS n FROM sections WHERE type = 'context'")
+    .get() as { n: number } | undefined;
+  const draftPointers = db
+    .prepare("SELECT COUNT(*) AS n FROM messages WHERE draftSection = 'context'")
+    .get() as { n: number } | undefined;
+  if (Number(pending?.n ?? 0) === 0 && Number(draftPointers?.n ?? 0) === 0) return;
+
+  db.exec('BEGIN');
+  try {
+    /*
+     * Conversations that somehow carry both names. Whichever row has text is
+     * the one kept; when both are empty the old one goes, since the new name is
+     * what the application will look for.
+     */
+    const collisions = db
+      .prepare(
+        `SELECT old.conversationId AS conversationId,
+                length(trim(old.content)) AS oldLength,
+                length(trim(new.content)) AS newLength
+         FROM sections AS old
+         JOIN sections AS new
+           ON new.conversationId = old.conversationId AND new.type = 'content'
+         WHERE old.type = 'context'`,
+      )
+      .all() as { conversationId: string; oldLength: number; newLength: number }[];
+
+    for (const row of collisions) {
+      const losingType = Number(row.oldLength) > Number(row.newLength) ? 'content' : 'context';
+      db.prepare('DELETE FROM sections WHERE conversationId = ? AND type = ?').run(
+        row.conversationId,
+        losingType,
+      );
+    }
+
+    db.exec("UPDATE sections SET type = 'content' WHERE type = 'context'");
+    db.exec("UPDATE messages SET draftSection = 'content' WHERE draftSection = 'context'");
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 function addColumn(db: DatabaseSync, table: string, column: string, type: string): void {

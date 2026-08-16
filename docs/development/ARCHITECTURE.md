@@ -195,7 +195,7 @@ A future data model may support section provenance, for example:
 
 ```text
 ChatSection
-- type: CONTEXT | HEART | APPLICATION | TESTIMONY
+- type: CONTENT | HEART | APPLICATION | TESTIMONY
 - content
 - source_message_ids[]
 - author_origin: USER | AI_ASSISTED | AI_GENERATED
@@ -205,7 +205,7 @@ ChatSection
 
 Section meaning:
 
-- **Context** is the person's understanding of the passage. AI may assist with historical, literary, or textual background, but the stored section represents the person's understanding.
+- **Content** is the person's understanding of the passage. AI may assist with historical, literary, or textual background, but the stored section represents the person's understanding.
 - **Heart** is personal reflection on how the passage touched, convicted, encouraged, challenged, or affected the person. Do not silently manufacture it.
 - **Application** is how the person says the passage applies to them and how they intend to respond.
 - **Testimony** may be a testimony, declaration of faith or conviction, commitment, prayer, or statement of belief. It is not limited to recounting a past event, and must never be invented for the user.

@@ -99,7 +99,7 @@ try {
         scriptureReference: 'Romans 8:28',
         message: 'Today this passage reminded me that uncertainty is not abandonment.',
         sections: {
-          context: 'Paul is writing to a church under real pressure, not a comfortable one.',
+          content: 'Paul is writing to a church under real pressure, not a comfortable one.',
           heart: 'It met the part of me that wants the outcome before the obedience.',
         },
       },
@@ -108,7 +108,7 @@ try {
         scriptureReference: 'Psalm 46:10',
         message: 'Stillness has felt like wasted time this week.',
         sections: {
-          context: 'A psalm sung while the nations rage and the earth gives way.',
+          content: 'A psalm sung while the nations rage and the earth gives way.',
           heart: 'Being still is not doing nothing; it is refusing to panic.',
           application: 'Ten minutes before the phone tomorrow morning.',
           testimony: 'The day I stopped rehearsing the argument, it lost its grip.',
@@ -118,14 +118,14 @@ try {
         title: 'A lamp to my feet',
         scriptureReference: 'Psalm 119:105',
         message: 'Enough light for the next step, not the whole road.',
-        sections: { context: 'The longest psalm, entirely about the word of God.' },
+        sections: { content: 'The longest psalm, entirely about the word of God.' },
       },
       {
         title: 'The vine and the branches',
         scriptureReference: 'John 15:5',
         message: 'Fruit is evidence of connection, not of effort.',
         sections: {
-          context: 'Jesus speaks this on the last night, walking to Gethsemane.',
+          content: 'Jesus speaks this on the last night, walking to Gethsemane.',
           heart: 'I have been trying to produce what only abiding can grow.',
         },
       },

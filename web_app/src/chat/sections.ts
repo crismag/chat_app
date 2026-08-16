@@ -9,9 +9,9 @@ import { AI_GUIDANCE_SECTIONS, type AiGuidanceSection } from '@chat/shared'
  */
 export const SECTIONS = [
   {
-    type: 'context' as const,
+    type: 'content' as const,
     letter: 'C',
-    name: 'Context',
+    name: 'Content',
     prompt: 'What does the passage mean?',
   },
   {
@@ -40,7 +40,7 @@ export const SECTIONS = [
  * This is not the four-section form with two of them hidden. Condensed
  * C.H.A.T. is a complete, approved format: the interface never calls it
  * partial, simplified or incomplete, and it never shows empty
- * Context/Heart/Application/Testimony fields beside it.
+ * Content/Heart/Application/Testimony fields beside it.
  */
 export const CONDENSED_FIELDS = [
   {

@@ -62,8 +62,8 @@ async function buttonWith(driver, pattern) {
  * Find a button inside one section's card.
  *
  * Every section carries its own pair of controls, so searching the whole page
- * for "Improve wording" finds Context's — which is correctly disabled when
- * Context is empty, so the click lands on nothing and the script reports a
+ * for "Improve wording" finds Content's — which is correctly disabled when
+ * Content is empty, so the click lands on nothing and the script reports a
  * failure that is really its own. Scoping to the card is the fix, and it is
  * also what a person does: they press the button next to the words they wrote.
  */
@@ -175,7 +175,7 @@ try {
   );
 
   // --- the disclosure comes before anything is sent ----------------------
-  const ask = await buttonInSection(driver, 'Context', /^Ask me questions$/);
+  const ask = await buttonInSection(driver, 'Content', /^Ask me questions$/);
   check('an "Ask me questions" control sits with the section', ask !== null);
   await driver.executeScript('arguments[0].scrollIntoView({block:"center"})', ask);
   await ask.click();
@@ -200,7 +200,7 @@ try {
   );
 
   // --- accepting the disclosure, and asking -------------------------------
-  await (await buttonInSection(driver, 'Context', /^Ask me questions$/)).click();
+  await (await buttonInSection(driver, 'Content', /^Ask me questions$/)).click();
   await wait(400);
   await (await buttonWith(driver, /I understand — continue/)).click();
 
@@ -236,7 +236,7 @@ try {
   await wait(1800); // let the autosave settle
 
   /*
-   * Heart's own control, not the first one on the page. Context is empty and
+   * Heart's own control, not the first one on the page. Content is empty and
    * its Improve is therefore correctly disabled.
    */
   const improve = await buttonInSection(driver, 'Heart', /^Improve wording$/);

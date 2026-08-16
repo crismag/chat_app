@@ -69,7 +69,7 @@ function renderAssist(overrides: Partial<Parameters<typeof FieldAssist>[0]> = {}
 describe('only the four C.H.A.T. sections can be asked about', () => {
   test('Heart is one of them, and the Condensed fields are not', () => {
     expect(isGuidanceSection('heart')).toBe(true)
-    expect(isGuidanceSection('context')).toBe(true)
+    expect(isGuidanceSection('content')).toBe(true)
     expect(isGuidanceSection('application')).toBe(true)
     expect(isGuidanceSection('testimony')).toBe(true)
     expect(isGuidanceSection('verse')).toBe(false)

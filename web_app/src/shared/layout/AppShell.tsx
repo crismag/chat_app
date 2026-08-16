@@ -26,7 +26,7 @@ const navItems = [
  * it appears. It is the cheapest possible way to teach the structure.
  */
 const letters = [
-  { letter: 'C', word: 'Context', className: styles.context },
+  { letter: 'C', word: 'Content', className: styles.content },
   { letter: 'H', word: 'Heart', className: styles.heart },
   { letter: 'A', word: 'Application', className: styles.application },
   { letter: 'T', word: 'Testimony', className: styles.testimony },

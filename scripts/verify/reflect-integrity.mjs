@@ -113,7 +113,7 @@ try {
   // --- nothing before something is written ------------------------------
   check(
     'no section fields before anything is written',
-    (await fieldArea('Context')) === null,
+    (await fieldArea('Content')) === null,
   );
   await shoot('reflect-1280-empty');
 
@@ -122,7 +122,7 @@ try {
     .findElement(By.css('textarea[aria-label="Write your reflection"]'))
     .sendKeys('Romans 8:28 met me this week and I could not see how any of it works together.');
   await driver.findElement(By.css('form button[type=submit]')).click();
-  await until(async () => (await fieldArea('Context')) !== null);
+  await until(async () => (await fieldArea('Content')) !== null);
   check('the four sections appear once there is something to shape', true);
 
   const application = await fieldArea('Application');
@@ -306,8 +306,8 @@ try {
     check('accepted wording is badged as the model’s help',
       /AI assisted|AI drafted/i.test(badgeAfterApply), badgeAfterApply);
 
-    const context = await fieldArea('Context');
-    await context.sendKeys(' And one word of my own.');
+    const content = await fieldArea('Content');
+    await content.sendKeys(' And one word of my own.');
     await until(async () => /^Saved$/i.test(await saveStateText()), 8000);
     const badgeAfterEdit = await driver.executeScript(
       `return [...document.querySelectorAll('[class*=badge]')].map((b) => b.textContent).join('|')`,
@@ -366,7 +366,7 @@ try {
   check('the Condensed form shows verse and reflection',
     (await fieldArea('Verse')) !== null && (await fieldArea('Reflection')) !== null);
   check('and no empty C/H/A/T fields beside them',
-    (await fieldArea('Context')) === null && (await fieldArea('Testimony')) === null);
+    (await fieldArea('Content')) === null && (await fieldArea('Testimony')) === null);
   check('the Full draft is preserved, not discarded',
     condensedBody.includes(SENTENCE) || (await driver.executeScript(`
       return fetch('/api/conversations/' + new URLSearchParams(location.search).get('c'),
@@ -380,7 +380,7 @@ try {
   await clickByText('Change to Full');
   await wait(1800);
   check('changing back restores the four sections',
-    (await fieldArea('Context')) !== null && (await writingOnScreen()).includes(SENTENCE));
+    (await fieldArea('Content')) !== null && (await writingOnScreen()).includes(SENTENCE));
 
   // --- 390px ------------------------------------------------------------
   await driver.manage().window().setRect({ width: 390, height: 844 });

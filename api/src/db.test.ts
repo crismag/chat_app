@@ -37,7 +37,7 @@ async function completeChat(
   id: string,
   cookie: string,
 ) {
-  for (const type of ['context', 'heart', 'application', 'testimony'] as const) {
+  for (const type of ['content', 'heart', 'application', 'testimony'] as const) {
     const response = await app.request(`/api/conversations/${id}/sections`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', cookie },
@@ -164,6 +164,126 @@ describe('SQLite store', () => {
       .prepare('SELECT COUNT(*) AS n FROM sessions WHERE token = ?')
       .get('token-1') as { n: number };
     expect(remaining.n).toBe(0);
+    store.close();
+  });
+});
+
+/*
+ * Renaming the C of C.H.A.T. moved a value that is written down.
+ *
+ * `sections.type` stores the section's name as a literal, so a database from
+ * before the rename holds rows the running code no longer asks for. These tests
+ * are written from the author's side: the words they typed are still there
+ * afterwards, and are reachable under the name the application now uses.
+ */
+describe('the Context → Content rename carries stored writing across', () => {
+  /** A database as it stood before the rename, written directly. */
+  function legacyDatabase(name: string): string {
+    const file = join(dir, name);
+    const seed = new SqliteStore(file);
+    seed.db
+      .prepare('INSERT INTO users (id, email, passwordHash) VALUES (?, ?, ?)')
+      .run('u1', `${name}@example.com`, 'x');
+    seed.db
+      .prepare(
+        `INSERT INTO conversations
+           (id, userId, format, title, scriptureReference, publicationState, createdAt, updatedAt)
+         VALUES ('c1', 'u1', 'full', 'Romans 8', 'Romans 8:28', 'private', '2026-01-01', '2026-01-01')`,
+      )
+      .run();
+    seed.db
+      .prepare(
+        `INSERT INTO sections (conversationId, type, content, authorOrigin)
+         VALUES ('c1', 'context', 'Paul is writing to a church under pressure.', 'user')`,
+      )
+      .run();
+    seed.close();
+    return file;
+  }
+
+  it('moves what the author wrote to the section under its new name', () => {
+    const file = legacyDatabase('legacy.sqlite');
+
+    const store = new SqliteStore(file);
+    const sections = store.sections.get('c1');
+    expect(sections?.['context']).toBeUndefined();
+    expect(sections?.['content']).toMatchObject({
+      type: 'content',
+      content: 'Paul is writing to a church under pressure.',
+      authorOrigin: 'user',
+    });
+    store.close();
+  });
+
+  it('is harmless the second time, and on a database that never held the old name', () => {
+    const file = legacyDatabase('idempotent.sqlite');
+
+    /* Three opens: the migrating one, then two that must find nothing to do. */
+    for (let run = 0; run < 3; run += 1) {
+      const store = new SqliteStore(file);
+      expect(store.sections.get('c1')?.['content']?.content).toBe(
+        'Paul is writing to a church under pressure.',
+      );
+      const rows = store.db
+        .prepare('SELECT COUNT(*) AS n FROM sections')
+        .get() as { n: number };
+      expect(rows.n).toBe(1);
+      store.close();
+    }
+
+    /* And a database built fresh, which never had a 'context' row at all. */
+    const fresh = new SqliteStore(join(dir, 'fresh.sqlite'));
+    expect(fresh.sections.get('c1')).toBeUndefined();
+    fresh.close();
+  });
+
+  it('keeps the row that has writing when a conversation somehow carries both', () => {
+    const file = legacyDatabase('collision.sqlite');
+    const seeded = new SqliteStore(file);
+    /* The migration already ran on open; put the pair back to force the case. */
+    seeded.db.prepare("UPDATE sections SET type = 'context' WHERE conversationId = 'c1'").run();
+    seeded.db
+      .prepare(
+        `INSERT INTO sections (conversationId, type, content, authorOrigin)
+         VALUES ('c1', 'content', '', 'user')`,
+      )
+      .run();
+    seeded.close();
+
+    const store = new SqliteStore(file);
+    const sections = store.sections.get('c1');
+    expect(Object.keys(sections ?? {})).toEqual(['content']);
+    /* The empty row lost. Nobody's sentence was dropped to settle a key clash. */
+    expect(sections?.['content']?.content).toBe('Paul is writing to a church under pressure.');
+    store.close();
+  });
+
+  it('repoints a draft that was still waiting to be added', () => {
+    const file = join(dir, 'draft-pointer.sqlite');
+    const seed = new SqliteStore(file);
+    seed.db
+      .prepare('INSERT INTO users (id, email, passwordHash) VALUES (?, ?, ?)')
+      .run('u1', 'draft@example.com', 'x');
+    seed.db
+      .prepare(
+        `INSERT INTO conversations
+           (id, userId, format, title, scriptureReference, publicationState, createdAt, updatedAt)
+         VALUES ('c1', 'u1', 'full', 'Romans 8', 'Romans 8:28', 'private', '2026-01-01', '2026-01-01')`,
+      )
+      .run();
+    seed.db
+      .prepare(
+        `INSERT INTO messages
+           (id, conversationId, position, role, content, originalContent, authorOrigin, createdAt,
+            draftText, draftSection)
+         VALUES ('m1', 'c1', 0, 'assistant', 'Here is a draft.', 'Here is a draft.',
+                 'ai_generated', '2026-01-01', 'Some draft text.', 'context')`,
+      )
+      .run();
+    seed.close();
+
+    const store = new SqliteStore(file);
+    expect(store.messages.get('c1')?.[0]?.draftSection).toBe('content');
     store.close();
   });
 });

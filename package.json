@@ -2,7 +2,7 @@
   "name": "chat-app",
   "private": true,
   "version": "0.1.0",
-  "description": "C.H.A.T. — Context, Heart, Application, Testimony",
+  "description": "C.H.A.T. — Content, Heart, Application, Testimony",
   "engines": {
     "node": ">=22"
   },

@@ -64,7 +64,7 @@ export const FORMAT_LIMITS: Record<ChatFormat, FormatLimits> = {
     fields: {
       title: { recommended: 60, hard: 100 },
       scriptureReference: { recommended: 60, hard: 100 },
-      context: { recommended: 400, hard: 700 },
+      content: { recommended: 400, hard: 700 },
       heart: { recommended: 300, hard: 600 },
       application: { recommended: 300, hard: 600 },
       testimony: { recommended: 300, hard: 600 },
@@ -72,7 +72,7 @@ export const FORMAT_LIMITS: Record<ChatFormat, FormatLimits> = {
     combined: {
       recommended: 1200,
       hard: 2400,
-      of: ['context', 'heart', 'application', 'testimony'],
+      of: ['content', 'heart', 'application', 'testimony'],
     },
     maxPages: 2,
     extensionAllowed: true,
@@ -94,7 +94,7 @@ export const FORMAT_LIMITS: Record<ChatFormat, FormatLimits> = {
 export const REQUIRED_FULL_FIELDS = [
   'title',
   'scriptureReference',
-  'context',
+  'content',
   'heart',
   'application',
   'testimony',

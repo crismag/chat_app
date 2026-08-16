@@ -152,8 +152,8 @@ describe('the H in C.H.A.T. is Heart', () => {
     expect(offenders).toEqual([]);
   });
 
-  test('the four sections are exactly Context, Heart, Application, Testimony', () => {
-    expect([...AI_GUIDANCE_SECTIONS]).toEqual(['context', 'heart', 'application', 'testimony']);
+  test('the four sections are exactly Content, Heart, Application, Testimony', () => {
+    expect([...AI_GUIDANCE_SECTIONS]).toEqual(['content', 'heart', 'application', 'testimony']);
   });
 
   test('the system instruction names Heart and rules the other word out', () => {
@@ -199,11 +199,11 @@ describe('incoming requests are validated at runtime', () => {
       {
         passageReference: 'Romans 8',
         sections: ['heart'],
-        written: { heart: '   ', context: 'Paul is writing to Rome.' },
+        written: { heart: '   ', content: 'Paul is writing to Rome.' },
       },
       LIMITS,
     );
-    expect(parsed.written).toEqual({ context: 'Paul is writing to Rome.' });
+    expect(parsed.written).toEqual({ content: 'Paul is writing to Rome.' });
   });
 
   test('length is enforced on the server, not merely in the browser', () => {
@@ -723,8 +723,8 @@ describe('the endpoints', () => {
     const { app, cookie } = await signedIn();
     const response = await post(app, '/api/ai/reflection-guidance', cookie, {
       passageReference: 'Romans 8:28',
-      sections: ['context', 'heart'],
-      written: { context: 'Paul is writing to believers in Rome.' },
+      sections: ['content', 'heart'],
+      written: { content: 'Paul is writing to believers in Rome.' },
     });
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
@@ -732,7 +732,7 @@ describe('the endpoints', () => {
       notice: string;
     };
 
-    expect(Object.keys(body.sections).sort()).toEqual(['context', 'heart']);
+    expect(Object.keys(body.sections).sort()).toEqual(['content', 'heart']);
     for (const section of Object.values(body.sections)) {
       expect(section.questions.length).toBeGreaterThanOrEqual(AI_QUESTIONS_PER_SECTION.min);
       expect(section.questions.length).toBeLessThanOrEqual(AI_QUESTIONS_PER_SECTION.max);
@@ -1388,7 +1388,7 @@ describe('the model may generate, and may never mutate', () => {
   test('the destination comes from application state or the user’s own words', () => {
     /* Scoped mode wins: it is the application's own state. */
     expect(
-      resolveDraftTarget({ focusSection: 'heart', userMessage: 'draft something for context' }),
+      resolveDraftTarget({ focusSection: 'heart', userMessage: 'draft something for content' }),
     ).toEqual({ section: 'heart', source: DRAFT_TARGET_SOURCES.SCOPE });
 
     /* Otherwise the author's own request. */
@@ -1487,7 +1487,7 @@ describe('the model may generate, and may never mutate', () => {
       content: 'Mine.',
       authorOrigin: 'user',
     });
-    for (const type of ['context', 'heart', 'application']) {
+    for (const type of ['content', 'heart', 'application']) {
       expect(detail.sections[type]?.content).toBe('');
     }
   });
@@ -1717,7 +1717,7 @@ describe('the model may generate, and may never mutate', () => {
     const { id } = (await created.json()) as { id: string };
     await post('/api/ai/reflection-chat', {
       conversationId: id,
-      message: 'draft my context please',
+      message: 'draft my content please',
     });
 
     const opened = await app.request(`/api/conversations/${id}`, { headers: { Cookie: cookie } });
@@ -1726,7 +1726,7 @@ describe('the model may generate, and may never mutate', () => {
     };
     const withDraft = detail.messages.find((message) => message.draftText);
     expect(withDraft?.draftText).toBeTruthy();
-    expect(withDraft?.draftSection).toBe('context');
+    expect(withDraft?.draftSection).toBe('content');
   });
 });
 

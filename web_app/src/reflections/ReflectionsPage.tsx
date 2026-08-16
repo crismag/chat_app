@@ -68,7 +68,7 @@ const FILTERS: { id: Filter; label: string }[] = [
 ]
 
 const SECTIONS: { type: ChatSectionType; letter: string; label: string }[] = [
-  { type: CHAT_SECTION_TYPES.CONTEXT, letter: 'C', label: 'Context' },
+  { type: CHAT_SECTION_TYPES.CONTENT, letter: 'C', label: 'Content' },
   { type: CHAT_SECTION_TYPES.HEART, letter: 'H', label: 'Heart' },
   { type: CHAT_SECTION_TYPES.APPLICATION, letter: 'A', label: 'Application' },
   { type: CHAT_SECTION_TYPES.TESTIMONY, letter: 'T', label: 'Testimony' },

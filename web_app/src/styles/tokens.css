@@ -12,7 +12,7 @@
  * so the light theme is warm off-white with a brown-black ink, the way a page
  * is, rather than the pure #fff / #000 of a dashboard.
  *
- * And the four C.H.A.T. sections carry their own colours. Context, Heart,
+ * And the four C.H.A.T. sections carry their own colours. Content, Heart,
  * Application and Testimony are the product's whole structure; giving each one a
  * hue means a user learns the framework by using the app instead of by reading
  * about it.
@@ -121,12 +121,12 @@
 
   /*
    * The C.H.A.T. sections. Each hue is chosen for what the section *is*:
-   * Context is the cool, factual ground; Heart is warm and personal;
+   * Content is the cool, factual ground; Heart is warm and personal;
    * Application is the amber of something to be acted on; Testimony is the
    * green of the accent itself, because a testimony is where the loop lands.
    */
-  --context: #3d5a80;
-  --context-soft: #e4ebf4;
+  --content: #3d5a80;
+  --content-soft: #e4ebf4;
   --heart: #9c4a5c;
   --heart-soft: #f6e6e9;
   --application: #8a5a2b;
@@ -185,8 +185,8 @@
     --danger: #e08d80;
     --danger-soft: #35211e;
 
-    --context: #8fb0d9;
-    --context-soft: #1e2836;
+    --content: #8fb0d9;
+    --content-soft: #1e2836;
     --heart: #d98fa2;
     --heart-soft: #331f26;
     --application: #d9a066;

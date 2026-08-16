@@ -139,7 +139,7 @@ describe('a draft is unmistakably a draft', () => {
     expect(
       screen.getByRole('group', { name: 'Add this draft to a section' }),
     ).toBeInTheDocument()
-    for (const name of ['Context', 'Heart', 'Application', 'Testimony']) {
+    for (const name of ['Content', 'Heart', 'Application', 'Testimony']) {
       expect(screen.getByRole('button', { name })).toBeInTheDocument()
     }
   })
@@ -183,7 +183,7 @@ describe('the per-response control is an icon, not a row', () => {
     const menu = screen.getByRole('menu', { name: 'Use this response' })
     expect(menu).toBeInTheDocument()
     expect(screen.getByText('Use this response')).toBeInTheDocument()
-    for (const name of ['Context', 'Heart', 'Application', 'Testimony']) {
+    for (const name of ['Content', 'Heart', 'Application', 'Testimony']) {
       expect(screen.getByRole('menuitem', { name: `Use in ${name}` })).toBeInTheDocument()
     }
     expect(screen.getByRole('menuitem', { name: 'Copy text' })).toBeInTheDocument()
@@ -192,8 +192,8 @@ describe('the per-response control is an icon, not a row', () => {
   test('choosing a destination hands it to the page, which decides how it lands', () => {
     const handlers = renderHelper()
     fireEvent.click(screen.getByRole('button', { name: 'Use response in reflection' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Use in Context' }))
-    expect(handlers.onUseInField).toHaveBeenCalledWith('context', reply.content, 'ai_generated')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Use in Content' }))
+    expect(handlers.onUseInField).toHaveBeenCalledWith('content', reply.content, 'ai_generated')
     /* And it dismisses on selection. */
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
@@ -245,7 +245,7 @@ describe('chips follow the state', () => {
   test('the default set contains no Polish or Shorten', () => {
     renderHelper()
     expect(screen.getByRole('button', { name: 'Explain simply' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Draft Context' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Draft Content' })).toBeInTheDocument()
     /* Meaningless as conversation starters: there is nothing to polish yet. */
     expect(screen.queryByRole('button', { name: 'Polish' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Shorten' })).not.toBeInTheDocument()
@@ -261,7 +261,7 @@ describe('chips follow the state', () => {
           content: 'A draft.',
           authorOrigin: 'ai_generated',
           draftText: 'Some draft text.',
-          draftSection: 'context',
+          draftSection: 'content',
         },
       ],
     })
@@ -276,7 +276,7 @@ describe('chips follow the state', () => {
 
   test('every chip carries a structured identifier, never prompt text', () => {
     const known = Object.values(AI_CHAT_ACTIONS)
-    for (const section of [null, 'context', 'heart', 'application', 'testimony'] as const) {
+    for (const section of [null, 'content', 'heart', 'application', 'testimony'] as const) {
       for (const chip of chipsFor(section)) {
         expect(known).toContain(chip.action)
         /* Something readable for the thread, so it still reads as a conversation. */
@@ -286,7 +286,7 @@ describe('chips follow the state', () => {
   })
 
   test('only the draft action may produce a draft, and it names its destination', () => {
-    for (const section of ['context', 'heart', 'application', 'testimony'] as const) {
+    for (const section of ['content', 'heart', 'application', 'testimony'] as const) {
       const drafts = chipsFor(section).filter(
         (chip) => chip.action === AI_CHAT_ACTIONS.DRAFT_SECTION,
       )
@@ -329,10 +329,10 @@ describe('scoped mode', () => {
 
 describe('after something is added', () => {
   test('the destination is confirmed and can be gone to', () => {
-    const handlers = renderHelper({ addedNotice: { field: 'context', at: Date.now() } })
-    expect(screen.getByRole('status')).toHaveTextContent('Added to Context')
+    const handlers = renderHelper({ addedNotice: { field: 'content', at: Date.now() } })
+    expect(screen.getByRole('status')).toHaveTextContent('Added to Content')
     fireEvent.click(screen.getByRole('button', { name: 'View' }))
-    expect(handlers.onViewSection).toHaveBeenCalledWith('context')
+    expect(handlers.onViewSection).toHaveBeenCalledWith('content')
   })
 })
 

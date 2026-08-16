@@ -192,7 +192,7 @@ try {
 
   // --- 2. a draft for each of the four sections ----------------------------
   const sections = [
-    ['Context', 'Draft my Context section for this passage.'],
+    ['Content', 'Draft my Content section for this passage.'],
     ['Heart', 'Draft my Heart section.'],
     ['Application', 'Draft my Application section.'],
     ['Testimony', 'Write a short prayer for my Testimony.'],
@@ -247,7 +247,7 @@ try {
     );
     check(
       'listing all four destinations and Copy text',
-      ['Use in Context', 'Use in Heart', 'Use in Application', 'Use in Testimony'].every((l) =>
+      ['Use in Content', 'Use in Heart', 'Use in Application', 'Use in Testimony'].every((l) =>
         items.includes(l),
       ) && items.includes('Copy text'),
       JSON.stringify(items),

@@ -141,7 +141,7 @@ export function createApp(
     const sections = sectionsFromStore(stored);
     return {
       ...base,
-      context: sections.context.content,
+      content: sections.content.content,
       heart: sections.heart.content,
       application: sections.application.content,
       testimony: sections.testimony.content,

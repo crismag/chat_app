@@ -15,7 +15,7 @@
 
 /** The four sections guidance may be asked about. */
 export const AI_GUIDANCE_SECTIONS = [
-  'context',
+  'content',
   'heart',
   'application',
   'testimony',
@@ -30,7 +30,7 @@ export type AiGuidanceSection = (typeof AI_GUIDANCE_SECTIONS)[number];
  * describing the section differently.
  */
 export const AI_SECTION_MEANINGS: Record<AiGuidanceSection, string> = {
-  context: 'Context — what is happening in and around the passage.',
+  content: 'Content — what is happening in and around the passage.',
   heart: 'Heart — how the passage personally touches the writer.',
   application: 'Application — how it applies, and what they may do.',
   testimony: 'Testimony — their own declaration of faith, conviction or prayer.',

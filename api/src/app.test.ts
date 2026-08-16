@@ -132,7 +132,7 @@ describe('publication and community', () => {
      * be a complete one before it can be shared. An empty C.H.A.T. is a draft
      * by definition.
      */
-    for (const type of ['context', 'heart', 'application', 'testimony'] as const) {
+    for (const type of ['content', 'heart', 'application', 'testimony'] as const) {
       await app.request(`/api/conversations/${conversation.id}/sections`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Cookie: owner.cookie },
@@ -193,15 +193,15 @@ describe('C.H.A.T. extraction authorship', () => {
       sections?: Record<string, { content: string }>;
     }>(extracted);
 
-    // What it proposes: Context only. Nothing was said that Heart or Testimony
+    // What it proposes: Content only. Nothing was said that Heart or Testimony
     // could be honestly drawn from, so neither is offered.
     expect(body.applied).toBe(false);
-    expect(body.proposed?.['context']?.content.length).toBeGreaterThan(0);
+    expect(body.proposed?.['content']?.content.length).toBeGreaterThan(0);
     expect(body.proposed?.['heart']).toBeUndefined();
     expect(body.proposed?.['testimony']).toBeUndefined();
 
     // And nothing has been written yet: a proposal is not a save.
-    expect(body.sections?.['context']?.content).toBe('');
+    expect(body.sections?.['content']?.content).toBe('');
   });
 
   /*
@@ -229,7 +229,7 @@ describe('C.H.A.T. extraction authorship', () => {
     });
 
     const written = {
-      context: 'Paul is writing to a church under pressure.',
+      content: 'Paul is writing to a church under pressure.',
       heart: 'It met me on a week I could not see the good.',
       application: 'I will pray before I answer my brother.',
       testimony: 'I declare that he is working even where I cannot see it.',
@@ -277,7 +277,7 @@ describe('C.H.A.T. extraction authorship', () => {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', Cookie: cookie },
       body: JSON.stringify({
-        type: 'context',
+        type: 'content',
         content: 'A shepherd psalm.',
         authorOrigin: 'ai_assisted',
       }),
@@ -287,7 +287,7 @@ describe('C.H.A.T. extraction authorship', () => {
       headers: { Cookie: cookie },
     });
     const detail = await json<{ sections: Record<string, { authorOrigin: string }> }>(after);
-    expect(detail.sections['context']?.authorOrigin).toBe('ai_assisted');
+    expect(detail.sections['content']?.authorOrigin).toBe('ai_assisted');
   });
 });
 

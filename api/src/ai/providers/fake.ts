@@ -40,7 +40,7 @@ import type {
  * behaviour the real provider is forbidden.
  */
 const QUESTIONS: Record<AiGuidanceSection, string[]> = {
-  context: [
+  content: [
     'What is happening immediately before and after this passage?',
     'Who is speaking here, and who are they speaking to?',
   ],

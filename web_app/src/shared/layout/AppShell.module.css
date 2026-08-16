@@ -70,8 +70,8 @@
  * appear together, and it is what makes them legible as a system everywhere
  * else.
  */
-.context {
-  color: var(--context);
+.content {
+  color: var(--content);
 }
 .heart {
   color: var(--heart);

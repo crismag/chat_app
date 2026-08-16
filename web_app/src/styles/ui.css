@@ -188,9 +188,9 @@
 }
 
 /* Section badges, one per letter of C.H.A.T. */
-.badge-context {
-  background: var(--context-soft);
-  color: var(--context);
+.badge-content {
+  background: var(--content-soft);
+  color: var(--content);
 }
 .badge-heart {
   background: var(--heart-soft);

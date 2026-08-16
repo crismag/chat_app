@@ -75,7 +75,7 @@ export const DEFAULT_CHIPS: Chip[] = [
   explain,
   historical,
   askChip('Ask me a question'),
-  draftChip('context', 'Draft Context'),
+  draftChip('content', 'Draft Content'),
 ]
 
 /**
@@ -86,7 +86,12 @@ export const DEFAULT_CHIPS: Chip[] = [
  * rather than a new code path.
  */
 export const SECTION_CHIPS: Record<AiGuidanceSection, Chip[]> = {
-  context: [explain, historical, askChip('Ask a Context question'), draftChip('context', 'Draft Context')],
+  content: [
+    explain,
+    historical,
+    askChip('Ask a Content question'),
+    draftChip('content', 'Draft Content'),
+  ],
   heart: [
     askChip('Ask a Heart question'),
     explain,

@@ -77,7 +77,7 @@ const SIDEBAR_KEY = 'chat.reflect.sidebar'
 const DISCLOSURE_KEY = 'chat.ai.disclosure'
 
 /** The four sections assistance understands. Heart, never a highlight. */
-const SECTION_FIELDS: AiGuidanceSection[] = ['context', 'heart', 'application', 'testimony']
+const SECTION_FIELDS: AiGuidanceSection[] = ['content', 'heart', 'application', 'testimony']
 
 /** How long after the last keystroke the artifact writes itself down. */
 const AUTOSAVE_MS = 1200
@@ -883,7 +883,7 @@ export function ChatPage() {
   /**
    * Put the text into the section's UNSAVED buffer — never a commit.
    *
-   * This is the difference between "review in Context" and "write to Context".
+   * This is the difference between "review in Content" and "write to Content".
    * The text appears in the editor as unsaved writing the author can change,
    * the header says Unsaved, and the ordinary Save they already use is what
    * commits it. Nothing generated is ever written down without them.
@@ -1631,7 +1631,7 @@ export function ChatPage() {
         <FormatSheet
           format={format}
           fullSections={Object.fromEntries(
-            (['context', 'heart', 'application', 'testimony'] as const).map((field) => [
+            (['content', 'heart', 'application', 'testimony'] as const).map((field) => [
               field,
               valueOf(field),
             ]),

@@ -13,7 +13,7 @@ const fill = (n: number) => 'a'.repeat(n);
 const fullDraft = (over: Partial<Record<string, string>> = {}) => ({
   title: 'Trusting when I cannot see',
   scriptureReference: 'Romans 8:28',
-  context: fill(200),
+  content: fill(200),
   heart: fill(200),
   application: fill(200),
   testimony: fill(200),
@@ -48,12 +48,12 @@ describe('Full C.H.A.T.', () => {
    */
   it('applies the combined limit even when every field is individually fine', () => {
     const draft = fullDraft({
-      context: fill(500),
+      content: fill(500),
       heart: fill(500),
       application: fill(500),
       testimony: fill(500),
     });
-    for (const field of ['context', 'heart', 'application', 'testimony'] as const) {
+    for (const field of ['content', 'heart', 'application', 'testimony'] as const) {
       expect(counterFor(CHAT_FORMATS.FULL, field, draft[field])!.status).not.toBe(
         LENGTH_STATUS.INVALID,
       );
@@ -65,7 +65,7 @@ describe('Full C.H.A.T.', () => {
 
   it('is invalid past the combined hard maximum, with no way to acknowledge it', () => {
     const draft = fullDraft({
-      context: fill(700),
+      content: fill(700),
       heart: fill(600),
       application: fill(600),
       testimony: fill(600),
@@ -79,7 +79,7 @@ describe('Full C.H.A.T.', () => {
   });
 
   it('requires acknowledgement when extended, and accepts it', () => {
-    const draft = fullDraft({ context: fill(700), heart: fill(600) });
+    const draft = fullDraft({ content: fill(700), heart: fill(600) });
     const unacknowledged = validateChat(CHAT_FORMATS.FULL, draft);
     expect(unacknowledged.requiresExtensionAcknowledgement).toBe(true);
     expect(unacknowledged.publishable).toBe(false);
