@@ -22,6 +22,7 @@ import {
   AI_GUIDANCE_SECTIONS,
   AI_OUTCOMES,
   AI_QUESTIONS_PER_SECTION,
+  AI_SECTION_MEANINGS,
   AI_TITLE_OPTIONS,
 } from '@chat/shared';
 import { createApp } from '../app.ts';
@@ -31,6 +32,7 @@ import { aiLogLine, redact, type AiLogEvent } from './logging.ts';
 import {
   CHAT_RESPONSE_SCHEMA,
   CHAT_TASK,
+  DRAFT_SECTION_NOTES,
   TITLE_TASK,
   SYSTEM_INSTRUCTION,
   buildChatPrompt,
@@ -159,6 +161,37 @@ describe('the H in C.H.A.T. is Heart', () => {
   test('the system instruction names Heart and rules the other word out', () => {
     expect(SYSTEM_INSTRUCTION).toContain('Heart —');
     expect(SYSTEM_INSTRUCTION).toMatch(/never called High\w+/i);
+  });
+
+  /*
+   * What a "Draft the Content section" request must ask the model for.
+   *
+   * The C section holds the passage — roughly thirty real reflections say so,
+   * transcribed in `docs/examples/REAL_CHAT_SAMPLES.md`. The note used to ask
+   * for "what the passage means and what is happening in and around it", and
+   * the model duly wrote essays nobody writes.
+   *
+   * The hallucination guard is the part that matters most. A model asked for
+   * verse text with no verse text in front of it will invent a plausible
+   * paraphrase and attribute it to a translation, which is a false attribution
+   * of Scripture and worse than an unhelpful answer.
+   */
+  test('a Content draft is asked for the passage, not an essay about it', () => {
+    const note = DRAFT_SECTION_NOTES['content']!;
+    expect(note).toMatch(/passage itself/i);
+    expect(note).toMatch(/reference and (its )?translation/i);
+    expect(note).not.toMatch(/what the passage means and what is happening/i);
+    /* An explanation is optional and secondary, and verse-only is finished. */
+    expect(note).toMatch(/optional/i);
+    expect(note).toMatch(/only the passage is complete/i);
+    /* Never reconstruct Scripture from memory. */
+    expect(note).toMatch(/do NOT reconstruct/i);
+  });
+
+  test('the section meanings describe Content as the passage', () => {
+    expect(AI_SECTION_MEANINGS.content).toMatch(/passage itself/i);
+    /* And the system instruction carries that meaning, not an older one. */
+    expect(SYSTEM_INSTRUCTION).toContain(AI_SECTION_MEANINGS.content);
   });
 
   test('the schema sent to a provider names heart, and only requested sections', () => {

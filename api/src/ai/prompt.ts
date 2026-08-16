@@ -181,9 +181,24 @@ Write the draft and put it in the "draft" field. Keep the "reply" field to one s
 Follow the drafting rules above: first person, plain, built on what they have actually said, inventing no experience, no answered prayer and no personal history they have not mentioned. If you have little of theirs to build on, write something short and openly tentative that they can correct.`,
 };
 
-/** For a Content draft specifically, keep it about the passage. */
+/*
+ * For a Content draft specifically, the section holds the passage.
+ *
+ * This note used to ask for a commentary — "what the passage means and what is
+ * happening in and around it" — and the model duly wrote essays. Roughly thirty
+ * real reflections say otherwise: C is where the verse goes, usually with its
+ * reference and translation, and frequently with nothing after it. See
+ * `docs/examples/REAL_CHAT_SAMPLES.md`. The instruction now matches what people
+ * actually write.
+ */
 export const DRAFT_SECTION_NOTES: Record<string, string> = {
-  content: 'This is the Content section: what the passage means and what is happening in and around it. Keep personal response, feelings and application out of it — those belong to Heart and Application.',
+  content: `This is the Content section, and it holds the PASSAGE ITSELF — the verse text, with its reference and translation named.
+
+Write it the way a person writes it: the passage as it reads, and its reference and translation. Do not write an essay about the passage. Do not open with "This passage teaches…" or "In this passage, Paul…".
+
+Quote the verse ONLY from the "Passage text, as the writer supplied it" block above, word for word, and name the translation it came with. If there is no such block, do NOT reconstruct the wording from memory and do NOT name a translation — say which reference and translation you would need, and offer to write the short explanation instead. Inventing verse text and attributing it to a named translation is a false attribution of Scripture, and it is worse than an unhelpful answer.
+
+An explanation after the verse is optional and secondary. Add at most one or two plain sentences, and only if there is something worth saying; a Content section that is only the passage is complete and finished. Keep personal response, feelings and application out of it — those belong to Heart and Application.`,
   heart: 'This is the Heart section: how the passage personally touches the writer. Build only on what they have said about themselves.',
   application: 'This is the Application section: how it applies and what they may do. Be concrete rather than general.',
   testimony: "This is the Testimony section: their own declaration of faith, conviction or prayer. Build only on what they have expressed.",

@@ -33,6 +33,7 @@ import {
   fetchPassage,
   fetchSavedPassage,
   fetchTranslations,
+  passageAsWritten,
   readPreviousTranslationId,
   readRecentTranslationIds,
   rememberTranslationId,
@@ -59,6 +60,21 @@ export interface ScripturePassageProps {
    * in step. Optional: the component is complete without it.
    */
   onPassageChange?: (passage: BiblePassage | null) => void
+  /**
+   * Offer the passage to the Content section.
+   *
+   * The C of C.H.A.T. is where the passage goes — that is what roughly thirty
+   * real reflections show (`docs/examples/REAL_CHAT_SAMPLES.md`), and it is what
+   * makes this connector worth having: choose a passage, and the section can be
+   * populated with the text, its reference and its translation, ready for the
+   * author to add an explanation if they want one.
+   *
+   * It hands over TEXT and nothing else. The page decides where it lands and
+   * whether existing writing has to be protected first, which keeps the one
+   * safe insertion path the rest of the application already uses. Optional: the
+   * component is complete without it, and shows no button when it is absent.
+   */
+  onUsePassage?: (text: string) => void
 }
 
 type Phase = 'idle' | 'loading-translations' | 'loading-passage'
@@ -77,6 +93,7 @@ export function ScripturePassage({
   conversationId,
   initialReference,
   onPassageChange,
+  onUsePassage,
 }: ScripturePassageProps) {
   const [translations, setTranslations] = useState<BibleTranslation[] | null>(null)
   const [translationId, setTranslationId] = useState<number | null>(null)
@@ -325,6 +342,28 @@ export function ScripturePassage({
               </span>
             ) : null}
           </footer>
+          {/*
+            The passage into the section it belongs in.
+
+            An explicit press, never automatic. Choosing a translation to read
+            is not the same act as putting words into a reflection, and the page
+            this hands to still asks before it displaces anything already
+            written there.
+          */}
+          {onUsePassage ? (
+            <div className={styles.useRow}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => onUsePassage(passageAsWritten(passage, shownAbbreviation))}
+              >
+                Add to Content
+              </button>
+              <span className={styles.useHint}>
+                The passage, its reference and its translation — yours to arrange.
+              </span>
+            </div>
+          ) : null}
         </>
       ) : (
         !busy &&

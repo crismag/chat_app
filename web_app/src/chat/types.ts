@@ -1,5 +1,6 @@
 import type {
   AiGuidanceSection,
+  AuthorOrigin,
   ChatFormat,
   ChatSection,
   ChatSectionType,
@@ -26,6 +27,14 @@ export type PendingAdd = {
   existing: string
   /** The caret in that section's editor, when one is known. */
   caret: number | null
+  /**
+   * Who the incoming words belong to.
+   *
+   * A model's draft is `ai_generated`. A passage the author chose from the
+   * Bible connector is not — those are the words of Scripture in a translation
+   * they picked, and badging them as AI-drafted would be a claim nobody made.
+   */
+  origin: AuthorOrigin
 }
 
 /** Said after a write, so the destination is seen to have received it. */

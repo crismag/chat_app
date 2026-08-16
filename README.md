@@ -10,7 +10,7 @@ The product is intended to run from one primary codebase across **Web, Android, 
 
 A user begins with a natural conversation around a Bible verse, sermon, question, experience, or testimony. The application preserves that conversation and can help organize it into the C.H.A.T. framework:
 
-- **C — Content**: The person explains the content of the passage—what is happening, who is involved, the surrounding circumstances, and what they understand it to mean.
+- **C — Content**: The passage itself—the verse text, usually with its reference and translation—and an explanation after it only if the person wants one. A Content section that is only the passage is complete. See [`docs/examples/REAL_CHAT_SAMPLES.md`](docs/examples/REAL_CHAT_SAMPLES.md).
 - **H — Heart**: The person shares their heart and how the passage touches, convicts, encourages, challenges, or affects them.
 - **A — Application**: The person describes how the passage applies to them and how they will apply what they have learned.
 - **T — Testimony**: The person expresses a testimony, declaration of faith or conviction, commitment, prayer, or statement of belief related to the passage or learning.

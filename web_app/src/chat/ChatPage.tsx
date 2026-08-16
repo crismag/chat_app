@@ -14,12 +14,14 @@ import {
   AI_OUTCOMES,
   AI_UNAVAILABLE_MESSAGE,
   AUTHOR_ORIGINS,
+  CHAT_SECTION_TYPES,
   TITLE_SOURCES,
   CHAT_FORMATS,
   validateChat,
   type AiAction,
   type AiCapabilities,
   type AiGuidanceSection,
+  type AuthorOrigin,
   type ChatFormat,
   type ValidationResult,
 } from '@chat/shared'
@@ -870,14 +872,35 @@ export function ChatPage() {
    * below goes through the same authenticated section endpoint used when
    * someone types into the field by hand.
    */
-  function addDraftToSection(field: FieldType, text: string) {
+  function addDraftToSection(
+    field: FieldType,
+    text: string,
+    origin: AuthorOrigin = AUTHOR_ORIGINS.AI_GENERATED,
+  ) {
     const existing = valueOf(field)
     if (!existing.trim()) {
       /* Nothing there to protect, so it goes straight into the unsaved buffer. */
-      void applyAdd(field, text, 'replace')
+      void applyAdd(field, text, 'replace', origin)
       return
     }
-    setPendingAdd({ field, text, existing, caret: carets[field] ?? null })
+    setPendingAdd({ field, text, existing, caret: carets[field] ?? null, origin })
+  }
+
+  /**
+   * The chosen passage into Content, which is the section it belongs in.
+   *
+   * The C of C.H.A.T. holds the passage — see `docs/examples/REAL_CHAT_SAMPLES.md`
+   * — so the Bible connector's whole point is being able to put it there. This
+   * takes the same route a draft does, which means a Content section that
+   * already has writing in it still raises the sheet and is never displaced
+   * silently.
+   *
+   * What differs is the badge. These are the words of Scripture in a translation
+   * the author chose; calling them AI-drafted would be a claim nobody made, so
+   * the provenance recorded is the author's own.
+   */
+  function addPassageToContent(text: string) {
+    addDraftToSection(CHAT_SECTION_TYPES.CONTENT, text, AUTHOR_ORIGINS.USER)
   }
 
   /**
@@ -892,6 +915,7 @@ export function ChatPage() {
     field: FieldType,
     text: string,
     mode: 'append' | 'replace' | 'insert',
+    origin: AuthorOrigin = AUTHOR_ORIGINS.AI_GENERATED,
   ) {
     const existing = valueOf(field)
     const next = mergeInto(existing, text, mode, carets[field] ?? existing.length)
@@ -906,7 +930,7 @@ export function ChatPage() {
 
     setPendingAdd(null)
     setEdits((current) => ({ ...current, [field]: next }))
-    setPendingOrigins((current) => ({ ...current, [field]: AUTHOR_ORIGINS.AI_GENERATED }))
+    setPendingOrigins((current) => ({ ...current, [field]: origin }))
     setAddedNotice({ field, at: Date.now() })
     flashSection(field)
 
@@ -1508,6 +1532,7 @@ export function ChatPage() {
         <ScripturePassage
           conversationId={activeId}
           initialReference={referenceDraft ?? detail?.scriptureReference ?? ''}
+          onUsePassage={addPassageToContent}
         />
 
         <div className={styles.artifactBody}>
@@ -1673,7 +1698,9 @@ export function ChatPage() {
           existing={pendingAdd.existing}
           caret={pendingAdd.caret}
           onCancel={() => setPendingAdd(null)}
-          onChoose={(mode) => void applyAdd(pendingAdd.field, pendingAdd.text, mode)}
+          onChoose={(mode) =>
+            void applyAdd(pendingAdd.field, pendingAdd.text, mode, pendingAdd.origin)
+          }
         />
       ) : null}
 

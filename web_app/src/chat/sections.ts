@@ -6,13 +6,20 @@ import { AI_GUIDANCE_SECTIONS, type AiGuidanceSection } from '@chat/shared'
  * The prompts are the whole point of showing a card rather than a textarea: an
  * empty box asks the author to remember the framework, a question asks them
  * something they can answer.
+ *
+ * Content's prompt is not a question, and that is deliberate. Roughly thirty
+ * real C.H.A.T. reflections were transcribed in
+ * `docs/examples/REAL_CHAT_SAMPLES.md`, and in every one of them the C section
+ * holds the passage itself — the verse text, usually with its reference and
+ * translation. Many hold nothing else. Asking "what does the passage mean?"
+ * was asking for a commentary nobody writes.
  */
 export const SECTIONS = [
   {
     type: 'content' as const,
     letter: 'C',
     name: 'Content',
-    prompt: 'What does the passage mean?',
+    prompt: 'The passage itself. Add an explanation only if you want to.',
   },
   {
     type: 'heart' as const,

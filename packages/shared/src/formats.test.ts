@@ -78,6 +78,28 @@ describe('Full C.H.A.T.', () => {
     expect(result.publishable).toBe(false);
   });
 
+  /*
+   * The C section holds the passage, and often nothing else.
+   *
+   * Roughly thirty real reflections were transcribed in
+   * `docs/examples/REAL_CHAT_SAMPLES.md` and most of their Content sections are
+   * the verse, its reference and its translation with no commentary after them.
+   * An author who writes that has finished the section, and nothing may report
+   * it as missing, partial or awaiting an explanation.
+   */
+  it('treats a Content section that is only the passage as complete', () => {
+    const verseOnly =
+      '"For God so loved the world that he gave his one and only Son…"\nJohn 3:16 NIV';
+    const result = validateChat(CHAT_FORMATS.FULL, fullDraft({ content: verseOnly }));
+
+    expect(result.missing).not.toContain('content');
+    expect(result.missing).toEqual([]);
+    expect(result.publishable).toBe(true);
+    expect(
+      counterFor(CHAT_FORMATS.FULL, 'content', verseOnly)!.status,
+    ).toBe(LENGTH_STATUS.RECOMMENDED);
+  });
+
   it('requires acknowledgement when extended, and accepts it', () => {
     const draft = fullDraft({ content: fill(700), heart: fill(600) });
     const unacknowledged = validateChat(CHAT_FORMATS.FULL, draft);

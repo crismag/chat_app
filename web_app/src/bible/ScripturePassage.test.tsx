@@ -13,6 +13,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { ScripturePassage } from './ScripturePassage.tsx'
+import { passageAsWritten } from './api.ts'
 import type { BiblePassage, BibleTranslation } from '@chat/shared'
 
 afterEach(() => {
@@ -530,5 +531,57 @@ describe('the passage card', () => {
 
     const lookups = calls.filter((call) => call.includes('/bible/passages?'))
     expect(lookups).toHaveLength(0)
+  })
+})
+
+/*
+ * The passage into Content.
+ *
+ * The C of C.H.A.T. holds the passage itself, which is what makes this
+ * connector worth having — see `docs/examples/REAL_CHAT_SAMPLES.md`.
+ */
+describe('offering the passage to Content', () => {
+  test('hands over the verse with its reference and translation', async () => {
+    const used: string[] = []
+    stubFetch({ saved: NIV_PASSAGE })
+    render(<ScripturePassage conversationId="c1" onUsePassage={(text) => used.push(text)} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Add to Content' }))
+    expect(used).toHaveLength(1)
+    expect(used[0]).toContain('For God so loved the world')
+    expect(used[0]).toContain('John 3:16-18')
+    expect(used[0]).toContain('NIV')
+  })
+
+  test('offers nothing when the page has nowhere to put it', async () => {
+    stubFetch({ saved: NIV_PASSAGE })
+    render(<ScripturePassage conversationId="c1" />)
+
+    await screen.findByTestId('scripture-text')
+    expect(screen.queryByRole('button', { name: 'Add to Content' })).not.toBeInTheDocument()
+  })
+
+  test('and nothing before a passage has been chosen', async () => {
+    stubFetch()
+    render(<ScripturePassage conversationId="c1" onUsePassage={() => {}} />)
+
+    await screen.findByRole('button', { name: /choose a passage/i })
+    expect(screen.queryByRole('button', { name: 'Add to Content' })).not.toBeInTheDocument()
+  })
+
+  test('puts the verse first and the attribution on its own line', () => {
+    expect(passageAsWritten(NIV_PASSAGE, 'NIV')).toBe(
+      'For God so loved the world that he gave his one and only Son…\nJohn 3:16-18 NIV',
+    )
+  })
+
+  /*
+   * Arrangement is the author's. Real reflections put the reference before the
+   * quote about as often as after it, so what lands is a starting point in an
+   * ordinary textarea — not a shape the application then enforces.
+   */
+  test('what lands is plain text, with no label or markup imposed on it', () => {
+    const written = passageAsWritten(NIV_PASSAGE, 'NIV')
+    expect(written).not.toMatch(/Content:|[<>]|\*\*/)
   })
 })

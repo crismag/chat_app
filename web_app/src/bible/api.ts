@@ -178,3 +178,20 @@ export function rememberTranslationId(id: number): void {
     /* Ignored for the same reason. */
   }
 }
+
+/**
+ * The passage as a person would write it into their reflection.
+ *
+ * The C of C.H.A.T. holds the passage itself — the verse text, usually with its
+ * reference and translation. See `docs/examples/REAL_CHAT_SAMPLES.md`.
+ *
+ * Verse first, attribution on its own line after it. That is one of the
+ * arrangements the samples show and not a house style: the reference appears
+ * before the quote about as often as after it, and one sample carries a
+ * bible.com link beside it. What this returns is a starting point that lands in
+ * an ordinary textarea, where the author can move it, trim it or replace it.
+ */
+export function passageAsWritten(passage: BiblePassage, abbreviation: string): string {
+  const attribution = [passage.reference, abbreviation].filter(Boolean).join(' ')
+  return `${passage.content.trim()}\n${attribution}`.trim()
+}

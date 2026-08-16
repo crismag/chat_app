@@ -205,7 +205,7 @@ ChatSection
 
 Section meaning:
 
-- **Content** is the person's understanding of the passage. AI may assist with historical, literary, or textual background, but the stored section represents the person's understanding.
+- **Content** holds the passage itself — the verse text, usually with its reference and translation — with an optional explanation after it. See [`docs/examples/REAL_CHAT_SAMPLES.md`](../examples/REAL_CHAT_SAMPLES.md) for the observed usage this is drawn from. A Content section containing only the passage is complete, and no validator, progress count or empty state may say otherwise. AI may assist with historical, literary or textual background, but the stored section is the person's own.
 - **Heart** is personal reflection on how the passage touched, convicted, encouraged, challenged, or affected the person. Do not silently manufacture it.
 - **Application** is how the person says the passage applies to them and how they intend to respond.
 - **Testimony** may be a testimony, declaration of faith or conviction, commitment, prayer, or statement of belief. It is not limited to recounting a past event, and must never be invented for the user.

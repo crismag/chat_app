@@ -23,7 +23,16 @@ The application should make that loop feel simple enough for everyday use.
 ## C.H.A.T. framework
 
 ### C — Content
-The person explains the content of the passage. This can include what is happening, who is involved, the surrounding circumstances, relevant verses, and what the person understands the passage to mean. AI may assist with historical, literary, biblical, or textual context, but the entry represents the person's understanding.
+Content holds **the passage itself** — the verse text, usually with its reference and its translation named. An explanation may follow it, but often nothing does.
+
+This is not an inference. Roughly thirty real C.H.A.T. reflections are transcribed in [`docs/examples/REAL_CHAT_SAMPLES.md`](../examples/REAL_CHAT_SAMPLES.md), and in every one of them the C section carries Scripture. Many carry the verse and nothing else; where an explanation appears at all, it more often appears under Heart.
+
+Two rules follow, and both are behavioural rather than editorial:
+
+- **A Content section that is only the passage is complete.** Nothing may report it as missing, partial, unfinished, or awaiting commentary.
+- **Arrangement belongs to the author.** Reference before the quote, after it, or with a bible.com link beside it — all of these occur in the samples. The field is free text and the application does not impose a shape on it.
+
+AI may assist with historical, literary, biblical or textual background, but that is conversation; the entry represents the person's own reflection, and a drafting request for this section produces the passage as an author would write it rather than an essay about it.
 
 ### H — Heart
 The person shares their heart and how the passage touches them. This includes what spoke to, affected, convicted, encouraged, challenged, or caused them to reflect. Heart is personal reflection and must not be silently manufactured by AI.

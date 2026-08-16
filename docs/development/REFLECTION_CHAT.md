@@ -95,7 +95,7 @@ explicit action**.
 
   | Section | Chips |
   |---|---|
-  | Content | Explain the background · Ask a Content question · Draft Content · Check this interpretation |
+  | Content | Explain simply · Historical context · Ask a Content question · Draft Content |
   | Heart | Ask a Heart question · Help me express this · Draft Heart · Make this more personal |
   | Application | Suggest a practical response · Make this specific · Draft Application · Ask an Application question |
   | Testimony | Help me write a prayer · Turn this into a declaration · Draft Testimony · Ask a faith question |

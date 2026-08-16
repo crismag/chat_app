@@ -30,7 +30,8 @@ export type AiGuidanceSection = (typeof AI_GUIDANCE_SECTIONS)[number];
  * describing the section differently.
  */
 export const AI_SECTION_MEANINGS: Record<AiGuidanceSection, string> = {
-  content: 'Content — what is happening in and around the passage.',
+  content:
+    'Content — the passage itself, as the writer wants it read: the verse text, usually with its reference and translation. An explanation may follow it, but often nothing does.',
   heart: 'Heart — how the passage personally touches the writer.',
   application: 'Application — how it applies, and what they may do.',
   testimony: 'Testimony — their own declaration of faith, conviction or prayer.',
