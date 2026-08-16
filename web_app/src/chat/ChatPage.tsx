@@ -218,6 +218,13 @@ export function ChatPage() {
   const [flashField, setFlashField] = useState<FieldType | null>(null)
 
   const [shareOpen, setShareOpen] = useState(false)
+  /*
+   * The communities this person may share into. Loaded once and only used to
+   * populate the share sheet — the server checks membership again when a
+   * publication is created, because a stale list must never be able to place
+   * something in a community someone has left.
+   */
+  const [communities, setCommunities] = useState<{ id: string; name: string }[]>([])
   const [formatOpen, setFormatOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [validation, setValidation] = useState<ValidationResult | null>(null)
@@ -359,6 +366,20 @@ export function ChatPage() {
         setError(caught instanceof Error ? caught.message : 'Unable to load conversations')
       })
   }, [searchParams, refreshList, openConversation])
+
+  /*
+   * The share sheet's community list.
+   *
+   * A failure here is silence rather than an error: not being able to list
+   * communities should not stop someone writing, and the sheet simply says
+   * there is no community to share into. The publish request would refuse
+   * anyway if this list were wrong.
+   */
+  useEffect(() => {
+    api<{ communities: { id: string; name: string }[] }>('/communities')
+      .then((response) => setCommunities(response.communities))
+      .catch(() => setCommunities([]))
+  }, [])
 
   /**
    * Whether `?new=1` has already been acted on.
@@ -1138,18 +1159,40 @@ export function ChatPage() {
     }
   }
 
-  async function share(audience: ShareAudience, acknowledgeExtension: boolean) {
+  async function share(
+    audience: ShareAudience,
+    acknowledgeExtension: boolean,
+    communityId: string | null,
+  ) {
     if (!activeId) return
     if (!(await leaveSafely())) return
     setError(null)
+    const acknowledge = acknowledgeExtension ? '?acknowledgeExtension=true' : ''
     try {
       if (audience === 'only-me') {
         await api(`/conversations/${activeId}/unpublish`, { method: 'POST' })
+      } else if (audience === 'community') {
+        /*
+         * A community publication, and nothing else. The reflection's own
+         * `publicationState` is deliberately left alone: it means "this has a
+         * public publication", and it drives the public profile. Setting it
+         * here would put a private community's reflection on a public page,
+         * which is the exact conversion the rules forbid.
+         */
+        await api(`/publications${acknowledge}`, {
+          method: 'POST',
+          body: JSON.stringify({
+            conversationId: activeId,
+            audience: 'community',
+            communityId,
+          }),
+        })
       } else {
-        await api(
-          `/conversations/${activeId}/publish${acknowledgeExtension ? '?acknowledgeExtension=true' : ''}`,
-          { method: 'POST' },
-        )
+        await api(`/conversations/${activeId}/publish${acknowledge}`, { method: 'POST' })
+        await api(`/publications${acknowledge}`, {
+          method: 'POST',
+          body: JSON.stringify({ conversationId: activeId, audience: 'public' }),
+        })
       }
       setValidation(null)
       setShareOpen(false)
@@ -1762,6 +1805,7 @@ export function ChatPage() {
 
       {shareOpen && detail ? (
         <ShareSheet
+          communities={communities}
           currentlyPublished={detail.publicationState === 'published'}
           validation={validation}
           format={format}

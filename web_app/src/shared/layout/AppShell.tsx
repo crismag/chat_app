@@ -1,19 +1,18 @@
 import { Navigate, NavLink, Outlet, useNavigate } from 'react-router'
 import { useAuth } from '../../auth/useAuth.ts'
-import { ChatIcon, LibraryIcon, PlusIcon } from '../ui/icons.tsx'
+import { ChatIcon, CommunityIcon, LibraryIcon, PlusIcon } from '../ui/icons.tsx'
 import { ProfileMenu } from '../ui/ProfileMenu.tsx'
 import styles from './AppShell.module.css'
 
 /*
- * Two destinations, not four.
- *
- * Create is an action on a finished reflection, reached from the card and the
- * account menu. Community is not in the shell until it can open a published
- * entry. What remains is the product that works: write, and revisit.
+ * Three destinations. Create stays an action on a finished reflection, reached
+ * from the card and the account menu. Community is in the shell because a
+ * published entry now has its own address and can be opened from the feed.
  */
 const navItems = [
   { to: '/', label: 'Reflect', end: true, Icon: ChatIcon },
   { to: '/reflections', label: 'Reflections', end: false, Icon: LibraryIcon },
+  { to: '/community', label: 'Community', end: false, Icon: CommunityIcon },
 ] as const
 
 /*
