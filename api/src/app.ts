@@ -249,7 +249,6 @@ export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) 
       updatedAt: timestamp,
     };
     store.conversations.set(conversation.id, conversation);
-    store.messages.set(conversation.id, []);
     return c.json(summaryOf(conversation), 201);
   });
 
@@ -411,9 +410,7 @@ export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) 
       authorOrigin: 'user' as const,
       createdAt: nowIso(),
     };
-    const messages = store.messages.get(conversation.id) ?? [];
-    messages.push(message);
-    store.messages.set(conversation.id, messages);
+    store.messages.append(conversation.id, message);
     conversation.updatedAt = message.createdAt;
     store.conversations.set(conversation.id, conversation);
     return c.json(message, 201);
@@ -599,8 +596,7 @@ export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) 
         authorOrigin: result.origin,
         createdAt: nowIso(),
       };
-      messages.push(assistantMessage);
-      store.messages.set(conversation.id, messages);
+      store.messages.append(conversation.id, assistantMessage);
       conversation.updatedAt = assistantMessage.createdAt;
       store.conversations.set(conversation.id, conversation);
       return c.json({

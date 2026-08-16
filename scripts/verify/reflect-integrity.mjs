@@ -219,6 +219,36 @@ try {
   check('and the chat says which section is being worked on', banner === 1);
   await shoot('reflect-1280-artifact');
 
+  /*
+   * Provenance survives being edited.
+   *
+   * Accepting a suggestion and then changing a word must not turn the badge
+   * into "Your words" — that would be the interface making a claim about
+   * authorship that nobody made.
+   */
+  await clickByText('Suggest from conversation');
+  await wait(1500);
+  const applied = await clickByText('Use this in');
+  await wait(1500);
+  if (!applied) {
+    check('an extraction can be accepted into a section', false, 'no apply control');
+  } else {
+    const badgeAfterApply = await driver.executeScript(
+      `return [...document.querySelectorAll('[class*=badge]')].map((b) => b.textContent).join('|')`,
+    );
+    check('accepted wording is badged as the model’s help',
+      /AI assisted|AI drafted/i.test(badgeAfterApply), badgeAfterApply);
+
+    const context = await fieldArea('Context');
+    await context.sendKeys(' And one word of my own.');
+    await until(async () => /^Saved$/i.test(await saveStateText()), 8000);
+    const badgeAfterEdit = await driver.executeScript(
+      `return [...document.querySelectorAll('[class*=badge]')].map((b) => b.textContent).join('|')`,
+    );
+    check('and editing it does not quietly re-attribute it to the author',
+      /AI assisted/i.test(badgeAfterEdit), badgeAfterEdit);
+  }
+
   // --- share ------------------------------------------------------------
   await clickByText('Share');
   await until(async () => (await driver.findElements(By.css('[role=dialog]'))).length === 1);

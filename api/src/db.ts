@@ -259,6 +259,37 @@ class MessageTable {
     return rows.length > 0 ? rows : undefined;
   }
 
+  /**
+   * Add one message to the end of the thread.
+   *
+   * The callers used to read the whole list, push, and write it all back. That
+   * worked, but it is the same shape as the write that deleted a conversation's
+   * sections — a replace wearing a save's clothes — and it loses everything if
+   * the read ever comes back short. Appending cannot.
+   */
+  append(conversationId: string, message: StoredMessage): this {
+    const row = this.db
+      .prepare('SELECT COALESCE(MAX(position), -1) AS last FROM messages WHERE conversationId = ?')
+      .get(conversationId) as Row | undefined;
+    this.db
+      .prepare(
+        `INSERT INTO messages
+           (id, conversationId, position, role, content, originalContent, authorOrigin, createdAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        message.id,
+        conversationId,
+        Number(row?.['last'] ?? -1) + 1,
+        message.role,
+        message.content,
+        message.originalContent,
+        message.authorOrigin,
+        message.createdAt,
+      );
+    return this;
+  }
+
   set(conversationId: string, messages: StoredMessage[]): this {
     const insert = this.db.prepare(
       `INSERT INTO messages

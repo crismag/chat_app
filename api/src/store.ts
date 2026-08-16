@@ -70,11 +70,35 @@ export class MemorySectionTable {
   }
 }
 
+/** Messages, with the same surface — and the same `append` — as the table. */
+export class MemoryMessageTable {
+  private readonly rows = new Map<string, StoredMessage[]>();
+
+  get(conversationId: string): StoredMessage[] | undefined {
+    const row = this.rows.get(conversationId);
+    return row ? [...row] : undefined;
+  }
+
+  set(conversationId: string, messages: StoredMessage[]): this {
+    this.rows.set(conversationId, [...messages]);
+    return this;
+  }
+
+  append(conversationId: string, message: StoredMessage): this {
+    this.rows.set(conversationId, [...(this.rows.get(conversationId) ?? []), message]);
+    return this;
+  }
+
+  delete(conversationId: string): boolean {
+    return this.rows.delete(conversationId);
+  }
+}
+
 export class MemoryStore {
   users = new Map<string, StoredUser>();
   usersByEmail = new Map<string, string>();
   sessions = new Map<string, StoredSession>();
   conversations = new Map<string, StoredConversation>();
-  messages = new Map<string, StoredMessage[]>();
+  messages = new MemoryMessageTable();
   sections = new MemorySectionTable();
 }

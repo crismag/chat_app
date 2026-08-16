@@ -244,9 +244,19 @@ export function ChatPage() {
     setSaveState({ status: 'saving' })
     try {
       for (const [field, value] of pending) {
+        /*
+         * Editing wording the model drafted does not make it entirely the
+         * author's. Their own writing stays theirs; anything the model touched
+         * stays marked as assisted, so the badge on the card cannot quietly
+         * become a claim nobody made.
+         */
+        const origin =
+          storedOrigin(field as FieldType) === AUTHOR_ORIGINS.USER
+            ? AUTHOR_ORIGINS.USER
+            : AUTHOR_ORIGINS.AI_ASSISTED
         await api(`/conversations/${activeId}/sections`, {
           method: 'PATCH',
-          body: JSON.stringify({ type: field, content: value }),
+          body: JSON.stringify({ type: field, content: value, authorOrigin: origin }),
         })
       }
       const next = await api<ConversationDetail>(`/conversations/${activeId}`)
@@ -273,7 +283,7 @@ export function ChatPage() {
       })
       return false
     }
-  }, [activeId, edits, storedValue, refreshList])
+  }, [activeId, edits, storedValue, storedOrigin, refreshList])
 
   /*
    * Typing settles, and it is written down.
