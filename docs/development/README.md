@@ -11,6 +11,7 @@ It exists so implementation work, AI-assisted development, code generation, and 
 3. [`DEVELOPMENT_INSTRUCTIONS.md`](DEVELOPMENT_INSTRUCTIONS.md) — rules for implementation and AI-assisted development.
 4. [`MVP_PLAN.md`](MVP_PLAN.md) — phased first-release plan.
 5. [`AI_AND_CONTENT_RULES.md`](AI_AND_CONTENT_RULES.md) — AI behavior, authorship, Scripture, testimony, and generated-content boundaries.
+6. [`AI_PROVIDER.md`](AI_PROVIDER.md) — how assistance is wired: setup, configuration, model selection, failure modes, privacy and logging, and how to add another provider. Document 5 is the rules; this is the mechanism that serves them.
 
 ## Working principle
 
