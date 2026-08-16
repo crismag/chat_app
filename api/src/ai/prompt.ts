@@ -25,7 +25,7 @@ import {
  * It goes into the structured log on every call, so a change in answer quality
  * can be traced to the change in wording that caused it.
  */
-export const PROMPT_VERSION = '2026-08-16.4';
+export const PROMPT_VERSION = '2026-08-16.5';
 
 /**
  * The standing instruction.
@@ -174,7 +174,7 @@ It must be answerable only out of their own understanding and experience, it mus
 
 Keep the reply to the question itself and at most one short sentence of lead-in. This is NOT a draft. Do not fill the draft field.`,
 
-  [AI_CHAT_ACTIONS.DRAFT_SECTION]: `The writer pressed a "Draft" button for one of their C.H.A.T. sections.
+  [AI_CHAT_ACTIONS.DRAFT_SECTION]: `The writer pressed the button for one of their C.H.A.T. sections — "Draft Heart", "Draft Application", "Draft Testimony", or "Prepare Content".
 
 Write the draft and put it in the "draft" field. Keep the "reply" field to one short sentence introducing it — do not repeat the draft inside the reply.
 
@@ -192,14 +192,16 @@ Follow the drafting rules above: first person, plain, built on what they have ac
  * actually write.
  */
 export const DRAFT_SECTION_NOTES: Record<string, string> = {
-  content: `This is the Content section, and it holds the PASSAGE ITSELF — the verse text, with its reference and translation named.
+  content: `The writer pressed "Prepare Content". This is the Content section, and it holds the PASSAGE ITSELF — the verse text, with its reference and translation named.
 
 Write it the way a person writes it: the passage as it reads, and its reference and translation. Do not write an essay about the passage. Do not open with "This passage teaches…" or "In this passage, Paul…".
 
 Quote the verse ONLY from the "Passage text, as the writer supplied it" block above, word for word, and name the translation it came with. If there is no such block, do NOT reconstruct the wording from memory and do NOT name a translation — say which reference and translation you would need, and offer to write the short explanation instead. Inventing verse text and attributing it to a named translation is a false attribution of Scripture, and it is worse than an unhelpful answer.
 
-An explanation after the verse is optional and secondary. Add at most one or two plain sentences, and only if there is something worth saying; a Content section that is only the passage is complete and finished. Keep personal response, feelings and application out of it — those belong to Heart and Application.`,
-  heart: 'This is the Heart section: how the passage personally touches the writer. Build only on what they have said about themselves.',
+An explanation after the verse is optional and secondary. Add at most one or two plain sentences, and only if there is something worth saying; a Content section that is only the passage is complete and finished. In real reflections, explanation of what a passage means usually appears under Heart rather than here — so prefer to leave it for Heart, without refusing it here if the writer has asked for it. Keep personal response, feelings and application out of it — those belong to Heart and Application.`,
+  heart: `This is the Heart section: how the passage personally touches the writer, and where their reading of it usually goes.
+
+In real reflections this is where explanation lands — the background, who was speaking, what the passage is doing — always tied to what it meant to THEM rather than left as a commentary. So a Heart draft may explain, as long as the explanation stays in service of their response and invents no feeling, experience or conviction they have not expressed. Build only on what they have said about themselves.`,
   application: 'This is the Application section: how it applies and what they may do. Be concrete rather than general.',
   testimony: "This is the Testimony section: their own declaration of faith, conviction or prayer. Build only on what they have expressed.",
 };

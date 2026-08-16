@@ -31,8 +31,9 @@ export type AiGuidanceSection = (typeof AI_GUIDANCE_SECTIONS)[number];
  */
 export const AI_SECTION_MEANINGS: Record<AiGuidanceSection, string> = {
   content:
-    'Content — the passage itself, as the writer wants it read: the verse text, usually with its reference and translation. An explanation may follow it, but often nothing does.',
-  heart: 'Heart — how the passage personally touches the writer.',
+    'Content — the passage itself, as the writer wants it read: the verse text, usually with its reference and translation. An explanation may follow it, but often nothing does, and a Content section that is only the passage is finished.',
+  heart:
+    'Heart — how the passage personally touches the writer, and where their reading of it usually goes. In real reflections the explanation of what a passage means — its background, who was speaking, what it is doing — appears here far more often than in Content.',
   application: 'Application — how it applies, and what they may do.',
   testimony: 'Testimony — their own declaration of faith, conviction or prayer.',
 };
@@ -136,9 +137,13 @@ export const AI_OUTCOME_MESSAGES: Record<AiOutcome, string> = {
  * in scope, and nothing else is sent.
  *
  * Its job is to be the side helper for discussing, expanding and editing the
- * C.H.A.T. items: what the passage means, thinking a section aloud, asking for
- * a rewording, being asked a question back. Not homework, not search, not
+ * C.H.A.T. items: explaining a passage, thinking a section aloud, asking for a
+ * rewording, being asked a question back. Not homework, not search, not
  * counselling.
+ *
+ * Explaining a passage is a thing the helper does; it is NOT what the Content
+ * section is for. C holds the passage. An explanation the helper gives belongs
+ * wherever the writer puts it, and in real reflections that is Heart.
  */
 
 /** How many past turns of THIS conversation may be sent. */
@@ -216,10 +221,26 @@ export const AI_CHAT_ACTION_MESSAGES: Record<AiChatAction, string> = {
   [AI_CHAT_ACTIONS.DRAFT_SECTION]: 'Draft this section for me.',
 };
 
-/** What a draft-section action shows, per destination. */
+/**
+ * What a draft-section action shows, per destination.
+ *
+ * Content is worded differently from the other three, and the difference is the
+ * point. Heart, Application and Testimony are written; Content is where the
+ * passage goes, so asking to "draft" it invites the model to compose Scripture
+ * — which is the one thing it must never do. "Prepare" asks for the section to
+ * be got ready, which is honest about both the retrieved case and the case
+ * where there is no text and the answer is to say so.
+ */
 export function draftActionMessage(section: AiGuidanceSection): string {
   const name = section.charAt(0).toUpperCase() + section.slice(1);
+  if (section === 'content') return 'Prepare my Content section.';
   return `Draft my ${name} section.`;
+}
+
+/** The chip's label, per destination. Kept beside the message it sends. */
+export function draftActionLabel(section: AiGuidanceSection): string {
+  const name = section.charAt(0).toUpperCase() + section.slice(1);
+  return section === 'content' ? 'Prepare Content' : `Draft ${name}`;
 }
 
 export type ReflectionChatTurn = {

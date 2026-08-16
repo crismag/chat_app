@@ -245,7 +245,7 @@ describe('chips follow the state', () => {
   test('the default set contains no Polish or Shorten', () => {
     renderHelper()
     expect(screen.getByRole('button', { name: 'Explain simply' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Draft Content' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Prepare Content' })).toBeInTheDocument()
     /* Meaningless as conversation starters: there is nothing to polish yet. */
     expect(screen.queryByRole('button', { name: 'Polish' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Shorten' })).not.toBeInTheDocument()

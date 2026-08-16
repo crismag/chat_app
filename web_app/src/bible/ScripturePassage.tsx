@@ -369,7 +369,8 @@ export function ScripturePassage({
         !busy &&
         !notConfigured && (
           <p className={styles.empty}>
-            Add the passage you are reflecting on, and it will stay with this
+            Choose a passage and its words come with it — the text, the reference
+            and the translation, ready to put into Content. It stays with this
             reflection in the translation you chose.
           </p>
         )

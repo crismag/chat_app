@@ -2,6 +2,7 @@ import {
   AI_CHAT_ACTIONS,
   AI_CHAT_ACTION_MESSAGES,
   AI_GUIDANCE_SECTIONS,
+  draftActionLabel,
   draftActionMessage,
   type AiChatAction,
   type AiGuidanceSection,
@@ -35,9 +36,21 @@ export type Chip = {
   message: string
 }
 
-function draftChip(section: AiGuidanceSection, label: string): Chip {
+/*
+ * The label and the message both come from `@chat/shared`, so a chip cannot
+ * say one thing on its face and another in the thread.
+ *
+ * Content's chip reads "Prepare Content" rather than "Draft Content". The C
+ * section is the passage, and a button offering to *draft* it is a button
+ * offering to compose Scripture — which is exactly the failure the prompt
+ * spends a paragraph refusing. Preparing it is what actually happens: the
+ * retrieved passage is laid out with its reference and translation, or, when
+ * there is no retrievable text, the model says which reference and translation
+ * it would need instead of inventing a verse.
+ */
+function draftChip(section: AiGuidanceSection): Chip {
   return {
-    label,
+    label: draftActionLabel(section),
     action: AI_CHAT_ACTIONS.DRAFT_SECTION,
     section,
     message: draftActionMessage(section),
@@ -75,7 +88,7 @@ export const DEFAULT_CHIPS: Chip[] = [
   explain,
   historical,
   askChip('Ask me a question'),
-  draftChip('content', 'Draft Content'),
+  draftChip('content'),
 ]
 
 /**
@@ -90,24 +103,24 @@ export const SECTION_CHIPS: Record<AiGuidanceSection, Chip[]> = {
     explain,
     historical,
     askChip('Ask a Content question'),
-    draftChip('content', 'Draft Content'),
+    draftChip('content'),
   ],
   heart: [
     askChip('Ask a Heart question'),
     explain,
-    draftChip('heart', 'Draft Heart'),
+    draftChip('heart'),
     historical,
   ],
   application: [
     askChip('Ask an Application question'),
     explain,
-    draftChip('application', 'Draft Application'),
+    draftChip('application'),
     historical,
   ],
   testimony: [
     askChip('Ask a faith question'),
     explain,
-    draftChip('testimony', 'Draft Testimony'),
+    draftChip('testimony'),
     historical,
   ],
 }

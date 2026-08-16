@@ -1348,12 +1348,30 @@ export function ChatPage() {
                 exists. Neither is a decision made once, at the beginning,
                 before there was anything to name.
               */}
+              {/*
+                The reference, typed by hand — the fallback, not the front door.
+
+                Adding a passage is the passage card's job: it fetches the real
+                words in a chosen translation, keeps them with the reflection,
+                and puts them into Content. This field only records a string, so
+                it no longer says "Add the passage" — a promise it cannot keep,
+                and one that competed with the control that can.
+
+                It is not removed, and removing it was considered. It is the
+                only way to record a passage the picker cannot reach: a
+                translation this key does not carry, an unusual or compound
+                reference, a sermon passage, or simply no network. Deleting it
+                would stop nobody from writing a reflection, and would strand
+                everyone whose Bible is not in the catalog. So it stays, quiet,
+                and says what it is when asked.
+              */}
               <input
                 ref={referenceRef}
                 className={styles.referenceInput}
                 value={referenceDraft ?? detail?.scriptureReference ?? ''}
                 /* Not an example: an example set in caps reads as a real reference. */
-                placeholder="Add the passage"
+                placeholder="Reference"
+                title="Type a reference yourself. To bring in the passage's words, use Choose a passage below."
                 aria-label="Scripture reference"
                 onChange={(event) => setReferenceDraft(event.target.value)}
                 onBlur={() => {

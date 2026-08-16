@@ -188,6 +188,24 @@ describe('the H in C.H.A.T. is Heart', () => {
     expect(note).toMatch(/do NOT reconstruct/i);
   });
 
+  /*
+   * Where interpretation goes.
+   *
+   * The samples are one-sided about this: an author who explains a passage
+   * explains it under Heart. Content gets the verse. Neither the meanings nor
+   * the drafting notes may FORBID an explanation in Content — a minority of
+   * real reflections do put one there — but the model's default has to match
+   * the majority rather than the older assumption.
+   */
+  test('interpretation is pointed at Heart, without being banned from Content', () => {
+    expect(AI_SECTION_MEANINGS.heart).toMatch(/means/i);
+    expect(DRAFT_SECTION_NOTES['heart']).toMatch(/explanation/i);
+    const content = DRAFT_SECTION_NOTES['content']!;
+    expect(content).toMatch(/usually appears under Heart/i);
+    /* "Prefer", not "never": some authors do explain in Content. */
+    expect(content).toMatch(/without refusing it here/i);
+  });
+
   test('the section meanings describe Content as the passage', () => {
     expect(AI_SECTION_MEANINGS.content).toMatch(/passage itself/i);
     /* And the system instruction carries that meaning, not an older one. */

@@ -178,7 +178,7 @@ export function resolveDraftTarget(input: {
 }): DraftTarget | null {
   /*
    * A structured action carries its own destination — "Draft Heart" is a
-   * different button from "Draft Content" — and the client picked it from a
+   * different button from "Prepare Content" — and the client picked it from a
    * fixed list. It outranks the scope, because it is the more specific thing
    * the author just pressed.
    */

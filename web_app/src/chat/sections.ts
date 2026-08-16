@@ -13,6 +13,11 @@ import { AI_GUIDANCE_SECTIONS, type AiGuidanceSection } from '@chat/shared'
  * holds the passage itself — the verse text, usually with its reference and
  * translation. Many hold nothing else. Asking "what does the passage mean?"
  * was asking for a commentary nobody writes.
+ *
+ * Heart's prompt carries the other half of that finding. The authors who DO
+ * explain a passage explain it under Heart — the background, who was speaking,
+ * what it is doing — always tied to what it meant to them. So Heart asks for
+ * both, and Content asks for neither.
  */
 export const SECTIONS = [
   {
@@ -25,7 +30,7 @@ export const SECTIONS = [
     type: 'heart' as const,
     letter: 'H',
     name: 'Heart',
-    prompt: 'What touched or challenged you?',
+    prompt: 'What it means to you, and what touched or challenged you.',
   },
   {
     type: 'application' as const,
@@ -65,6 +70,20 @@ export const CONDENSED_FIELDS = [
 ]
 
 export type FieldMeta = (typeof SECTIONS)[number] | (typeof CONDENSED_FIELDS)[number]
+
+/**
+ * A field's name, by its stored type.
+ *
+ * For the places that hold a section row without knowing which format it came
+ * from — the Create renderer chief among them, which was printing the raw
+ * lowercase enum (`content:`, `heart:`) straight onto an exported image. A
+ * machine identifier on a card someone shares is a machine identifier in
+ * public, and it is the one place a surviving legacy `context` row would have
+ * painted the old name onto a picture.
+ */
+export const FIELD_NAMES: Record<string, string> = Object.fromEntries(
+  [...SECTIONS, ...CONDENSED_FIELDS].map((field) => [field.type, field.name]),
+)
 
 /**
  * Which of the four sections assistance may be asked about.
