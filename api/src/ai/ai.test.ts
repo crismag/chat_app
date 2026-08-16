@@ -22,6 +22,7 @@ import {
   AI_GUIDANCE_SECTIONS,
   AI_OUTCOMES,
   AI_QUESTIONS_PER_SECTION,
+  AI_TITLE_OPTIONS,
 } from '@chat/shared';
 import { createApp } from '../app.ts';
 import { MemoryStore } from '../store.ts';
@@ -30,6 +31,7 @@ import { aiLogLine, redact, type AiLogEvent } from './logging.ts';
 import {
   CHAT_RESPONSE_SCHEMA,
   CHAT_TASK,
+  TITLE_TASK,
   SYSTEM_INSTRUCTION,
   buildChatPrompt,
   buildGuidancePrompt,
@@ -57,6 +59,7 @@ import {
   validateChatPayload,
   validateGuidancePayload,
   validateImprovePayload,
+  validateTitlePayload,
 } from './validation.ts';
 
 const LIMITS = { maxInputChars: 12_000 };
@@ -559,6 +562,9 @@ describe('the service gates before it calls', () => {
         throw new Error('connect ECONNREFUSED 10.0.0.1:443 while calling project 584923326390');
       },
       discussReflection() {
+        throw new Error('connect ECONNREFUSED 10.0.0.1:443 while calling project 584923326390');
+      },
+      suggestReflectionTitles() {
         throw new Error('connect ECONNREFUSED 10.0.0.1:443 while calling project 584923326390');
       },
     };
@@ -1422,6 +1428,9 @@ describe('the model may generate, and may never mutate', () => {
       improveReflectionWriting() {
         throw new Error('not used');
       },
+      suggestReflectionTitles() {
+        throw new Error('not used');
+      },
       async discussReflection() {
         return {
           reply:
@@ -1490,6 +1499,9 @@ describe('the model may generate, and may never mutate', () => {
         throw new Error('not used');
       },
       improveReflectionWriting() {
+        throw new Error('not used');
+      },
+      suggestReflectionTitles() {
         throw new Error('not used');
       },
       async discussReflection() {
@@ -1715,5 +1727,203 @@ describe('the model may generate, and may never mutate', () => {
     const withDraft = detail.messages.find((message) => message.draftText);
     expect(withDraft?.draftText).toBeTruthy();
     expect(withDraft?.draftSection).toBe('context');
+  });
+});
+
+/* ==================================================== suggesting a title == */
+
+describe('a title is a label, so a model may suggest one', () => {
+  /*
+   * The distinction the whole capability rests on: Heart and Testimony carry
+   * the author's own conviction, so writing them unasked would be putting words
+   * in someone's mouth. A title is the handle the work is filed under and makes
+   * no claim about what anyone believes — which is why suggesting one is
+   * legitimate where suggesting a testimony is not.
+   */
+
+  test('the task asks for titles, and names the failure it is written against', () => {
+    expect(TITLE_TASK).toMatch(/read as a NAME/);
+    expect(TITLE_TASK).toMatch(/not as the first line/);
+    /* The observed defect, quoted in the prompt so it cannot be forgotten. */
+    expect(TITLE_TASK).toMatch(/Romans 8:28 met me this week and I could not/);
+    expect(TITLE_TASK).toMatch(/does not stop mid-thought/);
+  });
+
+  test('and asks for different angles, because models return near-duplicates', () => {
+    expect(TITLE_TASK).toMatch(/differ in ANGLE, not in wording/);
+    expect(TITLE_TASK).toMatch(/Three rewordings of one idea is not a choice/);
+  });
+
+  test('candidates over the format’s maximum are dropped, never trimmed', () => {
+    /*
+     * Trimming is exactly how a title becomes the truncated sentence this
+     * capability exists to stop producing, so an over-long candidate is
+     * discarded rather than cut down to fit.
+     */
+    const titles = validateTitlePayload(
+      { titles: ['Trusting when I cannot see', 'x'.repeat(200), 'What I could not say'] },
+      { maxChars: 100 },
+    );
+    expect(titles).toEqual(['Trusting when I cannot see', 'What I could not say']);
+  });
+
+  test('quotation marks and trailing stops are cleaned off', () => {
+    expect(
+      validateTitlePayload({ titles: ['"Trusting when I cannot see."'] }, { maxChars: 100 }),
+    ).toEqual(['Trusting when I cannot see']);
+  });
+
+  test('near-duplicates are collapsed, so a choice is really a choice', () => {
+    const titles = validateTitlePayload(
+      { titles: ['Trusting when I cannot see', 'trusting when I cannot see', 'A different angle'] },
+      { maxChars: 100 },
+    );
+    expect(titles).toHaveLength(2);
+  });
+
+  test('a malformed payload is refused rather than coerced', () => {
+    for (const bad of [null, {}, { titles: 'one' }, { titles: [42] }, { titles: [] }, { titles: [''] }]) {
+      expect(() => validateTitlePayload(bad, { maxChars: 100 })).toThrow(AiFailure);
+    }
+  });
+
+  test('at most four come back', () => {
+    const titles = validateTitlePayload(
+      { titles: ['one', 'two', 'three', 'four', 'five', 'six'] },
+      { maxChars: 100 },
+    );
+    expect(titles).toHaveLength(AI_TITLE_OPTIONS.max);
+  });
+});
+
+describe('suggest title, end to end', () => {
+  async function withWriting(ai: ConstructorParameters<typeof AiService>[0] = {}, format = 'full') {
+    const app = createApp(new MemoryStore(), {
+      config: workingConfig(),
+      createProvider: () => new FakeProvider(),
+      logger: () => {},
+      jitter: () => 0,
+      ...ai,
+    });
+    const registered = await app.request('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: `t${Math.random()}@example.com`, password: 'secret12' }),
+    });
+    const cookie = registered.headers.get('set-cookie') ?? '';
+    const post = (path: string, body: unknown) =>
+      app.request(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: cookie },
+        body: JSON.stringify(body),
+      });
+    const created = await post('/api/conversations', {
+      scriptureReference: 'Romans 8:28',
+      format,
+    });
+    const { id } = (await created.json()) as { id: string };
+    await post(`/api/conversations/${id}/messages`, {
+      content: 'Romans 8:28 keeps meeting me this week and I cannot see how any of it works together.',
+    });
+    return { app, cookie, id, post };
+  }
+
+  test('the model produces the candidates when it is available', async () => {
+    const { id, post } = await withWriting();
+    const response = await post(`/api/conversations/${id}/ai`, { action: 'suggest_title' });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { suggestions: string[]; source: string };
+    expect(body.source).toBe('model');
+    expect(body.suggestions.length).toBeGreaterThan(1);
+  });
+
+  test('every candidate fits the format, for both formats', async () => {
+    for (const [format, hard] of [
+      ['full', 100],
+      ['condensed', 80],
+    ] as const) {
+      const { id, post } = await withWriting({}, format);
+      const response = await post(`/api/conversations/${id}/ai`, { action: 'suggest_title' });
+      const body = (await response.json()) as { suggestions: string[] };
+      for (const title of body.suggestions) {
+        expect(title.length).toBeLessThanOrEqual(hard);
+      }
+    }
+  });
+
+  test('an over-long candidate never leaves the server', async () => {
+    /* Whatever produced it, it is checked again on the way out. */
+    const flooding: AIProvider = {
+      name: 'flooding',
+      generateReflectionGuidance() {
+        throw new Error('not used');
+      },
+      improveReflectionWriting() {
+        throw new Error('not used');
+      },
+      discussReflection() {
+        throw new Error('not used');
+      },
+      async suggestReflectionTitles() {
+        return { titles: ['A fine short title', 'y'.repeat(400)] };
+      },
+    };
+    const { id, post } = await withWriting({ createProvider: () => flooding });
+    const response = await post(`/api/conversations/${id}/ai`, { action: 'suggest_title' });
+    const body = (await response.json()) as { suggestions: string[] };
+    for (const title of body.suggestions) expect(title.length).toBeLessThanOrEqual(100);
+  });
+
+  test('suggesting never applies anything', async () => {
+    const { app, cookie, id, post } = await withWriting();
+    const before = await app.request(`/api/conversations/${id}`, { headers: { Cookie: cookie } });
+    const titleBefore = ((await before.json()) as { title: string }).title;
+
+    await post(`/api/conversations/${id}/ai`, { action: 'suggest_title' });
+
+    const after = await app.request(`/api/conversations/${id}`, { headers: { Cookie: cookie } });
+    /* Byte-identical. Declining is the default, not an action. */
+    expect(((await after.json()) as { title: string }).title).toBe(titleBefore);
+  });
+
+  test('with no provider the heuristic answers, and says so', async () => {
+    const { id, post } = await withWriting({
+      config: workingConfig({ configured: false }),
+    });
+    const response = await post(`/api/conversations/${id}/ai`, { action: 'suggest_title' });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { suggestions: string[]; source: string };
+    expect(body.source).toBe('heuristic');
+    expect(body.suggestions.length).toBeGreaterThan(0);
+  });
+
+  test('and when the provider fails, the button still works', async () => {
+    const { id, post } = await withWriting({
+      createProvider: () =>
+        new FakeProvider({ failWith: new AiFailure(AI_OUTCOMES.PROVIDER_UNAVAILABLE, 'outage') }),
+    });
+    const response = await post(`/api/conversations/${id}/ai`, { action: 'suggest_title' });
+    /*
+     * Not a 502. The heuristic needs no key and no network, so a provider
+     * outage degrades the quality of the suggestions rather than removing the
+     * feature — the floor, not the ceiling.
+     */
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { source: string; suggestions: string[] };
+    expect(body.source).toBe('heuristic');
+    expect(body.suggestions.length).toBeGreaterThan(0);
+  });
+
+  test('the response carries strings, and nothing that could be obeyed', async () => {
+    const { id, post } = await withWriting();
+    const response = await post(`/api/conversations/${id}/ai`, { action: 'suggest_title' });
+    const body = (await response.json()) as Record<string, unknown>;
+    /* No field naming what to write, or asking for anything to be applied. */
+    expect(body['applied']).toBe(false);
+    expect(body['field']).toBeUndefined();
+    expect(body['action']).toBe('suggest_title');
+    for (const title of body['suggestions'] as string[]) {
+      expect(typeof title).toBe('string');
+    }
   });
 });

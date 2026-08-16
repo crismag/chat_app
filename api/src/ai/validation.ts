@@ -15,6 +15,7 @@
 import {
   AI_CHAT_ACTIONS,
   AI_CHAT_REPLY_MAX_CHARS,
+  AI_TITLE_OPTIONS,
   AI_GUIDANCE_SECTIONS,
   AI_OUTCOMES,
   AI_QUESTIONS_PER_SECTION,
@@ -388,6 +389,42 @@ export function validateChatPayload(payload: unknown): ReflectionChatResult {
     redirected: !onTopic,
     ...(draftText === undefined ? {} : { draft: draftText }),
   };
+}
+
+/**
+ * Check candidate titles, and refuse the ones the field would reject.
+ *
+ * A suggestion that arrives already over its own format's maximum is a bug, not
+ * a suggestion — the field would report invalid the moment it landed. So
+ * over-long candidates are DROPPED rather than trimmed: trimming is how a title
+ * becomes the truncated sentence this capability exists to stop producing.
+ *
+ * Near-duplicates go too. Three rewordings of one idea look like a choice and
+ * are not one.
+ */
+export function validateTitlePayload(payload: unknown, limits: { maxChars: number }): string[] {
+  if (!isRecord(payload)) throw invalid('title payload was not an object');
+  const raw = payload['titles'];
+  if (!Array.isArray(raw)) throw invalid('title payload had no titles array');
+
+  const titles: string[] = [];
+  const seen = new Set<string>();
+
+  for (const item of raw) {
+    if (typeof item !== 'string') throw invalid('a title candidate was not text');
+    /* Models like to wrap a title in quotes or close it with a full stop. */
+    const cleaned = item.trim().replace(/^["'\u201c\u2018]|["'\u201d\u2019]$/g, '').replace(/\.$/, '').trim();
+    if (!cleaned) continue;
+    if (cleaned.length > limits.maxChars) continue;
+
+    const key = cleaned.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    titles.push(cleaned);
+  }
+
+  if (titles.length === 0) throw invalid('no usable title candidates came back');
+  return titles.slice(0, AI_TITLE_OPTIONS.max);
 }
 
 export function validateImprovePayload(payload: unknown, original: string): ImproveWritingResult {

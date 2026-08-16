@@ -367,6 +367,13 @@ How each half is held:
 The tests assert on **stored sections after the call**, not on rendering: a
 rendering test can pass while a section quietly changed.
 
+## Suggest a title
+
+Not part of this panel, but under the same rules — see
+[AI_PROVIDER.md](./AI_PROVIDER.md#suggest-a-title). The model returns candidate
+strings, trusted code writes the title on an explicit choice, and the heuristic
+is the floor when no provider can answer.
+
 ## Known limitations
 
 - **Draft "Edit" is inline in the card**, not a full editor. It is a textarea on

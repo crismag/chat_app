@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import {
   CHAT_FORMATS,
+  TITLE_SOURCES,
   FORMAT_LIMITS,
   counterFor,
   validateChat,
@@ -9,7 +10,7 @@ import {
 } from '@chat/shared'
 import { CloseIcon, GlobeIcon, LockIcon, CommunityIcon } from '../shared/ui/icons.tsx'
 
-import { SECTIONS, mergeInto } from './sections.ts'
+import { ORIGIN_LABELS, SECTIONS, mergeInto } from './sections.ts'
 import type { FieldType } from './types.ts'
 import styles from './ChatPage.module.css'
 
@@ -463,12 +464,15 @@ export function TitleSuggestionSheet({
   suggestions,
   currentTitle,
   format,
+  source,
   onClose,
   onUse,
 }: {
   suggestions: string[]
   currentTitle: string
   format: ChatFormat
+  /** Which side produced these. Shown, so nobody is misled about it. */
+  source: string
   onClose: () => void
   onUse: (title: string) => Promise<void>
 }) {
@@ -504,6 +508,25 @@ export function TitleSuggestionSheet({
       <p className={styles.sheetLead}>
         Drawn from your passage and your own writing. Nothing here is used until you choose
         it, and you can edit it first.
+      </p>
+
+      {/*
+        Where these came from, said plainly. The model and the fallback produce
+        noticeably different candidates, and an author who cannot tell which
+        they are looking at has been misled about the help they are getting.
+      */}
+      <p className={styles.titleSource}>
+        {source === TITLE_SOURCES.MODEL ? (
+          <>
+            <span className="badge badge-ai-generated">{ORIGIN_LABELS['ai_generated']}</span>
+            Suggested by AI from what you have written.
+          </>
+        ) : (
+          <>
+            <span className="badge badge-user">Built from your words</span>
+            AI was unavailable, so these were assembled from your own writing.
+          </>
+        )}
       </p>
 
       {currentTitle.trim() ? (

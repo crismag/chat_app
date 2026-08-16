@@ -32,6 +32,8 @@ import type {
   ReflectionChatResult,
   ReflectionGuidanceRequest,
   ReflectionGuidanceResult,
+  TitleSuggestionRequest,
+  TitleSuggestionResult,
 } from './types.ts';
 import { FakeProvider } from './providers/fake.ts';
 
@@ -191,6 +193,31 @@ export class AiService {
     );
   }
 
+  /**
+   * Names for a reflection, from the model.
+   *
+   * The caller falls back to the heuristic when this does not work, so a
+   * failure here is not a failure for the author — which is why nothing in this
+   * method tries harder than the others do.
+   */
+  async suggestTitles(
+    request: TitleSuggestionRequest,
+    caller: AiCaller,
+  ): Promise<AiServiceResult<TitleSuggestionResult>> {
+    const config = this.readConfig();
+    const bounded: TitleSuggestionRequest = {
+      ...request,
+      history: boundHistory(request.history, {
+        maxTurns: AI_CHAT_HISTORY_TURNS,
+        maxChars: Math.floor(config.maxInputChars / 2),
+      }),
+    };
+
+    return this.run('suggest_title', caller, (provider, signal) =>
+      provider.suggestReflectionTitles(bounded, { signal, requestId: caller.requestId }),
+    );
+  }
+
   async improveWriting(
     request: ImproveWritingRequest,
     caller: AiCaller,
@@ -203,7 +230,7 @@ export class AiService {
   /* --------------------------------------------------------------- guts */
 
   private async run<T>(
-    operation: 'reflection_guidance' | 'improve_writing' | 'reflection_chat',
+    operation: 'reflection_guidance' | 'improve_writing' | 'reflection_chat' | 'suggest_title',
     caller: AiCaller,
     call: (provider: AIProvider, signal: AbortSignal) => Promise<T>,
   ): Promise<AiServiceResult<T>> {

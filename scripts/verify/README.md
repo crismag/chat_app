@@ -54,6 +54,22 @@ node scripts/verify/ai-conversation.mjs
 With AI switched off it takes its other branch and checks the composer still
 stores messages as notes to self — which is the path that must never break.
 
+## `ai-companion.mjs` — the conversation as a companion
+
+Drafts for all four sections, the per-response icon and its menu, adding over
+existing text, scoped mode, a human detour, and injection. Asserts on shape,
+provenance and stored state rather than on wording, so it passes against the
+deterministic provider and against Gemini.
+
+## `ai-suggest-title.mjs` — titles rather than truncated sentences
+
+Prints the candidates, then checks the mechanical parts: three or four options,
+inside the format's limit, distinct in angle, declining leaves the title
+byte-identical, accepting survives a reload.
+
+The quality claim is not machine-checkable. **Read the candidates it prints.**
+If they read as sentences, the prompt is not finished.
+
 ## `ai-live-smoke.mjs` — one real Gemini call
 
 The only thing in this repository that talks to Gemini. It is opt-in **twice**:

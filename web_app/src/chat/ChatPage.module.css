@@ -1234,6 +1234,17 @@
   background: var(--ai-generated-soft);
 }
 
+/* Where the candidates came from — never inferred from how they read. */
+.titleSource {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
 .addChoices {
   display: grid;
   gap: var(--space-2);

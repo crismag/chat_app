@@ -14,6 +14,7 @@ import {
   AI_OUTCOMES,
   AI_UNAVAILABLE_MESSAGE,
   AUTHOR_ORIGINS,
+  TITLE_SOURCES,
   CHAT_FORMATS,
   validateChat,
   type AiAction,
@@ -134,7 +135,9 @@ export function ChatPage() {
     capabilities?: AiCapabilities
   }>({ enabled: true })
   const [suggesting, setSuggesting] = useState(false)
-  const [titleSuggestions, setTitleSuggestions] = useState<string[] | null>(null)
+  const [titleSuggestions, setTitleSuggestions] = useState<
+    { titles: string[]; source: string } | null
+  >(null)
 
   /*
    * Model-backed assistance, held entirely apart from the artifact.
@@ -658,12 +661,15 @@ export function ChatPage() {
     setSuggesting(true)
     setError(null)
     try {
-      const result = await api<{ suggestions?: string[] }>(`/conversations/${activeId}/ai`, {
-        method: 'POST',
-        body: JSON.stringify({ action: AI_ACTIONS.SUGGEST_TITLE }),
-      })
+      const result = await api<{ suggestions?: string[]; source?: string }>(
+        `/conversations/${activeId}/ai`,
+        { method: 'POST', body: JSON.stringify({ action: AI_ACTIONS.SUGGEST_TITLE }) },
+      )
       if (result.suggestions?.length) {
-        setTitleSuggestions(result.suggestions)
+        setTitleSuggestions({
+          titles: result.suggestions,
+          source: result.source ?? TITLE_SOURCES.HEURISTIC,
+        })
       } else {
         setError('No title could be drawn from this yet. Write a little more first.')
       }
@@ -1625,7 +1631,8 @@ export function ChatPage() {
 
       {titleSuggestions && detail ? (
         <TitleSuggestionSheet
-          suggestions={titleSuggestions}
+          suggestions={titleSuggestions.titles}
+          source={titleSuggestions.source}
           currentTitle={displayTitleValue(detail.title, detail.scriptureReference)}
           format={format}
           /* Declining leaves the title exactly as it was. */

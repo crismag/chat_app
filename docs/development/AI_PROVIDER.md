@@ -35,6 +35,7 @@ Three capabilities, each triggered by an explicit act:
 | Suggest reflection questions | `POST /api/ai/reflection-guidance` | 1–3 guiding questions per requested section |
 | Improve wording | `POST /api/ai/improve-writing` | A suggested rewording, with the original |
 | Bounded reflection conversation | `POST /api/ai/reflection-chat` | One reply, stored as an assistant message |
+| Suggest a title | `POST /api/conversations/:id/ai` (`suggest_title`) | 3–4 candidate names, with a heuristic floor |
 | Capability state | `GET /api/ai/status` | `{ enabled, provider, capabilities }` |
 
 **Out of scope, deliberately:** auto-filling Heart or Testimony; generating a
@@ -415,6 +416,56 @@ live **above** the seam in `AiService` and are inherited for free. If you find
 yourself re-implementing one of them in an adapter, it is in the wrong place.
 
 ---
+
+## Suggest a title
+
+A title is a **label**, not personal expression — the handle the work is filed
+under, making no claim about what anyone believes or experienced. So a model
+suggesting one is legitimate where suggesting a Testimony is not.
+
+It was a heuristic first: rearrange the author's opening clause and trim it.
+That reliably produced a sentence someone interrupted — *"Romans 8:28 met me
+this week and I could not"* — rather than a name. The prompt is written against
+that specific defect, and asks for options differing in **angle** rather than
+wording, because models default to near-duplicates and three rewordings of one
+idea look like a choice without being one.
+
+Live, on a reflection about not being able to see how things work together:
+
+> - Releasing the need to make sense of everything
+> - Trusting blindly when I cannot see how it works
+> - Undone by the verse I tried to hold together
+> - Wanting to trust even without the feeling
+
+The same reflection through the heuristic:
+
+> - Romans 8:28 keeps meeting me this week and I cannot see
+> - Romans 8:28
+
+### The heuristic is the floor, not the ceiling
+
+The model is asked first. When it is disabled, unconfigured, rate-limited or
+simply failing, the **heuristic answers instead** and the button keeps working
+— it needs no key and no network. A provider outage degrades the quality of the
+suggestions rather than removing the feature, so the route returns **200 with
+`source: "heuristic"`** rather than an error.
+
+The sheet says which side produced the candidates. An author who cannot tell
+which they are looking at has been misled about the help they are getting.
+
+### Limits, and the boundary
+
+Candidates are generated within the format's limit — Full 60 recommended / 100
+hard, Condensed 50 / 80 — and validated again on the way out **whatever
+produced them**. Over-long candidates are **dropped, not trimmed**: trimming is
+exactly how a title becomes the truncated sentence this capability exists to
+stop producing.
+
+The model returns candidate strings and nothing else — no field naming what to
+write, nothing asking for anything to be applied. The title changes only when
+the author picks one and the client PATCHes it, through the same endpoint used
+when they type a title by hand. Declining leaves the title byte-identical, and
+there is a test asserting exactly that.
 
 ## Known limitations
 

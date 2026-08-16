@@ -74,6 +74,30 @@ export interface ReflectionChatRequest {
   actionSection?: AiGuidanceSection;
 }
 
+/**
+ * Ask for names for a reflection.
+ *
+ * A title is a LABEL, not personal expression, so a model suggesting one is
+ * legitimate where suggesting a Testimony is not — it is the handle the work is
+ * filed under, and it makes no claim about what anyone believes or experienced.
+ */
+export interface TitleSuggestionRequest {
+  passageReference: string;
+  /** What the author has written, section by section. Only what exists. */
+  sections: Partial<Record<AiGuidanceSection, string>>;
+  /** Their own words from the conversation, bounded before it gets here. */
+  history: ReflectionChatTurn[];
+  /** The format's ceiling, so nothing comes back that the field would reject. */
+  maxChars: number;
+  /** What the field aims for. Candidates over this are allowed but discouraged. */
+  recommendedChars: number;
+}
+
+export interface TitleSuggestionResult {
+  titles: string[];
+  usage?: AiUsage;
+}
+
 export interface ImproveWritingRequest {
   /** Which section the text belongs to, so tone and purpose are understood. */
   section: AiGuidanceSection;
@@ -186,6 +210,17 @@ export interface AIProvider {
     request: ReflectionChatRequest,
     options?: AiCallOptions,
   ): Promise<ReflectionChatResult>;
+  /**
+   * Suggest names for a reflection.
+   *
+   * Returns strings. It cannot apply one, and there is no field in which it
+   * could ask for one to be applied — renaming happens through the same PATCH
+   * the author uses when they type a title themselves.
+   */
+  suggestReflectionTitles(
+    request: TitleSuggestionRequest,
+    options?: AiCallOptions,
+  ): Promise<TitleSuggestionResult>;
 }
 
 /* ------------------------------------------------------------- the errors */

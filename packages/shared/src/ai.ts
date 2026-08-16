@@ -248,6 +248,21 @@ export type ReflectionChatResponse = {
   notice: string;
 };
 
+/**
+ * How many title candidates to ask for, and to accept.
+ *
+ * Three or four, and they must differ in ANGLE rather than in wording. Models
+ * default to near-duplicates — three rephrasings of one idea look like a
+ * choice and are not one — so the prompt says so and validation drops the
+ * duplicates that get through anyway.
+ */
+export const AI_TITLE_OPTIONS = { min: 2, ask: 4, max: 4 } as const;
+
+/** Which side produced the candidates. Shown, so nobody is misled. */
+export const TITLE_SOURCES = { MODEL: 'model', HEURISTIC: 'heuristic' } as const;
+
+export type TitleSource = (typeof TITLE_SOURCES)[keyof typeof TITLE_SOURCES];
+
 /** How many guiding questions a section may come back with. */
 export const AI_QUESTIONS_PER_SECTION = { min: 1, max: 3 } as const;
 

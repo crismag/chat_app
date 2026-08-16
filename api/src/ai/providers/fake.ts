@@ -27,6 +27,8 @@ import type {
   ReflectionChatResult,
   ReflectionGuidanceRequest,
   ReflectionGuidanceResult,
+  TitleSuggestionRequest,
+  TitleSuggestionResult,
 } from '../types.ts';
 
 /**
@@ -216,6 +218,34 @@ export class FakeProvider implements AIProvider {
           : '') +
         'What is standing out to you in the passage itself?',
       redirected: false,
+    };
+  }
+
+  /**
+   * Deterministic names, built from what the author actually wrote.
+   *
+   * Templated and obviously so, but it obeys the rules the real prompt sets:
+   * each is a complete phrase rather than a truncated sentence, they differ in
+   * angle rather than in wording, and every one fits the format's limit — a
+   * fake that returned a candidate the field would reject would let the
+   * limit test pass on behaviour the real provider is forbidden.
+   */
+  async suggestReflectionTitles(
+    request: TitleSuggestionRequest,
+    options?: AiCallOptions,
+  ): Promise<TitleSuggestionResult> {
+    await this.gate(options);
+
+    const reference = request.passageReference.trim();
+    const candidates = [
+      reference ? `Sitting with ${reference}` : 'Sitting with this passage',
+      request.sections.heart ? 'What this stirred in me' : 'Reading it again',
+      request.sections.application ? 'What I mean to do about it' : 'Where this leaves me',
+      reference ? `${reference}, and what I could not see` : 'What I could not see',
+    ];
+
+    return {
+      titles: candidates.filter((title) => title.length <= request.maxChars).slice(0, 4),
     };
   }
 

@@ -25,7 +25,7 @@ import {
  * It goes into the structured log on every call, so a change in answer quality
  * can be traced to the change in wording that caused it.
  */
-export const PROMPT_VERSION = '2026-08-16.3';
+export const PROMPT_VERSION = '2026-08-16.4';
 
 /**
  * The standing instruction.
@@ -189,6 +189,35 @@ export const DRAFT_SECTION_NOTES: Record<string, string> = {
   testimony: "This is the Testimony section: their own declaration of faith, conviction or prayer. Build only on what they have expressed.",
 };
 
+/**
+ * Added when asking for names for a reflection.
+ *
+ * The failure this is written against is specific and was observed: the
+ * heuristic returned "Romans 8:28 met me this week and I could not", which is a
+ * sentence someone interrupted rather than a name. A title names what the
+ * reflection is ABOUT to the person who wrote it — the tension, the turn, or
+ * the claim.
+ *
+ * The second failure it is written against is near-duplicates. Asked for three
+ * options a model will happily return one idea worded three ways, which looks
+ * like a choice and is not one, so the instruction asks for different ANGLES
+ * and names what the angles are.
+ */
+export const TITLE_TASK = `Task: suggest names for this reflection.
+
+A good title names what the reflection is about to the person who wrote it — the tension in it, the turn it takes, or the claim it makes. "Trusting when I cannot see" is a title. "Romans 8:28 met me this week and I could not" is a truncated sentence, and is not.
+
+Each title must:
+- read as a NAME, not as the first line of the reflection and not as a summary of it;
+- be a complete phrase that does not stop mid-thought;
+- come out of what this person actually wrote, in their register — plain if they are plain;
+- avoid inventing any claim, experience or conviction they have not expressed;
+- carry no quotation marks, no trailing full stop, and no "A reflection on…" preamble.
+
+Return options that differ in ANGLE, not in wording. Three rewordings of one idea is not a choice. Use different angles across the set, for example: the tension they are sitting in; the turn or resolution they reached; the passage's own image or phrase as they used it; what they resolved to do.
+
+If the reflection barely has anything in it yet, return fewer good options rather than padding the list with weak ones.`;
+
 /* ------------------------------------------------------------- delimiting */
 
 /**
@@ -269,6 +298,75 @@ export function guidanceResponseSchema(sections: readonly string[]): Record<stri
     required: ['sections'],
     additionalProperties: false,
   };
+}
+
+/**
+ * The title schema.
+ *
+ * Strings, and nothing else — no "recommended" flag, no field naming where a
+ * title should be written. Choosing one is the author's act, and applying it is
+ * an ordinary PATCH they trigger.
+ */
+export function titleResponseSchema(count: number): Record<string, unknown> {
+  return {
+    type: 'object',
+    properties: {
+      titles: {
+        type: 'array',
+        description: `${count} candidate names, each a complete phrase, differing in angle rather than wording.`,
+        minItems: 1,
+        maxItems: count,
+        items: { type: 'string' },
+      },
+    },
+    required: ['titles'],
+    additionalProperties: false,
+  };
+}
+
+export function buildTitlePrompt(
+  input: {
+    passageReference: string;
+    sections: Record<string, string>;
+    history: { role: string; content: string }[];
+    maxChars: number;
+    recommendedChars: number;
+    count: number;
+  },
+  nonce: string,
+): string {
+  const parts: string[] = [TITLE_TASK, ''];
+
+  /*
+   * The limit is stated as an instruction as well as enforced afterwards. A
+   * candidate that arrives over the field's maximum is dropped, and dropping
+   * three of four leaves someone with a thin list — so it is worth asking.
+   */
+  parts.push(
+    `Return up to ${input.count} options. Each MUST be at most ${input.maxChars} characters, and should aim for ${input.recommendedChars} or fewer.`,
+  );
+  parts.push('');
+  parts.push('The passage:');
+  parts.push(delimit('passage_reference', input.passageReference || '(not given)', nonce));
+
+  const written = Object.entries(input.sections).filter(([, value]) => value.trim() !== '');
+  if (written.length > 0) {
+    parts.push('');
+    parts.push("What they have written, section by section:");
+    for (const [section, value] of written) {
+      parts.push(delimit(`section_${section}`, value, nonce));
+    }
+  }
+
+  if (input.history.length > 0) {
+    parts.push('');
+    parts.push('What they said while working on it:');
+    for (const turn of input.history) {
+      parts.push(delimit(`turn_${turn.role}`, turn.content, nonce));
+    }
+  }
+
+  return parts.join('\n');
 }
 
 export const IMPROVE_RESPONSE_SCHEMA: Record<string, unknown> = {

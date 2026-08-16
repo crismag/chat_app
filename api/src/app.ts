@@ -17,6 +17,7 @@ import {
   CREATE_LAYOUTS,
   CREATE_STYLES,
   PUBLICATION_STATES,
+  TITLE_SOURCES,
   type AiAction,
   type CreateLayout,
   type CreateStyle,
@@ -652,7 +653,7 @@ export function createApp(
   });
 
   app.post('/api/conversations/:id/ai', async (c) => {
-    const { error, conversation } = ownedConversation(c, c.req.param('id'));
+    const { error, user, conversation } = ownedConversation(c, c.req.param('id'));
     if (error === 401) {
       return c.json({ error: 'Unauthenticated.' }, 401);
     }
@@ -680,16 +681,68 @@ export function createApp(
       /*
        * Suggesting a name for the work, from the work.
        *
-       * Every candidate is built from what the author already wrote and fits
-       * the format's title limit before it leaves here, so nothing arrives in
-       * the field already too long. And nothing is written: the title changes
+       * The model is asked first and the heuristic is the FLOOR, not the
+       * ceiling. That ordering is the whole design: the heuristic rearranges
+       * the author's own opening clause, which reliably produces a sentence
+       * someone interrupted — "Romans 8:28 met me this week and I could not" —
+       * where a title should name the tension, the turn or the claim. But the
+       * heuristic needs no key and no network, so when the model is off,
+       * unconfigured, rate-limited or simply failing, the button keeps working
+       * instead of going dark.
+       *
+       * The sheet says which produced the candidates, because an author should
+       * never be misled about where a suggestion came from.
+       *
+       * Nothing here writes anything. Candidates are strings; the title changes
        * only when the author picks one and PATCHes it themselves.
        */
-      const suggestions = suggestTitles(conversation.format, {
-        scriptureReference: conversation.scriptureReference,
-        messages,
-        sections: store.sections.get(conversation.id),
-      });
+      const limits = FORMAT_LIMITS[conversation.format].fields['title'];
+      const maxChars = limits?.hard ?? 100;
+      const recommendedChars = limits?.recommended ?? 60;
+
+      let suggestions: string[] = [];
+      let source: string = TITLE_SOURCES.HEURISTIC;
+
+      if (aiService.modelStatus().available) {
+        const stored = sectionsFromStore(store.sections.get(conversation.id));
+        const sections: Record<string, string> = {};
+        for (const [type, section] of Object.entries(stored)) {
+          if (section.content.trim()) sections[type] = section.content;
+        }
+
+        const result = await aiService.suggestTitles(
+          {
+            passageReference: conversation.scriptureReference ?? '',
+            sections,
+            history: messages.map((message) => ({
+              role: message.role,
+              content: message.content,
+            })),
+            maxChars,
+            recommendedChars,
+          },
+          {
+            userId: user?.id ?? 'unknown',
+            address: c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown',
+            requestId: randomUUID(),
+          },
+        );
+
+        if (result.ok && result.value.titles.length > 0) {
+          suggestions = result.value.titles;
+          source = TITLE_SOURCES.MODEL;
+        }
+      }
+
+      if (suggestions.length === 0) {
+        /* The floor. Always available, and honest about being the floor. */
+        suggestions = suggestTitles(conversation.format, {
+          scriptureReference: conversation.scriptureReference,
+          messages,
+          sections: store.sections.get(conversation.id),
+        });
+        source = TITLE_SOURCES.HEURISTIC;
+      }
 
       if (suggestions.length === 0) {
         return c.json(
@@ -701,13 +754,22 @@ export function createApp(
         );
       }
 
+      /*
+       * Checked once more on the way out, whatever produced them. A candidate
+       * that arrives already over the field's maximum would report invalid the
+       * moment it landed, which is a bug rather than a suggestion.
+       */
+      const withinLimit = suggestions.filter((title) => title.length <= maxChars);
+
       return c.json({
         action,
         applied: false,
-        suggestions,
+        suggestions: withinLimit.length > 0 ? withinLimit : suggestions.slice(0, 1),
         currentTitle: conversation.title,
         origin: AUTHOR_ORIGINS.AI_GENERATED,
         provider: status.provider,
+        /* Which side wrote these. Shown in the sheet. */
+        source,
       });
     }
 

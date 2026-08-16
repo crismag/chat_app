@@ -22,7 +22,7 @@
  */
 
 import { ApiError, FinishReason, GoogleGenAI } from '@google/genai';
-import { AI_GUIDANCE_NOTICE, AI_OUTCOMES } from '@chat/shared';
+import { AI_GUIDANCE_NOTICE, AI_OUTCOMES, AI_TITLE_OPTIONS } from '@chat/shared';
 import {
   CHAT_RESPONSE_SCHEMA,
   IMPROVE_RESPONSE_SCHEMA,
@@ -31,12 +31,15 @@ import {
   buildChatPrompt,
   buildGuidancePrompt,
   buildImprovePrompt,
+  buildTitlePrompt,
   guidanceResponseSchema,
+  titleResponseSchema,
 } from '../prompt.ts';
 import {
   validateChatPayload,
   validateGuidancePayload,
   validateImprovePayload,
+  validateTitlePayload,
 } from '../validation.ts';
 import { AiFailure } from '../types.ts';
 import type {
@@ -49,6 +52,8 @@ import type {
   ReflectionChatResult,
   ReflectionGuidanceRequest,
   ReflectionGuidanceResult,
+  TitleSuggestionRequest,
+  TitleSuggestionResult,
 } from '../types.ts';
 import { randomUUID } from 'node:crypto';
 
@@ -61,7 +66,7 @@ import { randomUUID } from 'node:crypto';
  * because explaining a passage takes more words than asking about one — but it
  * is still a ceiling, and the reply length is capped again on the way back.
  */
-const MAX_OUTPUT_TOKENS = { guidance: 700, improve: 900, chat: 1000 } as const;
+const MAX_OUTPUT_TOKENS = { guidance: 700, improve: 900, chat: 1000, titles: 300 } as const;
 
 /** Low, but not zero. Identical phrasing every time reads as a form, not help. */
 const TEMPERATURE = 0.4;
@@ -164,6 +169,37 @@ export class GeminiProvider implements AIProvider {
 
     const result = validateChatPayload(payload);
     return usage ? { ...result, usage } : result;
+  }
+
+  async suggestReflectionTitles(
+    request: TitleSuggestionRequest,
+    options?: AiCallOptions,
+  ): Promise<TitleSuggestionResult> {
+    const nonce = newNonce();
+    const sections: Record<string, string> = {};
+    for (const [section, value] of Object.entries(request.sections)) {
+      if (value) sections[section] = value;
+    }
+
+    const { payload, usage } = await this.call({
+      prompt: buildTitlePrompt(
+        {
+          passageReference: request.passageReference,
+          sections,
+          history: request.history,
+          maxChars: request.maxChars,
+          recommendedChars: request.recommendedChars,
+          count: AI_TITLE_OPTIONS.ask,
+        },
+        nonce,
+      ),
+      schema: titleResponseSchema(AI_TITLE_OPTIONS.ask),
+      maxOutputTokens: MAX_OUTPUT_TOKENS.titles,
+      options,
+    });
+
+    const titles = validateTitlePayload(payload, { maxChars: request.maxChars });
+    return usage ? { titles, usage } : { titles };
   }
 
   async improveReflectionWriting(
