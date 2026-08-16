@@ -58,6 +58,21 @@ export function SparkIcon(props: IconProps) {
   )
 }
 
+/*
+ * A hand and a spark — wording the author wrote with the model's help.
+ *
+ * Between the plain pencil and the plain spark, so the three provenance marks
+ * differ in shape and not only in colour.
+ */
+export function AssistedIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M3.5 20.5h4l9-9a2.8 2.8 0 0 0-4-4l-9 9v4Z" />
+      <path d="M18.5 2.5 19.4 5l2.6.9-2.6.9-.9 2.6-.9-2.6L15 5l2.6-.9.9-2.4Z" />
+    </svg>
+  )
+}
+
 export function TrashIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>

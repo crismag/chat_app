@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { counterFor, splitAtLimit, type ChatFormat } from '@chat/shared'
-import { CheckIcon, SendIcon } from '../shared/ui/icons.tsx'
+import { SendIcon } from '../shared/ui/icons.tsx'
 import { FieldAssist } from './FieldAssist.tsx'
+import { OriginMark, SaveToggle, StatusLight, type FieldStatus } from './FieldMarks.tsx'
 import {
   ORIGIN_CLASSES,
   ORIGIN_LABELS,
@@ -17,9 +18,19 @@ import styles from './ChatPage.module.css'
  *
  * The C.H.A.T. is the thing being made, so it is not previewed here in two
  * clamped lines behind an Edit button — it is shown whole and typed into
- * directly. Everything a person needs while writing sits with the words: the
- * question, the counter, who wrote it, and the two ways out to the conversation
- * beside it.
+ * directly.
+ *
+ * What is *not* on the face of the card is deliberate. The letter, the section
+ * name, "Not yet", "Written", "Your words", "Unsaved" and a Save button used to
+ * sit around every one of four fields, and four fields' worth of that is more
+ * interface than reflection. `docs/examples/REAL_CHAT_SAMPLES.md` transcribes
+ * roughly thirty real C.H.A.T.s: the labels vary in case and form, several omit
+ * them entirely, and some skip the C heading altogether and simply open with
+ * the verse — because the verse *is* the content and the label is redundant to
+ * the person writing it. So the section is carried by its colour, by the
+ * question in the empty field, and by wording one hover or one keyboard focus
+ * away; the state is carried by marks. Nothing has been removed from the
+ * accessibility tree, and nothing that was stored has changed.
  */
 function Field({
   meta,
@@ -72,6 +83,17 @@ function Field({
   const filled = value.trim().length > 0
 
   /*
+   * Three states for three shapes. "Long" is the amber: written, and past the
+   * length this format suggests — which is a thing to know about, not a thing
+   * that is wrong.
+   */
+  const status: FieldStatus = !filled
+    ? 'empty'
+    : counter && counter.status !== 'recommended'
+      ? 'long'
+      : 'written'
+
+  /*
    * Narrowed once, into a const, so the callbacks below keep the narrowing.
    * Non-null exactly when this field is one of the four assistance understands.
    */
@@ -87,25 +109,11 @@ function Field({
        */
       data-flash={flashed ? 'true' : 'false'}
     >
-      <div className={styles.fieldHead}>
-        <span className={styles.marker} aria-hidden="true">
-          {meta.letter}
-        </span>
-        <div className={styles.fieldHeading}>
-          <h3 className={styles.fieldName}>{meta.name}</h3>
-          <p className={styles.fieldPrompt}>{meta.prompt}</p>
-        </div>
-        <span className={styles.fieldState}>
-          {filled ? (
-            <>
-              <CheckIcon className={styles.tinyIcon} />
-              Written
-            </>
-          ) : (
-            'Not yet'
-          )}
-        </span>
-      </div>
+      {/*
+        The heading is kept for anything that navigates by headings; it is the
+        printing of it on the card that was the clutter, not the fact of it.
+      */}
+      <h3 className="sr-only">{meta.name}</h3>
 
       <textarea
         ref={areaRef}
@@ -116,8 +124,18 @@ function Field({
         /* Where the caret is, so "insert at cursor" can mean what it says. */
         onSelect={(event) => onCaret(event.currentTarget.selectionStart)}
         aria-label={`${meta.name} — ${meta.prompt}`}
-        /* The question is already printed above the box; twice is clutter. */
-        placeholder="Write here…"
+        /*
+         * The same sentence again as a type hint, because the placeholder
+         * leaves the moment there is writing in the box and the section still
+         * has to be nameable after that. A keyboard reaches the same wording
+         * through the mark below, which opens on focus.
+         */
+        title={`${meta.name} — ${meta.prompt}`}
+        /*
+         * The question, where the answer goes. It is the hint the section needs
+         * and it leaves of its own accord the moment there is writing to read.
+         */
+        placeholder={meta.prompt}
         onChange={(event) => {
           /*
            * At the hard maximum the field stops accepting characters and the
@@ -130,32 +148,32 @@ function Field({
       />
 
       <div className={styles.fieldFoot}>
-        {/* Nothing written is nobody's words yet, so nothing is claimed. */}
-        {filled ? (
-          <span className={`badge ${ORIGIN_CLASSES[authorOrigin] ?? 'badge-user'}`}>
-            {ORIGIN_LABELS[authorOrigin] ?? authorOrigin}
-          </span>
-        ) : null}
+        {/* Where this section has got to: red hollow, amber half, green solid. */}
+        <StatusLight name={meta.name} status={status} />
 
+        {/* Nothing written is nobody's words yet, so nothing is claimed. */}
+        {filled ? <OriginMark origin={authorOrigin} /> : null}
+
+        {/*
+          The count against the limit, and nothing else. The word "recommended"
+          was three quarters of this line and the number was already saying it.
+        */}
         {counter ? (
-          <span className={styles.counter} data-status={counter.status} aria-live="polite">
-            {counter.length} / {counter.recommended} recommended
-            {counter.length > counter.recommended ? ` · ${counter.hard} maximum` : ''}
+          <span
+            className={styles.counter}
+            data-status={counter.status}
+            aria-live="polite"
+            title={`${meta.name}: ${counter.length} of ${counter.recommended} characters recommended, ${counter.hard} maximum`}
+          >
+            {counter.length} / {counter.recommended}
+            {counter.length > counter.recommended ? ` · ${counter.hard} max` : ''}
+            <span className="sr-only"> characters</span>
           </span>
         ) : null}
 
         <span className={styles.fieldActions}>
-          <span className={styles.fieldSaved} role="status">
-            {dirty ? 'Unsaved' : filled ? 'Saved' : ''}
-          </span>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={onSave}
-            disabled={!dirty}
-          >
-            Save
-          </button>
+          {/* One control where a status and a button used to stand. */}
+          <SaveToggle name={meta.name} dirty={dirty} onSave={onSave} />
           <button
             type="button"
             className={styles.discussButton}

@@ -21,6 +21,31 @@ node scripts/verify/<name>.mjs
 
 Screenshots and other output go to `scripts/verify/out/`, which is ignored.
 
+## `card-marks.mjs` — the decluttered card, from both sides
+
+The reflection card lost its C.H.A.T. letters, its section headings, "Not yet",
+"Written", "Your words", "Unsaved", the word "recommended" and a separate Save
+button. Half of this script reads the text the card actually *paints* — walking
+the tree and dropping `sr-only`, `visibility: hidden` and zero-opacity nodes,
+because `textContent` would count the very sentences that exist so the marks can
+stay wordless — and asserts those words are gone.
+
+The other half is the half that gets quietly lost. It asks Chrome for its own
+accessibility tree (`Accessibility.queryAXTree`) rather than reading our
+`aria-label`s back to ourselves, prints every accessible name it finds, and
+requires each mark to carry one with its state inside it. Then it puts focus on
+each mark and measures the tooltip's computed opacity — a hint that opens only
+for a mouse is a hint half the users never get — and finally measures non-text
+contrast in both themes, because these marks are now the only visible carrier of
+what they say.
+
+```bash
+node scripts/verify/card-marks.mjs
+```
+
+**Look at `out/card-marks-1280.png` and `out/card-marks-390.png`.** The claim
+being made is that the card is less busy, and no assertion can make it.
+
 ## `ai-assist.mjs` — the assistance controls
 
 Needs the API started with the deterministic provider, so the run costs nothing

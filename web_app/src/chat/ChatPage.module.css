@@ -737,73 +737,119 @@
   border-left-color: var(--testimony);
 }
 
-.fieldHead {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-}
+/* --- The marks under a field -------------------------------------------- */
 
-.marker {
-  display: grid;
+/*
+ * A mark is a small drawing in a target big enough to hit.
+ *
+ * The visible glyph is ~14px and the box around it is 2.5rem, which is the
+ * 40px a thumb needs. The focus ring is drawn on the box, not removed from it:
+ * these are the only carriers of their information now, so they have to be
+ * reachable and visibly reachable.
+ */
+.mark {
+  display: inline-grid;
   place-items: center;
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 2.5rem;
+  height: 2.5rem;
   flex: none;
+  padding: 0;
+  border: none;
   border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  background: transparent;
   color: var(--muted);
-  font-family: var(--font-serif);
-  font-size: var(--text-sm);
-  font-weight: 700;
-  line-height: 1;
+  cursor: default;
 }
 
-.content .marker,
-.verse .marker {
-  background: var(--content-soft);
-  color: var(--content);
-}
-.heart .marker {
-  background: var(--heart-soft);
-  color: var(--heart);
-}
-.application .marker {
-  background: var(--application-soft);
-  color: var(--application);
-}
-.testimony .marker,
-.reflection .marker {
-  background: var(--testimony-soft);
-  color: var(--testimony);
+.mark:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
-.fieldHeading {
-  display: grid;
-  gap: 0.1rem;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.fieldName {
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  font-weight: 650;
-  letter-spacing: normal;
-  color: var(--ink);
-}
-
-.fieldPrompt {
-  font-size: var(--text-xs);
-  color: var(--muted);
-}
-
-.fieldState {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
+.markGlyph {
+  width: 0.9rem;
+  height: 0.9rem;
   flex: none;
+}
+
+/*
+ * The traffic light. Hue *and* shape: hollow, half, solid, drawn in
+ * FieldMarks.tsx — so it still reads for someone who cannot tell the red from
+ * the green.
+ */
+.mark[data-status='empty'] {
+  color: var(--danger);
+}
+.mark[data-status='long'] {
+  color: var(--warn);
+}
+.mark[data-status='written'] {
+  color: var(--ok);
+}
+
+/*
+ * Provenance keeps the badge colours it always had; only the words came off.
+ * Two classes, so the shape wins over the global pill it inherits from.
+ */
+.mark.originMark {
+  border-radius: var(--radius-pill);
+  padding: 0;
+  letter-spacing: normal;
+}
+
+.mark[data-save='dirty'] {
+  color: var(--warn);
+  cursor: pointer;
+}
+
+.mark[data-save='saved'] {
+  color: var(--ok);
+  cursor: pointer;
+}
+
+/* --- The wording behind a mark ------------------------------------------ */
+
+/*
+ * Shown on hover and on keyboard focus, which is the whole reason this is not
+ * a `title` attribute: `title` never opens for a keyboard.
+ *
+ * It is `aria-hidden`; the control it belongs to carries the same sentence as
+ * its accessible name, and saying it twice is worse than not drawing it.
+ */
+.hint {
+  position: relative;
+  display: inline-flex;
+}
+
+.hintText {
+  position: absolute;
+  bottom: calc(100% + var(--space-1));
+  left: 50%;
+  translate: -50% 0;
+  z-index: 3;
+  width: max-content;
+  max-width: min(15rem, 60vw);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--ink);
+  color: var(--paper);
   font-size: var(--text-xs);
-  color: var(--muted);
+  font-weight: 600;
+  line-height: var(--leading-snug);
+  text-align: center;
+  text-transform: none;
+  letter-spacing: normal;
+  box-shadow: var(--shadow-sm);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--fast) var(--ease), visibility var(--fast) var(--ease);
+}
+
+.hint:hover .hintText,
+.hint:focus-within .hintText {
+  opacity: 1;
+  visibility: visible;
 }
 
 /*
@@ -832,23 +878,22 @@
   box-shadow: var(--ring);
 }
 
+/*
+ * The marks are 40px boxes with a small drawing inside, so the row spaces
+ * itself; a further gap between them only pushes them apart.
+ */
 .fieldFoot {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: var(--space-1);
 }
 
 .fieldActions {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1);
   margin-inline-start: auto;
-}
-
-.fieldSaved {
-  font-size: var(--text-xs);
-  color: var(--muted);
 }
 
 .discussButton {
@@ -874,8 +919,10 @@
 }
 
 .counter {
+  padding-inline: var(--space-2);
   font-size: var(--text-xs);
   color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .counter[data-status='extended'] {
@@ -2246,6 +2293,7 @@
     animation: none;
   }
 
+  .hintText,
   .progressFill,
   .field,
   .chip,

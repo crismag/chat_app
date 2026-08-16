@@ -133,8 +133,15 @@ try {
   await until(async () => /1 of 4 written/.test(await body()), 8000);
   check('the section counts towards progress once it is written',
     /1 of 4 written/.test(await body()));
-  await until(async () => /^Saved$/m.test(await body()), 8000);
-  check('and saving says so without being asked', /Saved/.test(await body()));
+  /*
+   * Saving still happens without being asked; the field no longer says so in
+   * words. Its state is a toggle now, and `aria-pressed` is where the claim
+   * lives — `card-marks.mjs` holds the whole set of marks to account.
+   */
+  const savedToggles = () =>
+    driver.findElements(By.css('[class*=fieldActions] button[aria-pressed=true]'));
+  await until(async () => (await savedToggles()).length > 0, 8000);
+  check('and saving says so without being asked', (await savedToggles()).length > 0);
   await shoot(driver, 'reflect-1280-written');
 
   /*
