@@ -1,20 +1,21 @@
-import { Navigate, NavLink, Outlet } from 'react-router'
+import { Navigate, NavLink, Outlet, useNavigate } from 'react-router'
 import { useAuth } from '../../auth/useAuth.ts'
-import { ApiHealth } from '../api/ApiHealth.tsx'
-import {
-  ChatIcon,
-  CommunityIcon,
-  CreateIcon,
-  LibraryIcon,
-  SignOutIcon,
-} from '../ui/icons.tsx'
+import { ChatIcon, CommunityIcon, LibraryIcon, PlusIcon } from '../ui/icons.tsx'
+import { ProfileMenu } from '../ui/ProfileMenu.tsx'
 import styles from './AppShell.module.css'
 
+/*
+ * Three destinations, not four.
+ *
+ * Create left the primary navigation because it is an action on a finished
+ * reflection rather than a place of its own — it is reached from the C.H.A.T.
+ * companion and from the account menu. What remains is the actual shape of the
+ * product: write, revisit, share.
+ */
 const navItems = [
   { to: '/', label: 'Reflect', end: true, Icon: ChatIcon },
-  { to: '/library', label: 'Library', end: false, Icon: LibraryIcon },
+  { to: '/reflections', label: 'Reflections', end: false, Icon: LibraryIcon },
   { to: '/community', label: 'Community', end: false, Icon: CommunityIcon },
-  { to: '/create', label: 'Create', end: false, Icon: CreateIcon },
 ] as const
 
 /*
@@ -33,6 +34,7 @@ const letters = [
 
 export function AppShell() {
   const { user, ready, logout } = useAuth()
+  const navigate = useNavigate()
 
   if (!ready) {
     return (
@@ -86,18 +88,21 @@ export function AppShell() {
           </nav>
 
           <div className={styles.meta}>
-            <ApiHealth />
-            <span className={styles.who} title={user.email}>
-              {user.email}
-            </span>
+            {/*
+              The one primary action in the shell. Writing is what the product
+              is for, so starting is never more than one press away — and on a
+              phone it keeps the icon and drops the word rather than shrinking.
+            */}
             <button
               type="button"
-              className={`btn btn-ghost btn-sm ${styles.signOut}`}
-              onClick={() => void logout()}
+              className={`btn btn-primary btn-sm ${styles.newAction}`}
+              aria-label="New reflection"
+              onClick={() => void navigate('/?new=1')}
             >
-              <SignOutIcon className={styles.navIcon} />
-              <span className={styles.signOutLabel}>Sign out</span>
+              <PlusIcon className={styles.navIcon} />
+              <span className={styles.newLabel}>New reflection</span>
             </button>
+            <ProfileMenu email={user.email} onSignOut={() => void logout()} />
           </div>
         </div>
       </header>
@@ -108,7 +113,7 @@ export function AppShell() {
 
       {/*
         A bottom bar on phones, because the top of a tall screen is the hardest
-        place to reach. It carries the same four destinations as the header, and
+        place to reach. It carries the same destinations as the header, and
         icons let the labels stay legible instead of shrinking to fit.
       */}
       <nav className={styles.mobileNav} aria-label="Primary">

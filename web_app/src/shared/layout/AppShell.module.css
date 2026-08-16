@@ -51,13 +51,18 @@
   color: inherit;
 }
 
+/*
+ * The wordmark carries the identity, so it is set a step larger than the
+ * navigation beside it rather than the same size as everything else — a header
+ * where every element weighs the same has no hierarchy at all.
+ */
 .wordmark {
   display: flex;
   font-family: var(--font-serif);
-  font-size: 1.2rem;
+  font-size: 1.45rem;
   font-weight: 700;
   letter-spacing: 0.04em;
-  line-height: 1.1;
+  line-height: 1.05;
 }
 
 /*
@@ -79,6 +84,7 @@
 }
 
 .tagline {
+  display: none;
   color: var(--faint);
   font-size: var(--text-xs);
   letter-spacing: var(--tracking-wide);
@@ -131,18 +137,12 @@
   flex: none;
 }
 
-.who {
+.newLabel {
   display: none;
-  max-width: 16ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--faint);
-  font-size: var(--text-xs);
 }
 
-.signOutLabel {
-  display: none;
+.newAction {
+  padding-inline: 0.6rem;
 }
 
 .loading {
@@ -182,7 +182,7 @@
   bottom: 0;
   z-index: 5;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   border-top: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   backdrop-filter: saturate(180%) blur(12px);
@@ -227,9 +227,13 @@
   transform: translateY(-1px) scale(1.06);
 }
 
-@media (min-width: 640px) {
-  .signOutLabel {
+@media (min-width: 560px) {
+  .newLabel {
     display: inline;
+  }
+
+  .newAction {
+    padding-inline: 0.9rem;
   }
 }
 
@@ -238,8 +242,8 @@
     display: flex;
   }
 
-  .who {
-    display: inline;
+  .tagline {
+    display: block;
   }
 
   .mobileNav {
