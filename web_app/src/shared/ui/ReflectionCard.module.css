@@ -1,0 +1,272 @@
+/*
+ * The reflection gallery card.
+ *
+ * Moved here from `reflections/ReflectionsPage.module.css` unchanged, because
+ * the public profile shows the same card and a second implementation of it
+ * would drift within a week. Reflections still owns the *grids* — how many
+ * columns, and at what container width — because that is a property of the
+ * page, not of the card.
+ *
+ * The one rule kept from the page: no `@media (width…)`. Where this file needs
+ * to know how much room it has, it asks the nearest container, so the card
+ * behaves correctly inside a page whose sidebar just collapsed.
+ */
+
+/* --- The tile ---------------------------------------------------------- */
+
+/*
+ * Consistent heights, deliberately. Masonry makes chronological scanning
+ * harder: the eye has to hunt for where the next entry starts. So every tile
+ * is the same shape — a fixed set of rows, with the excerpt clamped rather
+ * than allowed to push the card taller.
+ */
+.tile {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto auto 1fr auto;
+  gap: var(--space-2);
+  min-height: 13.5rem;
+  padding: var(--space-4);
+  padding-top: calc(var(--space-4) + 3px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition:
+    transform var(--normal) var(--ease-out),
+    box-shadow var(--normal) var(--ease-out),
+    border-color var(--normal) var(--ease-out);
+}
+
+/* Only a card that goes somewhere lifts when pointed at. */
+.tile[data-interactive='true']:hover {
+  transform: translateY(-2px);
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.featured {
+  min-height: 15rem;
+  background: linear-gradient(var(--accent-soft), var(--surface) 42%);
+}
+
+.skeleton {
+  border-style: dashed;
+  background: var(--surface-2);
+  box-shadow: none;
+}
+
+.tileTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 1.5rem;
+}
+
+.reference {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--accent-ink);
+}
+
+.tileTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-md);
+  line-height: var(--leading-snug);
+}
+
+.tileTitle a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.tileTitle a::after {
+  /* The whole tile is the target; the link is what carries it. */
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.tileTitle a:hover {
+  text-decoration: underline;
+}
+
+.excerpt {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+.tileFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--line);
+}
+
+.date {
+  color: var(--faint);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+/* --- Section marks ----------------------------------------------------- */
+
+/*
+ * The section colours as a 3px strip of four segments — small indicators of
+ * which parts of the C.H.A.T. exist, never four large blocks of colour.
+ */
+.marks[data-variant='strip'] {
+  position: absolute;
+  inset: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  height: 3px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  overflow: hidden;
+}
+
+/* The optional thumbnail slot — 56px, filled with the section indicators
+   until generated imagery exists to put here. */
+.marks[data-variant='thumb'] {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 2px;
+  width: 56px;
+  height: 56px;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.marks[data-variant='thumb'] > span {
+  border-radius: 2px;
+}
+
+.marks > span {
+  background: var(--line);
+}
+
+.marks > span[data-written='true'] {
+  background: var(--muted);
+}
+
+.marks > span[data-section='content'][data-written='true'] {
+  background: var(--content);
+}
+.marks > span[data-section='heart'][data-written='true'] {
+  background: var(--heart);
+}
+.marks > span[data-section='application'][data-written='true'] {
+  background: var(--application);
+}
+.marks > span[data-section='testimony'][data-written='true'] {
+  background: var(--testimony);
+}
+
+@container (max-width: 700px) {
+  .marks[data-variant='thumb'] {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* --- C.H.A.T. markers -------------------------------------------------- */
+
+.progress {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.markers {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--faint);
+  font-size: 0.625rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Written sections are filled *and* bold-bordered; unwritten are outlines. */
+.marker[data-written='true'][data-section='content'] {
+  background: var(--content-soft);
+  border-color: var(--content);
+  color: var(--content);
+}
+.marker[data-written='true'][data-section='heart'] {
+  background: var(--heart-soft);
+  border-color: var(--heart);
+  color: var(--heart);
+}
+.marker[data-written='true'][data-section='application'] {
+  background: var(--application-soft);
+  border-color: var(--application);
+  color: var(--application);
+}
+.marker[data-written='true'][data-section='testimony'] {
+  background: var(--testimony-soft);
+  border-color: var(--testimony);
+  color: var(--testimony);
+}
+
+.progressCount {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.formatMark {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+/* --- Publication state ------------------------------------------------- */
+
+.private {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.published {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile {
+    transition: none;
+  }
+
+  .tile[data-interactive='true']:hover {
+    transform: none;
+  }
+}

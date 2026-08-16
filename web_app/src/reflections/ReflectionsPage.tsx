@@ -22,13 +22,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import {
   CHAT_FORMATS,
-  CHAT_SECTION_TYPES,
   type ChatFormat,
   type ChatSection,
   type ChatSectionType,
   type ConversationSummary,
 } from '@chat/shared'
 import { api } from '../shared/api/client.ts'
+import {
+  ChatProgress,
+  ReflectionCard,
+  ReflectionCardSkeleton,
+  SECTIONS,
+  SectionMarks,
+  StateBadge,
+  formatDate,
+} from '../shared/ui/ReflectionCard.tsx'
 import styles from './ReflectionsPage.module.css'
 
 /* ------------------------------------------------------------------- types */
@@ -67,13 +75,6 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'published', label: 'Published' },
 ]
 
-const SECTIONS: { type: ChatSectionType; letter: string; label: string }[] = [
-  { type: CHAT_SECTION_TYPES.CONTENT, letter: 'C', label: 'Content' },
-  { type: CHAT_SECTION_TYPES.HEART, letter: 'H', label: 'Heart' },
-  { type: CHAT_SECTION_TYPES.APPLICATION, letter: 'A', label: 'Application' },
-  { type: CHAT_SECTION_TYPES.TESTIMONY, letter: 'T', label: 'Testimony' },
-]
-
 /*
  * Beyond this many results an active search stops being browsing and starts
  * being looking-for-one-thing, and Auto switches to the denser list.
@@ -95,19 +96,7 @@ const FIRST_PASS_GRACE = 900
 
 const DAY = 24 * 60 * 60 * 1000
 
-const shortDate = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
-const longDate = new Intl.DateTimeFormat(undefined, {
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-})
 const monthLabel = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' })
-
-function formatDate(iso: string, now: number): string {
-  const value = new Date(iso)
-  if (Number.isNaN(value.getTime())) return ''
-  return now - value.getTime() > 300 * DAY ? longDate.format(value) : shortDate.format(value)
-}
 
 /** Today · This week · August 2026 · Older — the grouping the list uses. */
 export function groupLabel(iso: string, now: number): string {
@@ -142,56 +131,6 @@ function writtenSections(detail: ReflectionDetail): ChatSectionType[] {
 }
 
 /* ------------------------------------------------------------ small pieces */
-
-function ChatProgress({
-  format,
-  written,
-}: {
-  format: ChatFormat | undefined
-  written: ChatSectionType[] | undefined
-}) {
-  /*
-   * A Condensed C.H.A.T. is a format of its own, not a Full one with sections
-   * missing, so it must never be shown against a four-section scale.
-   */
-  if (format === CHAT_FORMATS.CONDENSED) {
-    return <span className={styles.formatMark}>Condensed C.H.A.T.</span>
-  }
-
-  const done = written?.length ?? 0
-  return (
-    <span className={styles.progress}>
-      <span
-        className={styles.markers}
-        role="img"
-        aria-label={`C.H.A.T. progress: ${done} of 4 sections written`}
-      >
-        {SECTIONS.map((section) => (
-          <span
-            key={section.type}
-            className={styles.marker}
-            data-section={section.type}
-            data-written={written?.includes(section.type) ? 'true' : 'false'}
-            aria-hidden="true"
-          >
-            {section.letter}
-          </span>
-        ))}
-      </span>
-      <span className={styles.progressCount}>{done} of 4</span>
-    </span>
-  )
-}
-
-function StateBadge({ state }: { state: ConversationSummary['publicationState'] }) {
-  const published = state === 'published'
-  return (
-    <span className={`badge ${published ? styles.published : styles.private}`}>
-      <span aria-hidden="true">{published ? '◉' : '◆'}</span>
-      {published ? 'Published' : 'Private'}
-    </span>
-  )
-}
 
 function Overflow({ item }: { item: ReflectionSummary }) {
   const [open, setOpen] = useState(false)
@@ -251,37 +190,17 @@ function Tile({
   featured?: boolean
 }) {
   return (
-    <li className={featured ? `${styles.tile} ${styles.featured}` : styles.tile}>
-      <span className={styles.strip} aria-hidden="true">
-        {SECTIONS.map((section) => (
-          <span
-            key={section.type}
-            data-section={section.type}
-            data-written={enrichment?.written.includes(section.type) ? 'true' : 'false'}
-          />
-        ))}
-      </span>
-      <div className={styles.tileTop}>
-        <span className={`eyebrow ${styles.reference}`}>
-          {item.scriptureReference || 'No Scripture reference'}
-        </span>
-        <StateBadge state={item.publicationState} />
-      </div>
-      <h3 className={styles.tileTitle}>
-        <Link to={`/?c=${item.id}`}>{item.title}</Link>
-      </h3>
-      <p className={styles.excerpt}>
-        {enrichment?.excerpt || 'Nothing written yet — open it and begin.'}
-      </p>
-      <div className={styles.tileFoot}>
-        <ChatProgress format={item.format} written={enrichment?.written} />
-        <span className={styles.date}>
-          <span className="sr-only">Last updated </span>
-          {formatDate(item.updatedAt, now)}
-        </span>
-        <Overflow item={item} />
-      </div>
-    </li>
+    <ReflectionCard
+      item={item}
+      excerpt={enrichment?.excerpt}
+      written={enrichment?.written}
+      now={now}
+      href={`/?c=${item.id}`}
+      featured={featured}
+      state={item.publicationState}
+      emptyExcerpt="Nothing written yet — open it and begin."
+      actions={<Overflow item={item} />}
+    />
   )
 }
 
@@ -296,15 +215,7 @@ function Row({
 }) {
   return (
     <li className={styles.row}>
-      <span className={styles.thumb} aria-hidden="true">
-        {SECTIONS.map((section) => (
-          <span
-            key={section.type}
-            data-section={section.type}
-            data-written={enrichment?.written.includes(section.type) ? 'true' : 'false'}
-          />
-        ))}
-      </span>
+      <SectionMarks written={enrichment?.written} variant="thumb" />
       <div className={styles.rowBody}>
         <div className={styles.rowHead}>
           <h3 className={styles.rowTitle}>
@@ -595,7 +506,7 @@ export function ReflectionsPage() {
       {preparing ? (
         <ul className={styles.grid} aria-hidden="true">
           {[0, 1, 2].map((key) => (
-            <li key={key} className={`${styles.tile} ${styles.skeleton}`} />
+            <ReflectionCardSkeleton key={key} />
           ))}
         </ul>
       ) : nothingAtAll ? (

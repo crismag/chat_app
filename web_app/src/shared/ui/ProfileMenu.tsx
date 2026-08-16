@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { CreateIcon, SignOutIcon } from './icons.tsx'
+import { CreateIcon, ProfileIcon, SignOutIcon } from './icons.tsx'
 import styles from './ProfileMenu.module.css'
 
 /*
@@ -114,6 +114,18 @@ export function ProfileMenu({
             <span className={styles.identityLabel}>Signed in as</span>
             <span className={styles.identityEmail}>{email}</span>
           </p>
+          <button
+            type="button"
+            role="menuitem"
+            className={styles.item}
+            onClick={() => {
+              close(false)
+              void navigate('/profile')
+            }}
+          >
+            <ProfileIcon className={styles.itemIcon} />
+            Your profile
+          </button>
           <button
             type="button"
             role="menuitem"

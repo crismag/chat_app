@@ -36,6 +36,8 @@ import { AiService, type AiServiceOptions } from './ai/service.ts';
 import { createBibleRoutes } from './bible/routes.ts';
 import { createPassageStore } from './bible/passage-store.ts';
 import { BibleService } from './bible/service.ts';
+import { createProfileRoutes } from './profile/routes.ts';
+import { createProfileStore } from './profile/store.ts';
 import { SqliteStore } from './db.ts';
 import { MemoryStore, type StoredConversation } from './store.ts';
 
@@ -316,6 +318,22 @@ export function createApp(
       ownsConversation: (userId, conversationId) =>
         store.conversations.get(conversationId)?.userId === userId,
       passages: biblePassages,
+    }),
+  );
+
+  /*
+   * Public profiles, mounted the same way and for the same reasons.
+   *
+   * The module owns its tables, its migration and — the part that matters —
+   * the query that decides what a stranger may see. Keeping that query inside
+   * `profile/store.ts` is what makes "authorisation before retrieval" checkable
+   * in one place instead of spread across a route, a mapper and a component.
+   */
+  app.route(
+    '/api/profiles',
+    createProfileRoutes({
+      currentUser: (c) => currentUser(c),
+      profiles: createProfileStore(store),
     }),
   );
 

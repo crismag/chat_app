@@ -29,6 +29,16 @@ export function ChatIcon(props: IconProps) {
   )
 }
 
+/** A person, for the profile — the one destination that is about who you are. */
+export function ProfileIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="12" cy="8" r="3.6" />
+      <path d="M4.8 20a7.2 7.2 0 0 1 14.4 0" />
+    </svg>
+  )
+}
+
 export function LibraryIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
