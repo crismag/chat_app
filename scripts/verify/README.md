@@ -294,3 +294,24 @@ Do not run it in CI.
 
 **Read what it prints.** "No invented verse" is finally a judgement about prose,
 and the quotation-mark heuristic is a signal rather than a verdict.
+
+## `content-wording.mjs` — what the interface says the C section is
+
+The rename from Context to Content reached the data model and most of the copy,
+and then three live places went on describing C as a commentary — the sign-in
+panel, the passage card's empty state and the reference input's placeholder —
+while the page's own meta description still carried the retired name into
+search results and shared links.
+
+```bash
+node scripts/verify/content-wording.mjs
+```
+
+It reads the text the page actually **paints**, dropping `sr-only` and hidden
+nodes, because the accessible headings legitimately name the sections and the
+claim here is about what a person reads.
+
+**Look at `out/content-wording-1280.png` and `out/content-wording-390.png`.**
+The assertions cannot settle the thing that matters most: that the passage
+picker now reads as the way to add a passage and the typed reference reads as
+the fallback beside it.
