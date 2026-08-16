@@ -33,6 +33,36 @@ export const SECTIONS = [
 ]
 
 /*
+ * The Condensed form — its own two fields, and its own questions.
+ *
+ * This is not the four-section form with two of them hidden. Condensed
+ * C.H.A.T. is a complete, approved format: the interface never calls it
+ * partial, simplified or incomplete, and it never shows empty
+ * Context/Heart/Application/Testimony fields beside it.
+ */
+export const CONDENSED_FIELDS = [
+  {
+    type: 'verse' as const,
+    letter: 'V',
+    name: 'Verse',
+    prompt: 'The words of the passage, as you want them read.',
+  },
+  {
+    type: 'reflection' as const,
+    letter: 'R',
+    name: 'Reflection',
+    prompt: 'What this passage is saying to you.',
+  },
+]
+
+export type FieldMeta = (typeof SECTIONS)[number] | (typeof CONDENSED_FIELDS)[number]
+
+/** Which form a format is written in. */
+export function fieldsFor(format: string): readonly FieldMeta[] {
+  return format === 'condensed' ? CONDENSED_FIELDS : SECTIONS
+}
+
+/*
  * Provenance, in words. The data model records whether wording came from the
  * author, from an assisted edit or from a draft the model wrote; the badge says
  * so on the card, because a colour alone cannot make that claim.

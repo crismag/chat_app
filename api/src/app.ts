@@ -607,6 +607,8 @@ export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) 
         action,
         original: target.content,
         revised: result.revised,
+        /* Said out loud, so the badge on the card can keep saying it. */
+        origin: result.origin,
         replaced: false,
         message: assistantMessage,
       });
@@ -616,6 +618,7 @@ export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) 
       action,
       original: target.originalContent,
       revised: result.revised,
+      origin: result.origin,
       replaced: false,
       messageId: target.id,
     });

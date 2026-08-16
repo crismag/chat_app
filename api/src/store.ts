@@ -61,7 +61,7 @@ export class MemorySectionTable {
   }
 
   set(conversationId: string, sections: Record<string, StoredSection>): this {
-    this.rows.set(conversationId, { ...(this.rows.get(conversationId) ?? {}), ...sections });
+    this.rows.set(conversationId, { ...this.rows.get(conversationId), ...sections });
     return this;
   }
 

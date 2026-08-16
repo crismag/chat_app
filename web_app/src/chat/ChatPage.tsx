@@ -1,51 +1,50 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import {
   AI_ACTIONS,
+  AUTHOR_ORIGINS,
   CHAT_FORMATS,
+  validateChat,
   type AiAction,
   type ChatFormat,
-  type ChatSection,
-  type ChatSectionType,
-  type ConversationSummary,
+  type ValidationResult,
 } from '@chat/shared'
-import { api } from '../shared/api/client.ts'
+import { ApiError, api } from '../shared/api/client.ts'
 import {
   BookIcon,
+  ChatIcon,
   CloseIcon,
   GlobeIcon,
   LockIcon,
-  SendIcon,
+  ShareIcon,
+  TrashIcon,
 } from '../shared/ui/icons.tsx'
-import { ChatCompanion } from './ChatCompanion.tsx'
+import { ChatArtifact } from './ChatArtifact.tsx'
+import { ChatHelper } from './ChatHelper.tsx'
+import { DeleteSheet, FormatSheet, ShareSheet, type ShareAudience } from './ChatSheets.tsx'
 import { ConversationSidebar } from './ConversationSidebar.tsx'
 import { deriveTitle, displayTitle } from './history.ts'
-import { SECTIONS } from './sections.ts'
+import { fieldsFor } from './sections.ts'
+import type {
+  ConversationDetail,
+  FieldType,
+  Proposal,
+  SaveState,
+  Summary,
+} from './types.ts'
 import styles from './ChatPage.module.css'
 
-type Message = {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  authorOrigin: string
-}
-
-/** The API returns a format on every conversation; the shared summary predates it. */
-type Summary = ConversationSummary & { format?: ChatFormat }
-
-type ConversationDetail = Summary & {
-  messages: Message[]
-  sections: Record<ChatSectionType, ChatSection>
-}
-
-const contextualActions: { id: AiAction; label: string }[] = [
-  { id: AI_ACTIONS.EXPLAIN, label: 'Explain this passage' },
-  { id: AI_ACTIONS.POLISH, label: 'Polish' },
-  { id: AI_ACTIONS.SHORTEN, label: 'Shorten' },
-  { id: AI_ACTIONS.SUMMARIZE, label: 'Summarize' },
-]
-
 const SIDEBAR_KEY = 'chat.reflect.sidebar'
+
+/** How long after the last keystroke the artifact writes itself down. */
+const AUTOSAVE_MS = 1200
 
 /** Small enough to be worth writing rather than depending on. */
 function useMediaQuery(query: string): boolean {
@@ -70,32 +69,51 @@ export function ChatPage() {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [detail, setDetail] = useState<ConversationDetail | null>(null)
   const [draft, setDraft] = useState('')
-  const [reference, setReference] = useState('')
-  const [referenceOpen, setReferenceOpen] = useState(false)
-  const [proposal, setProposal] = useState<{ original: string; revised: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
+  const [busyAction, setBusyAction] = useState<AiAction | null>(null)
+
+  /*
+   * The author's unsaved writing, held apart from what the server last said.
+   *
+   * Every refresh of the conversation merges into this rather than over it, so
+   * a background reload — and there are several — cannot replace a sentence
+   * halfway through being typed.
+   */
+  const [edits, setEdits] = useState<Partial<Record<FieldType, string>>>({})
+  const [saveState, setSaveState] = useState<SaveState>({ status: 'idle' })
+  const [overflow, setOverflow] = useState<{ field: FieldType; text: string } | null>(null)
+
+  const [titleDraft, setTitleDraft] = useState<string | null>(null)
+  const [referenceDraft, setReferenceDraft] = useState<string | null>(null)
+
+  const [discussing, setDiscussing] = useState<FieldType | null>(null)
+  const [proposal, setProposal] = useState<Proposal | null>(null)
+
+  const [shareOpen, setShareOpen] = useState(false)
+  const [formatOpen, setFormatOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [validation, setValidation] = useState<ValidationResult | null>(null)
 
   const [query, setQuery] = useState('')
   const [searchFocusToken, setSearchFocusToken] = useState(0)
-  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [helperOpen, setHelperOpen] = useState(false)
   const [listOpen, setListOpen] = useState(false)
 
   const composerRef = useRef<HTMLTextAreaElement>(null)
+  const titleRef = useRef<HTMLInputElement>(null)
   const referenceRef = useRef<HTMLInputElement>(null)
-  const messagesRef = useRef<HTMLOListElement>(null)
-  const drawerCloseRef = useRef<HTMLButtonElement>(null)
-  /** Which conversation the page has already loaded, so the URL effect can tell
-   * a genuine navigation from its own echo. */
   const openedRef = useRef<string | null>(null)
+  const saveTimer = useRef<number | null>(null)
 
   const isNarrow = useMediaQuery('(max-width: 899px)')
   /*
-   * Below this the three panes stop fitting side by side without squeezing the
-   * conversation, so the history collapses itself. The stored preference is not
-   * forgotten — it is what comes back when the window is wide again.
+   * Below this the three panes cannot all have room, and the artifact is the
+   * one that must not be squeezed — it is the thing being made. The history
+   * rails itself until the window is wide enough to hold it open, and the
+   * stored preference is what comes back when it is.
    */
-  const isTightDesktop = useMediaQuery('(max-width: 1199px)')
+  const isTightDesktop = useMediaQuery('(max-width: 1399px)')
 
   const [preferCollapsed, setPreferCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
@@ -109,24 +127,67 @@ export function ChatPage() {
     window.localStorage.setItem(SIDEBAR_KEY, next ? 'collapsed' : 'expanded')
   }
 
+  const format: ChatFormat = detail?.format ?? CHAT_FORMATS.FULL
+  const fields = fieldsFor(format)
+
+  const storedValue = useCallback(
+    (field: FieldType): string => {
+      if (!detail) return ''
+      if (field === 'verse' || field === 'reflection') {
+        return detail.condensed?.[field]?.content ?? ''
+      }
+      return detail.sections?.[field]?.content ?? ''
+    },
+    [detail],
+  )
+
+  const storedOrigin = useCallback(
+    (field: FieldType): string => {
+      if (!detail) return AUTHOR_ORIGINS.USER
+      if (field === 'verse' || field === 'reflection') {
+        return detail.condensed?.[field]?.authorOrigin ?? AUTHOR_ORIGINS.USER
+      }
+      return detail.sections?.[field]?.authorOrigin ?? AUTHOR_ORIGINS.USER
+    },
+    [detail],
+  )
+
+  const valueOf = useCallback(
+    (field: FieldType) => edits[field] ?? storedValue(field),
+    [edits, storedValue],
+  )
+
+  const dirtyFields = useMemo(() => {
+    const dirty = new Set<FieldType>()
+    for (const [field, value] of Object.entries(edits)) {
+      if (value !== storedValue(field as FieldType)) dirty.add(field as FieldType)
+    }
+    return dirty
+  }, [edits, storedValue])
+
+  const hasUnsaved = dirtyFields.size > 0
+
   const refreshList = useCallback(async () => {
     setConversations(await api<Summary[]>('/conversations'))
   }, [])
 
-  /*
-   * The open reflection lives in the address bar.
-   *
-   * Reloading in the middle of writing should not drop someone back onto an
-   * empty page: the conversation being read is part of where they are, so it is
-   * in the URL, and Back walks the reflections they opened.
-   */
   const openConversation = useCallback(
     async (id: string) => {
       const next = await api<ConversationDetail>(`/conversations/${id}`)
+      const switching = openedRef.current !== id
       openedRef.current = id
       setActiveId(id)
       setDetail(next)
-      setProposal(null)
+      if (switching) {
+        /* A different reflection is a different piece of work: its own drafts. */
+        setEdits({})
+        setOverflow(null)
+        setProposal(null)
+        setDiscussing(null)
+        setTitleDraft(null)
+        setReferenceDraft(null)
+        setValidation(null)
+      }
       setSearchParams(
         (current) => {
           if (current.get('c') === id) return current
@@ -136,6 +197,7 @@ export function ChatPage() {
         },
         { replace: true },
       )
+      return next
     },
     [setSearchParams],
   )
@@ -144,7 +206,6 @@ export function ChatPage() {
     const requestedId = searchParams.get('c')
     void refreshList()
       .then(async () => {
-        // Skip the round trip when the URL only caught up with what is open.
         if (requestedId && requestedId !== openedRef.current) {
           await openConversation(requestedId)
         }
@@ -154,10 +215,9 @@ export function ChatPage() {
       })
   }, [searchParams, refreshList, openConversation])
 
-  // The header's New reflection button arrives as ?new=1 rather than as state.
   useEffect(() => {
     if (searchParams.get('new') === '1') {
-      startNew()
+      void startNew()
       const next = new URLSearchParams(searchParams)
       next.delete('new')
       setSearchParams(next, { replace: true })
@@ -165,37 +225,128 @@ export function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
-  useEffect(() => {
-    messagesRef.current?.scrollTo({ top: messagesRef.current.scrollHeight })
-  }, [detail])
+  /* --- Saving ---------------------------------------------------------- */
 
-  // A drawer traps nothing useful if Escape does not close it.
-  useEffect(() => {
-    if (!drawerOpen && !listOpen) return
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setDrawerOpen(false)
-        setListOpen(false)
+  /**
+   * Write every changed field down, and say so.
+   *
+   * Returns whether it worked, because everything that could lose work — moving
+   * to another reflection, starting a new one, leaving for Create — waits on
+   * the answer rather than assuming it.
+   */
+  const saveAll = useCallback(async (): Promise<boolean> => {
+    if (!activeId) return true
+    const pending = Object.entries(edits).filter(
+      ([field, value]) => value !== storedValue(field as FieldType),
+    )
+    if (pending.length === 0) return true
+
+    setSaveState({ status: 'saving' })
+    try {
+      for (const [field, value] of pending) {
+        await api(`/conversations/${activeId}/sections`, {
+          method: 'PATCH',
+          body: JSON.stringify({ type: field, content: value }),
+        })
       }
+      const next = await api<ConversationDetail>(`/conversations/${activeId}`)
+      setDetail(next)
+      /* Only what was actually written is forgotten; later keystrokes stay. */
+      setEdits((current) => {
+        const remaining = { ...current }
+        for (const [field, value] of pending) {
+          if (remaining[field as FieldType] === value) delete remaining[field as FieldType]
+        }
+        return remaining
+      })
+      setSaveState({ status: 'saved', at: Date.now() })
+      void refreshList()
+      return true
+    } catch (caught: unknown) {
+      /*
+       * A failed save keeps every character on screen. The state says so and
+       * offers another go; nothing is rolled back to the server's version.
+       */
+      setSaveState({
+        status: 'failed',
+        message: caught instanceof Error ? caught.message : 'Could not save',
+      })
+      return false
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [drawerOpen, listOpen])
+  }, [activeId, edits, storedValue, refreshList])
+
+  /*
+   * Typing settles, and it is written down.
+   *
+   * The effect deliberately sets no state of its own — "unsaved" is derived
+   * from whether anything differs from the server, not stored a second time.
+   * Storing it meant a state update on every render, which React eventually
+   * refused as a runaway loop while someone was simply typing quickly.
+   */
+  const saveAllRef = useRef(saveAll)
+  saveAllRef.current = saveAll
 
   useEffect(() => {
-    if (drawerOpen) {
-      drawerCloseRef.current?.focus()
+    if (!hasUnsaved || !activeId) return
+    if (saveTimer.current) window.clearTimeout(saveTimer.current)
+    saveTimer.current = window.setTimeout(() => {
+      void saveAllRef.current()
+    }, AUTOSAVE_MS)
+    return () => {
+      if (saveTimer.current) window.clearTimeout(saveTimer.current)
     }
-  }, [drawerOpen])
+  }, [edits, hasUnsaved, activeId])
 
-  function startNew() {
+  /* The last line of defence: the browser asks before the tab takes it away. */
+  useEffect(() => {
+    if (!hasUnsaved) return
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [hasUnsaved])
+
+  /** Anything that moves away from this reflection goes through here first. */
+  const leaveSafely = useCallback(async (): Promise<boolean> => {
+    if (saveTimer.current) window.clearTimeout(saveTimer.current)
+    return saveAll()
+  }, [saveAll])
+
+  /* --- Editing the reflection ------------------------------------------ */
+
+  async function patchConversation(body: Record<string, unknown>): Promise<boolean> {
+    if (!activeId) return false
+    setSaveState({ status: 'saving' })
+    try {
+      await api(`/conversations/${activeId}`, { method: 'PATCH', body: JSON.stringify(body) })
+      await openConversation(activeId)
+      await refreshList()
+      setSaveState({ status: 'saved', at: Date.now() })
+      return true
+    } catch (caught: unknown) {
+      setSaveState({
+        status: 'failed',
+        message: caught instanceof Error ? caught.message : 'Could not save',
+      })
+      return false
+    }
+  }
+
+  async function startNew() {
+    if (!(await leaveSafely())) return
     openedRef.current = null
     setActiveId(null)
     setDetail(null)
     setDraft('')
-    setReference('')
-    setReferenceOpen(false)
+    setEdits({})
+    setOverflow(null)
     setProposal(null)
+    setDiscussing(null)
+    setTitleDraft(null)
+    setReferenceDraft(null)
+    setValidation(null)
     setListOpen(false)
     setSearchParams(
       (current) => {
@@ -208,39 +359,31 @@ export function ChatPage() {
     window.setTimeout(() => composerRef.current?.focus(), 0)
   }
 
-  /*
-   * Writing comes first.
-   *
-   * There is no title form to clear before a thought can be written down. The
-   * conversation is created by the act of sending the first message, and named
-   * from whatever it turns out to be about.
-   */
   async function sendMessage(event: FormEvent) {
     event.preventDefault()
     const content = draft.trim()
-    if (!content || sending) {
-      return
-    }
+    if (!content || sending) return
     setSending(true)
     setError(null)
     try {
       let id = activeId
       if (!id) {
+        const reference = referenceDraft?.trim()
         const created = await api<Summary>('/conversations', {
           method: 'POST',
           body: JSON.stringify({
             title: deriveTitle(content),
-            ...(reference.trim() ? { scriptureReference: reference.trim() } : {}),
+            ...(reference ? { scriptureReference: reference } : {}),
           }),
         })
         id = created.id
+        setReferenceDraft(null)
       }
       await api(`/conversations/${id}/messages`, {
         method: 'POST',
         body: JSON.stringify({ content }),
       })
       setDraft('')
-      setReferenceOpen(false)
       await openConversation(id)
       await refreshList()
     } catch (caught: unknown) {
@@ -250,50 +393,236 @@ export function ChatPage() {
     }
   }
 
+  /**
+   * Ask the model for something, and hold the answer.
+   *
+   * The result is a proposal beside the author's words. It is applied only when
+   * they say so, and it keeps its provenance when they do.
+   */
   async function runAi(action: AiAction) {
     if (!activeId) return
-    const result = await api<{ original?: string; revised?: string }>(
-      `/conversations/${activeId}/ai`,
-      { method: 'POST', body: JSON.stringify({ action }) },
-    )
-    if (result.original && result.revised) {
-      setProposal({ original: result.original, revised: result.revised })
-    }
-    await openConversation(activeId)
-  }
-
-  async function saveSection(type: ChatSectionType, content: string) {
-    if (!activeId) return
-    await api(`/conversations/${activeId}/sections`, {
-      method: 'PATCH',
-      body: JSON.stringify({ type, content }),
-    })
-    await openConversation(activeId)
-    await refreshList()
-  }
-
-  async function setPublication(publish: boolean) {
-    if (!activeId) return
+    setBusyAction(action)
+    setError(null)
     try {
-      await api(`/conversations/${activeId}/${publish ? 'publish' : 'unpublish'}`, {
+      const result = await api<{
+        original?: string
+        revised?: string
+        origin?: 'ai_assisted' | 'ai_generated'
+        proposed?: Record<string, { content: string; authorOrigin: string }>
+      }>(`/conversations/${activeId}/ai`, {
         method: 'POST',
+        body: JSON.stringify({ action }),
       })
+
+      /* Refresh first, then raise the proposal — the other order erased it. */
+      await openConversation(activeId)
+
+      if (action === AI_ACTIONS.EXTRACT_CHAT) {
+        const first = Object.entries(result.proposed ?? {})[0]
+        if (!first) {
+          setError(
+            'There is nothing in the conversation yet that a section could be drawn from.',
+          )
+          return
+        }
+        const [field, section] = first
+        setProposal({
+          action,
+          original: storedValue(field as FieldType),
+          revised: section.content,
+          origin: 'ai_assisted',
+          field: field as FieldType,
+        })
+        return
+      }
+
+      if (result.original && result.revised) {
+        setProposal({
+          action,
+          original: result.original,
+          revised: result.revised,
+          origin: result.origin ?? 'ai_assisted',
+          field: discussing,
+        })
+      }
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'That did not work')
+    } finally {
+      setBusyAction(null)
+    }
+  }
+
+  /** Put a piece of text into a field, saying plainly where it came from. */
+  async function putIntoField(field: FieldType, content: string, origin: string) {
+    if (!activeId) return
+    setSaveState({ status: 'saving' })
+    try {
+      await api(`/conversations/${activeId}/sections`, {
+        method: 'PATCH',
+        body: JSON.stringify({ type: field, content, authorOrigin: origin }),
+      })
+      await openConversation(activeId)
+      setEdits((current) => {
+        const next = { ...current }
+        delete next[field]
+        return next
+      })
+      setProposal(null)
+      setSaveState({ status: 'saved', at: Date.now() })
+      await refreshList()
+    } catch (caught: unknown) {
+      setSaveState({
+        status: 'failed',
+        message: caught instanceof Error ? caught.message : 'Could not save',
+      })
+    }
+  }
+
+  /** Send a section into the conversation, to be talked through. */
+  async function discussField(field: FieldType) {
+    if (!activeId) return
+    const content = valueOf(field).trim()
+    if (!content) return
+    if (!(await leaveSafely())) return
+    try {
+      await api(`/conversations/${activeId}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ content }),
+      })
+      setDiscussing(field)
+      setProposal(null)
+      await openConversation(activeId)
+      if (isNarrow) setHelperOpen(true)
+      window.setTimeout(() => composerRef.current?.focus(), 0)
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'Unable to send that section')
+    }
+  }
+
+  async function share(audience: ShareAudience, acknowledgeExtension: boolean) {
+    if (!activeId) return
+    if (!(await leaveSafely())) return
+    setError(null)
+    try {
+      if (audience === 'only-me') {
+        await api(`/conversations/${activeId}/unpublish`, { method: 'POST' })
+      } else {
+        await api(
+          `/conversations/${activeId}/publish${acknowledgeExtension ? '?acknowledgeExtension=true' : ''}`,
+          { method: 'POST' },
+        )
+      }
+      setValidation(null)
+      setShareOpen(false)
       await openConversation(activeId)
       await refreshList()
     } catch (caught: unknown) {
-      setError(
-        caught instanceof Error
-          ? caught.message
-          : 'This reflection is not ready to publish.',
-      )
+      /*
+       * 422 is the format gate, and it answers with a report. Showing it is the
+       * difference between "invalid" and "Heart is 46 characters over".
+       */
+      if (caught instanceof ApiError && caught.status === 422) {
+        const body = caught.body as { validation?: ValidationResult }
+        setValidation(body.validation ?? null)
+        return
+      }
+      setError(caught instanceof Error ? caught.message : 'Unable to share this reflection')
     }
   }
 
+  async function changeFormat(
+    next: ChatFormat,
+    carry: { field: FieldType; content: string } | null,
+  ) {
+    if (!activeId) return
+    if (!(await leaveSafely())) return
+    if (carry) {
+      await api(`/conversations/${activeId}/sections`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          type: carry.field,
+          content: carry.content,
+          authorOrigin: AUTHOR_ORIGINS.USER,
+        }),
+      })
+    }
+    await patchConversation({ format: next })
+    setFormatOpen(false)
+  }
+
+  async function removeConversation() {
+    if (!activeId) return
+    try {
+      await api(`/conversations/${activeId}`, { method: 'DELETE' })
+      setDeleteOpen(false)
+      openedRef.current = null
+      setActiveId(null)
+      setDetail(null)
+      setEdits({})
+      setSaveState({ status: 'idle' })
+      setSearchParams(
+        (current) => {
+          const params = new URLSearchParams(current)
+          params.delete('c')
+          return params
+        },
+        { replace: true },
+      )
+      await refreshList()
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'Unable to delete this reflection')
+    }
+  }
+
+  /* --- Rendering -------------------------------------------------------- */
+
   const hasWritten = detail !== null && detail.messages.length > 0
-  const format: ChatFormat = detail?.format ?? CHAT_FORMATS.FULL
-  const done = detail
-    ? SECTIONS.filter((meta) => detail.sections[meta.type]?.content.trim()).length
-    : 0
+  const written = fields.filter((meta) => valueOf(meta.type).trim()).length
+
+  const liveValidation = detail
+    ? validateChat(format, {
+        title: titleDraft ?? detail.title,
+        scriptureReference: referenceDraft ?? detail.scriptureReference ?? '',
+        ...Object.fromEntries(fields.map((meta) => [meta.type, valueOf(meta.type)])),
+      })
+    : null
+
+  useEffect(() => {
+    if (!isNarrow) setHelperOpen(false)
+  }, [isNarrow])
+
+  useEffect(() => {
+    if (!helperOpen && !listOpen) return
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setHelperOpen(false)
+        setListOpen(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [helperOpen, listOpen])
+
+  /*
+   * One reading of the truth: anything unwritten outranks the last success, so
+   * a "Saved" from a moment ago can never sit above a sentence that is not.
+   */
+  const saveStatus: SaveState['status'] =
+    saveState.status === 'saving' || saveState.status === 'failed'
+      ? saveState.status
+      : hasUnsaved
+        ? 'unsaved'
+        : saveState.status === 'saved'
+          ? 'saved'
+          : 'idle'
+
+  const saveLabel = {
+    saving: 'Saving…',
+    saved: 'Saved',
+    failed: 'Not saved',
+    unsaved: 'Unsaved changes',
+    idle: 'Saved',
+  }[saveStatus]
 
   const sidebar = (
     <ConversationSidebar
@@ -304,9 +633,12 @@ export function ChatPage() {
       onQuery={setQuery}
       onSelect={(id) => {
         setListOpen(false)
-        void openConversation(id).catch(() => setError('Unable to open that reflection'))
+        void leaveSafely().then((ok) => {
+          if (!ok) return
+          void openConversation(id).catch(() => setError('Unable to open that reflection'))
+        })
       }}
-      onNew={startNew}
+      onNew={() => void startNew()}
       onToggle={toggleSidebar}
       onSearchRequested={() => {
         toggleSidebar()
@@ -316,18 +648,22 @@ export function ChatPage() {
     />
   )
 
-  const companion = (
-    <ChatCompanion
-      sections={detail?.sections ?? null}
+  const helper = (
+    <ChatHelper
       format={format}
-      title={detail?.title ?? ''}
-      scriptureReference={detail?.scriptureReference ?? null}
-      hasWritten={hasWritten}
-      onSave={saveSection}
-      onExtract={async () => {
-        await runAi(AI_ACTIONS.EXTRACT_CHAT)
-      }}
-      onCreateVisual={() => void navigate(`/create?c=${activeId ?? ''}`)}
+      messages={detail?.messages ?? []}
+      draft={draft}
+      sending={sending}
+      discussing={discussing}
+      proposal={proposal}
+      busyAction={busyAction}
+      onDraft={setDraft}
+      onSend={(event) => void sendMessage(event)}
+      onAction={(action) => void runAi(action)}
+      onUseInField={(field, content, origin) => void putIntoField(field, content, origin)}
+      onStopDiscussing={() => setDiscussing(null)}
+      onDismissProposal={() => setProposal(null)}
+      composerRef={composerRef}
     />
   )
 
@@ -338,14 +674,14 @@ export function ChatPage() {
     >
       {isNarrow ? null : sidebar}
 
-      <div className={styles.thread}>
-        {/*
-          A div, not a <header>: this is the conversation's own heading row,
-          and a second banner landmark beside the shell's would make the page
-          ambiguous to anyone navigating by landmark.
-        */}
-        <div className={styles.threadHead}>
-          <div className={styles.threadHeadMain}>
+      {/*
+        The artifact is the page.
+        The C.H.A.T. is what is being made here, so it holds the middle and is
+        shown whole; the conversation is the tool beside it.
+      */}
+      <div className={styles.artifact}>
+        <div className={styles.artifactHead}>
+          <div className={styles.artifactHeadMain}>
             {isNarrow ? (
               <button
                 type="button"
@@ -357,58 +693,179 @@ export function ChatPage() {
               </button>
             ) : null}
 
-            <div className={styles.threadIdentity}>
-              {/* Scripture leads: it is the anchor the reflection hangs from. */}
-              <p className={styles.scripture}>
-                {detail?.scriptureReference ?? 'No passage chosen yet'}
-              </p>
-              <h1 className={styles.threadTitle}>
-                {detail
-                  ? displayTitle(detail.title, detail.scriptureReference)
-                  : 'New reflection'}
-              </h1>
+            <div className={styles.identity}>
+              {/*
+                Both of these are editable for as long as the reflection
+                exists. Neither is a decision made once, at the beginning,
+                before there was anything to name.
+              */}
+              <input
+                ref={referenceRef}
+                className={styles.referenceInput}
+                value={referenceDraft ?? detail?.scriptureReference ?? ''}
+                /* Not an example: an example set in caps reads as a real reference. */
+                placeholder="Add the passage"
+                aria-label="Scripture reference"
+                onChange={(event) => setReferenceDraft(event.target.value)}
+                onBlur={() => {
+                  if (referenceDraft === null) return
+                  /*
+                   * Before there is a reflection to attach it to, the passage
+                   * waits here and is carried in when the first message creates
+                   * one. Choosing a Scripture has never required a form.
+                   */
+                  if (!detail) return
+                  const value = referenceDraft.trim()
+                  if (value === (detail?.scriptureReference ?? '')) {
+                    setReferenceDraft(null)
+                    return
+                  }
+                  void patchConversation({ scriptureReference: value }).then(() =>
+                    setReferenceDraft(null),
+                  )
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') event.currentTarget.blur()
+                  if (event.key === 'Escape') setReferenceDraft(null)
+                }}
+              />
+              <input
+                ref={titleRef}
+                className={styles.titleInput}
+                value={
+                  titleDraft ??
+                  (detail ? displayTitleValue(detail.title, detail.scriptureReference) : '')
+                }
+                placeholder={detail ? 'Name this reflection' : 'New reflection'}
+                aria-label="Reflection title"
+                disabled={!detail}
+                onChange={(event) => setTitleDraft(event.target.value)}
+                onBlur={() => {
+                  if (titleDraft === null) return
+                  const value = titleDraft.trim()
+                  if (!value || value === detail?.title) {
+                    setTitleDraft(null)
+                    return
+                  }
+                  void patchConversation({ title: value }).then(() => setTitleDraft(null))
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') event.currentTarget.blur()
+                  if (event.key === 'Escape') setTitleDraft(null)
+                }}
+              />
             </div>
           </div>
 
-          <div className={styles.threadHeadSide}>
+          <div className={styles.artifactHeadSide}>
+            {/* Saving, in words, where the work is. */}
+            <span
+              className={styles.saveState}
+              data-status={saveStatus}
+              role="status"
+            >
+              {saveLabel}
+            </span>
+            {saveState.status === 'failed' ? (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => void saveAll()}
+              >
+                Try again
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                disabled={!hasUnsaved}
+                onClick={() => void saveAll()}
+              >
+                Save
+              </button>
+            )}
+
             {detail ? (
               <span className={styles.privacy}>
                 {detail.publicationState === 'published' ? (
                   <>
                     <GlobeIcon className={styles.tinyIcon} />
-                    Published
+                    Public
                   </>
                 ) : (
                   <>
                     <LockIcon className={styles.tinyIcon} />
-                    Private
+                    Only me
                   </>
                 )}
               </span>
             ) : null}
 
-            {detail ? (
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={() => void setPublication(detail.publicationState !== 'published')}
-              >
-                {detail.publicationState === 'published' ? 'Unpublish' : 'Publish'}
-              </button>
-            ) : null}
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={!detail}
+              onClick={() => setShareOpen(true)}
+            >
+              <ShareIcon className={styles.tinyIcon} />
+              Share
+            </button>
 
-            {/* The companion's own handle, on screens too narrow to show it. */}
-            {isNarrow && hasWritten ? (
+            <button
+              type="button"
+              className={styles.iconButton}
+              disabled={!detail}
+              aria-label="Delete this reflection"
+              onClick={() => setDeleteOpen(true)}
+            >
+              <TrashIcon className={styles.smallIcon} />
+            </button>
+
+            {isNarrow ? (
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
-                onClick={() => setDrawerOpen(true)}
-                aria-expanded={drawerOpen}
+                onClick={() => setHelperOpen(true)}
+                aria-expanded={helperOpen}
               >
-                C.H.A.T. {done}/4
+                <ChatIcon className={styles.tinyIcon} />
+                Chat
               </button>
             ) : null}
           </div>
+        </div>
+
+        <div className={styles.artifactMeta}>
+          <button
+            type="button"
+            className={styles.formatButton}
+            disabled={!detail}
+            onClick={() => setFormatOpen(true)}
+          >
+            {format === CHAT_FORMATS.CONDENSED ? 'Condensed C.H.A.T.' : 'Full C.H.A.T.'}
+            <span className={styles.formatChange}>Change</span>
+          </button>
+
+          {hasWritten ? (
+            <p className={styles.progress}>
+              <span className={styles.progressText}>
+                {written} of {fields.length} written
+              </span>
+              <span className={styles.progressTrack} aria-hidden="true">
+                <span
+                  className={styles.progressFill}
+                  style={{ inlineSize: `${(written / fields.length) * 100}%` }}
+                />
+              </span>
+            </p>
+          ) : null}
+
+          {liveValidation && hasWritten ? (
+            <span className={styles.combined} data-status={liveValidation.combined.status}>
+              {liveValidation.combined.length} / {liveValidation.combined.recommended}{' '}
+              characters together
+            </span>
+          ) : null}
         </div>
 
         {error ? (
@@ -417,141 +874,60 @@ export function ChatPage() {
           </p>
         ) : null}
 
-        {hasWritten && detail ? (
-          <ol className={styles.messages} ref={messagesRef}>
-            {detail.messages.map((message) => (
-              <li key={message.id} className={styles.message} data-role={message.role}>
-                <p className={styles.messageWho}>
-                  {message.role === 'user' ? 'You' : 'C.H.A.T.'}
-                </p>
-                <p className={styles.messageBody}>{message.content}</p>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          /*
-           * The empty state asks a question rather than reporting an absence,
-           * and every action beside it starts something. Nothing here has to be
-           * filled in before writing is possible.
-           */
-          <div className={styles.empty}>
-            <p className={styles.emptyPrompt}>What passage are you reflecting on today?</p>
-            <div className={styles.emptyActions}>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => {
-                  setReferenceOpen(true)
-                  window.setTimeout(() => referenceRef.current?.focus(), 0)
-                }}
-              >
-                Choose a Scripture
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => composerRef.current?.focus()}
-              >
-                Share what touched your heart
-              </button>
-              {conversations.length > 0 ? (
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => {
-                    const last = conversations[0]
-                    if (last) {
-                      void openConversation(last.id)
-                    }
-                  }}
-                >
-                  Continue your last reflection
-                </button>
-              ) : null}
-            </div>
-          </div>
-        )}
+        <div className={styles.artifactBody}>
+          <ChatArtifact
+            format={format}
+            hasWritten={hasWritten}
+            valueOf={valueOf}
+            originOf={storedOrigin}
+            dirtyFields={dirtyFields}
+            discussing={discussing}
+            proposal={proposal}
+            overflow={overflow}
+            onChange={(field, value, over) => {
+              setEdits((current) => ({ ...current, [field]: value }))
+              setOverflow(over ? { field, text: over } : null)
+            }}
+            onSave={() => void saveAll()}
+            onDiscuss={(field) => void discussField(field)}
+            onApplyProposal={() => {
+              if (proposal?.field) {
+                void putIntoField(proposal.field, proposal.revised, proposal.origin)
+              }
+            }}
+            onDismissProposal={() => setProposal(null)}
+          />
+        </div>
 
-        {proposal ? (
-          <aside className={styles.proposal}>
-            <p className={styles.proposalLabel}>
-              Suggested wording — nothing has been changed
-            </p>
-            <p className={styles.proposalOriginal}>{proposal.original}</p>
-            <p className={styles.proposalRevised}>{proposal.revised}</p>
+        {hasWritten ? (
+          <div className={styles.artifactFoot}>
             <button
               type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => setProposal(null)}
+              className="btn btn-secondary btn-sm"
+              disabled={busyAction !== null}
+              onClick={() => void runAi(AI_ACTIONS.EXTRACT_CHAT)}
             >
-              Dismiss
+              {busyAction === AI_ACTIONS.EXTRACT_CHAT
+                ? 'Reading the conversation…'
+                : 'Suggest from conversation'}
             </button>
-          </aside>
-        ) : null}
-
-        <div className={styles.composerWrap}>
-          {hasWritten ? (
-            <div className={styles.contextualActions}>
-              {contextualActions.map((action) => (
-                <button
-                  key={action.id}
-                  type="button"
-                  className={styles.chip}
-                  onClick={() => void runAi(action.id)}
-                >
-                  {action.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
-
-          {referenceOpen && !detail ? (
-            <label className={styles.referenceRow}>
-              <span className="sr-only">Scripture reference</span>
-              <input
-                ref={referenceRef}
-                className={styles.referenceInput}
-                value={reference}
-                onChange={(event) => setReference(event.target.value)}
-                placeholder="Romans 8:28"
-              />
-            </label>
-          ) : null}
-
-          <form className={styles.composer} onSubmit={(event) => void sendMessage(event)}>
-            <textarea
-              ref={composerRef}
-              className={styles.composerInput}
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-                  void sendMessage(event as unknown as FormEvent)
-                }
-              }}
-              placeholder={
-                hasWritten
-                  ? 'Keep going…'
-                  : 'Write what you are seeing in the passage, or what it stirred.'
-              }
-              aria-label="Write your reflection"
-              rows={2}
-            />
             <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={sending || !draft.trim()}
-              aria-label="Send"
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                void leaveSafely().then((ok) => {
+                  if (ok) navigate(`/create?c=${activeId ?? ''}`)
+                })
+              }}
             >
-              <SendIcon className={styles.smallIcon} />
+              Create visual
             </button>
-          </form>
-        </div>
+          </div>
+        ) : null}
       </div>
 
-      {isNarrow ? null : companion}
-
-      {/* --- Drawers, on screens with room for one pane at a time --------- */}
+      {/* The conversation, beside the work rather than in front of it. */}
+      {isNarrow ? null : <aside className={styles.helper} aria-label="Reflection chat">{helper}</aside>}
 
       {isNarrow && listOpen ? (
         <div className={styles.scrim} onClick={() => setListOpen(false)}>
@@ -576,29 +952,77 @@ export function ChatPage() {
         </div>
       ) : null}
 
-      {isNarrow && drawerOpen ? (
-        <div className={styles.scrim} onClick={() => setDrawerOpen(false)}>
+      {isNarrow && helperOpen ? (
+        <div className={styles.scrim} onClick={() => setHelperOpen(false)}>
           <div
             className={`${styles.drawer} ${styles.drawerRight}`}
             role="dialog"
-            aria-label="C.H.A.T. companion"
+            aria-label="Reflection chat"
             onClick={(event) => event.stopPropagation()}
           >
             <div className={styles.drawerHead}>
               <button
-                ref={drawerCloseRef}
                 type="button"
                 className={styles.headerButton}
-                onClick={() => setDrawerOpen(false)}
-                aria-label="Close the C.H.A.T. companion"
+                onClick={() => setHelperOpen(false)}
+                aria-label="Close the reflection chat"
               >
                 <CloseIcon className={styles.smallIcon} />
               </button>
             </div>
-            {companion}
+            <div className={styles.helper}>{helper}</div>
           </div>
         </div>
       ) : null}
+
+      {shareOpen && detail ? (
+        <ShareSheet
+          currentlyPublished={detail.publicationState === 'published'}
+          validation={validation}
+          format={format}
+          onClose={() => {
+            setShareOpen(false)
+            setValidation(null)
+          }}
+          onShare={share}
+        />
+      ) : null}
+
+      {formatOpen && detail ? (
+        <FormatSheet
+          format={format}
+          fullSections={Object.fromEntries(
+            (['context', 'heart', 'application', 'testimony'] as const).map((field) => [
+              field,
+              valueOf(field),
+            ]),
+          )}
+          condensedFields={Object.fromEntries(
+            (['verse', 'reflection'] as const).map((field) => [field, valueOf(field)]),
+          )}
+          onClose={() => setFormatOpen(false)}
+          onChoose={changeFormat}
+        />
+      ) : null}
+
+      {deleteOpen && detail ? (
+        <DeleteSheet
+          title={displayTitle(detail.title, detail.scriptureReference)}
+          onClose={() => setDeleteOpen(false)}
+          onDelete={removeConversation}
+        />
+      ) : null}
     </section>
   )
+}
+
+/**
+ * The title, for an editable field.
+ *
+ * A reflection begun without a name is stored under its passage, and printing
+ * that as the title reads as a bug. The field shows it as empty with a prompt,
+ * so naming it is an invitation rather than a correction.
+ */
+function displayTitleValue(title: string, reference: string | null): string {
+  return displayTitle(title, reference) === 'Untitled reflection' ? '' : title
 }

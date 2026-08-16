@@ -96,8 +96,8 @@ try {
     'empty state asks the question',
     (await body()).includes('What passage are you reflecting on today?'),
   );
-  const cardsBefore = await driver.findElements(By.css('[class*=cardToggle]'));
-  check('no section cards before writing', cardsBefore.length === 0, `${cardsBefore.length} found`);
+  const fieldsBefore = await driver.findElements(By.css('[class*=fieldInput]'));
+  check('no section fields before writing', fieldsBefore.length === 0, `${fieldsBefore.length} found`);
   await shoot(driver, 'reflect-1280-empty');
 
   // --- writing, with no title form --------------------------------------
@@ -107,44 +107,44 @@ try {
   );
   await wait(300);
   await driver.findElement(By.css('form button[type=submit]')).click();
-  await until(async () => (await driver.findElements(By.css('[class*=cardToggle]'))).length === 4);
+  await until(async () => (await driver.findElements(By.css('[class*=fieldInput]'))).length === 4);
 
-  const cardsAfter = await driver.findElements(By.css('[class*=cardToggle]'));
-  check('four section cards appear after writing', cardsAfter.length === 4, `${cardsAfter.length} found`);
+  const fieldsAfter = await driver.findElements(By.css('[class*=fieldInput]'));
+  check('four section fields appear after writing', fieldsAfter.length === 4, `${fieldsAfter.length} found`);
   check('the message is on screen', (await body()).includes('keeps meeting me this week'));
-  check('progress is stated in words', /\d of 4 reflected/.test(await body()));
+  check('progress is stated in words', /\d of 4 written/.test(await body()));
 
-  // --- one card open at a time ------------------------------------------
-  await cardsAfter[0].click();
-  await wait(400);
-  let open = await driver.findElements(By.css('[class*=cardToggle][aria-expanded=true]'));
-  const firstOpened = open.length === 1;
-  await (await driver.findElements(By.css('[class*=cardToggle]')))[2].click();
-  await wait(400);
-  open = await driver.findElements(By.css('[class*=cardToggle][aria-expanded=true]'));
-  check(
-    'only one section card is open at a time',
-    firstOpened && open.length === 1,
-    `${open.length} expanded after opening a second`,
+  /*
+   * All four are open at once now, and that is the point: the C.H.A.T. is the
+   * artifact, so it is shown whole rather than one accordion panel at a time.
+   */
+  const visible = await driver.executeScript(
+    `return [...document.querySelectorAll('[class*=fieldInput]')]
+       .filter((el) => el.getBoundingClientRect().height > 0).length`,
   );
+  check('every section is writable at once, not one at a time', visible === 4, `${visible} visible`);
 
   // --- writing into a section, and the counter --------------------------
-  const area = await driver.findElement(By.css('[class*=cardBody] textarea'));
+  const area = fieldsAfter[2];
   await area.sendKeys('I will pray before I react, and say the promise out loud when I cannot feel it.');
   await wait(300);
   const counter = await driver.findElements(By.css('[class*=counter]'));
   check('a live counter is shown while typing', counter.length > 0);
-  for (const b of await driver.findElements(By.css('[class*=cardActions] button'))) {
-    if ((await b.getText()) === 'Save') {
-      await b.click();
-      break;
-    }
-  }
-  await until(async () => /1 of 4 reflected/.test(await body()));
-  check('the saved section counts towards progress', /1 of 4 reflected/.test(await body()));
+  await until(async () => /1 of 4 written/.test(await body()), 8000);
+  check('the section counts towards progress once it is written',
+    /1 of 4 written/.test(await body()));
+  await until(async () => /^Saved$/m.test(await body()), 8000);
+  check('and saving says so without being asked', /Saved/.test(await body()));
   await shoot(driver, 'reflect-1280-written');
 
-  // --- the sidebar ------------------------------------------------------
+  /*
+   * The sidebar, where there is a choice to make.
+   *
+   * Under 1400px the history rails itself so the artifact is not squeezed by
+   * furniture, which means the preference can only be exercised above that.
+   */
+  await driver.manage().window().setRect({ width: 1500, height: 900 });
+  await wait(700);
   const collapseButton = await driver.findElement(
     By.css('button[aria-label="Collapse the reflections list"]'),
   );
@@ -175,20 +175,25 @@ try {
   );
   check('and expands again', expandedWidth > 180, `${expandedWidth}px`);
 
-  // --- narrow: the companion is a drawer --------------------------------
+  /*
+   * Narrow: the artifact keeps the screen and the conversation becomes the
+   * drawer. It is the same priority as on a desktop, expressed with one column.
+   */
   await driver.manage().window().setRect({ width: 390, height: 844 });
   await wait(900);
-  const companionInline = await driver.findElements(By.css('aside[aria-label="C.H.A.T. companion"]'));
-  const drawerButton = (await driver.findElements(By.css('button'))).length;
+  const helperInline = await driver.findElements(By.css('aside[aria-label="Reflection chat"]'));
+  const buttonCount = (await driver.findElements(By.css('button'))).length;
   let chatButton = null;
   for (const b of await driver.findElements(By.css('button'))) {
-    if (/^C\.H\.A\.T\. \d\/4$/.test((await b.getText()).trim())) {
+    if (/^Chat$/.test((await b.getText()).trim())) {
       chatButton = b;
       break;
     }
   }
-  check('the companion is not inline under 900px', companionInline.length === 0);
-  check('a C.H.A.T. n/4 button opens it instead', chatButton !== null, `${drawerButton} buttons`);
+  const fieldsNarrow = await driver.findElements(By.css('[class*=fieldInput]'));
+  check('the chat is not inline under 900px', helperInline.length === 0);
+  check('the C.H.A.T. still holds the screen', fieldsNarrow.length === 4, `${fieldsNarrow.length} fields`);
+  check('a Chat button opens the conversation instead', chatButton !== null, `${buttonCount} buttons`);
   await shoot(driver, 'reflect-390-thread');
 
   if (chatButton) {

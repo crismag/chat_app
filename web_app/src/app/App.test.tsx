@@ -87,7 +87,13 @@ test('Reflect opens on a question, and can be written in immediately', async () 
   expect(screen.getByText('Context · Heart · Application · Testimony')).toBeInTheDocument()
   // No title form stands between someone and their first sentence.
   expect(screen.getByLabelText('Write your reflection')).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Choose a Scripture' })).toBeInTheDocument()
+  /*
+   * The passage is a field that is always there rather than a button pressed
+   * once at the start: it can be filled in now, or long after the reflection
+   * has been written.
+   */
+  expect(screen.getByLabelText('Scripture reference')).toBeEnabled()
+  expect(screen.getByLabelText('Reflection title')).toBeInTheDocument()
 })
 
 /*
