@@ -1,163 +1,221 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router'
+import type { BiblePassage, ConversationSummary } from '@chat/shared'
 import {
-  CREATE_LAYOUTS,
-  CREATE_STYLES,
-  emptyChatSections,
-  type ConversationSummary,
-  type CreateLayout,
-  type CreateStyle,
-  type ChatSection,
-  type ChatSectionType,
-} from '@chat/shared'
-import { FIELD_NAMES } from '../chat/sections.ts'
+  CreateStudio,
+  deserializeStudioDocument,
+  exportStudioDocumentPage,
+  serializeStudioDocument,
+  type StudioDocument,
+  type StudioRenderResult,
+} from '@crismag/create-studio'
+import '@crismag/create-studio/styles.css'
+import { fetchSavedPassage } from '../bible/api.ts'
 import { api } from '../shared/api/client.ts'
+import {
+  CHAT_SQUARE_TEMPLATE,
+  availableReflectionFields,
+  buildChatStudioDocument,
+  defaultReflectionField,
+  type ReflectionField,
+  type StudioReflectionSource,
+} from './host-adapter.ts'
 import styles from './CreatePage.module.css'
 
-/*
- * A section's name as a reader should see it.
- *
- * Both the exported image and the preview used to print `section.type` — the
- * raw lowercase enum. That is a machine identifier on a card someone shares
- * publicly, and it is also the one place where a row that had escaped the
- * Context-to-Content migration would have painted the retired name onto a
- * picture. The fallback is the type itself, because a card missing a label is
- * worse than a card with an ugly one.
- */
-function nameOf(type: string): string {
-  return FIELD_NAMES[type] ?? type
+interface StoredCreation {
+  document: unknown
+  templateId: string
+  templateVersion: number
+  exportMetadata: ExportMetadata | null
+  updatedAt: string
 }
 
-type Creation = {
-  title: string
-  scriptureReference: string | null
-  layout: CreateLayout
-  style: CreateStyle
-  sections: Record<ChatSectionType, ChatSection>
-  textRenderedBy: string
+interface ExportMetadata {
+  exportedAt: string
+  format: 'image/png'
+  width: number
+  height: number
+}
+
+const FIELD_LABELS: Record<ReflectionField, string> = {
+  heart: 'Heart',
+  application: 'Application',
+  testimony: 'Testimony',
+  reflection: 'Reflection',
+}
+
+function safeFilename(title: string): string {
+  const value = title.trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')
+  return `${value || 'reflection'}.png`
 }
 
 export function CreatePage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
-  const [conversationId, setConversationId] = useState('')
-  const [layout, setLayout] = useState<CreateLayout>(CREATE_LAYOUTS.QUOTE_FOCUS)
-  const [style, setStyle] = useState<CreateStyle>(CREATE_STYLES.CREAM_BOTANICAL)
-  const [creation, setCreation] = useState<Creation | null>(null)
+  const [conversationId, setConversationId] = useState(searchParams.get('c') ?? '')
+  const [source, setSource] = useState<StudioReflectionSource | null>(null)
+  const [passage, setPassage] = useState<BiblePassage | null>(null)
+  const [document, setDocument] = useState<StudioDocument | null>(null)
+  const [selectedField, setSelectedField] = useState<ReflectionField | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const fields = useMemo(() => source ? availableReflectionFields(source) : [], [source])
 
   useEffect(() => {
     api<ConversationSummary[]>('/conversations')
       .then((items) => {
         setConversations(items)
-        setConversationId(items[0]?.id ?? '')
+        setConversationId((current) => items.some(({ id }) => id === current) ? current : (items[0]?.id ?? ''))
       })
-      .catch((caught: unknown) => {
-        setError(caught instanceof Error ? caught.message : 'Unable to load conversations')
-      })
+      .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : 'Unable to load reflections'))
   }, [])
 
-  async function preview() {
+  useEffect(() => {
     if (!conversationId) {
+      setLoading(false)
+      setSource(null)
+      setDocument(null)
       return
     }
+    let active = true
+    setLoading(true)
     setError(null)
+    setMessage(null)
+    Promise.all([
+      api<StudioReflectionSource>(`/conversations/${encodeURIComponent(conversationId)}`),
+      fetchSavedPassage(conversationId),
+      api<{ creation: StoredCreation | null }>(`/studio-creations/${encodeURIComponent(conversationId)}`),
+    ])
+      .then(([reflection, savedPassage, saved]) => {
+        if (!active) return
+        const restored = saved.creation
+          ? deserializeStudioDocument(JSON.stringify(saved.creation.document))
+          : buildChatStudioDocument(reflection, savedPassage.passage)
+        const storedField = restored.metadata?.['selectedField']
+        setSource(reflection)
+        setPassage(savedPassage.passage)
+        setSelectedField(
+          typeof storedField === 'string' && ['heart', 'application', 'testimony', 'reflection'].includes(storedField)
+            ? storedField as ReflectionField
+            : defaultReflectionField(reflection),
+        )
+        setDocument(restored)
+        if (saved.creation) setMessage('Saved Studio document reopened.')
+      })
+      .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : 'Unable to open this reflection in Studio'))
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [conversationId])
+
+  async function persist(nextDocument: StudioDocument, exportMetadata?: ExportMetadata) {
+    const canonical = JSON.parse(serializeStudioDocument(nextDocument)) as unknown
+    await api(`/studio-creations/${encodeURIComponent(conversationId)}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        document: canonical,
+        template: CHAT_SQUARE_TEMPLATE,
+        ...(exportMetadata ? { exportMetadata } : {}),
+      }),
+    })
+  }
+
+  async function save(nextDocument: StudioDocument) {
+    setError(null)
+    setMessage('Saving…')
     try {
-      setCreation(
-        await api<Creation>('/creations', {
-          method: 'POST',
-          body: JSON.stringify({ conversationId, layout, style }),
-        }),
-      )
+      await persist(nextDocument)
+      setMessage('Saved. This composition will reopen with the reflection.')
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Unable to preview')
+      setMessage(null)
+      setError(caught instanceof Error ? caught.message : 'Unable to save the composition')
     }
   }
 
-  function exportPng() {
-    if (!creation) {
-      return
-    }
-    const canvas = document.createElement('canvas')
-    canvas.width = 1080
-    canvas.height = 1080
-    const context = canvas.getContext('2d')
-    if (!context) {
-      return
-    }
-    context.fillStyle = style === CREATE_STYLES.DARK_WORSHIP ? '#1b1a17' : '#f6efe4'
-    context.fillRect(0, 0, canvas.width, canvas.height)
-    context.fillStyle = style === CREATE_STYLES.DARK_WORSHIP ? '#f6efe4' : '#2b241c'
-    context.font = '32px Georgia'
-    context.fillText(creation.title, 80, 140)
-    if (creation.scriptureReference) {
-      context.font = '24px sans-serif'
-      context.fillText(creation.scriptureReference, 80, 190)
-    }
-    context.font = '28px Georgia'
-    let y = 280
-    const sections = creation.sections ?? emptyChatSections()
-    for (const section of Object.values(sections)) {
-      if (!section.content) {
-        continue
+  async function exportPng(nextDocument: StudioDocument, pageId: string) {
+    setError(null)
+    setMessage('Preparing PNG…')
+    try {
+      const result = await exportStudioDocumentPage(nextDocument, { pageId, format: 'png', scale: 1 })
+      const url = URL.createObjectURL(result.blob)
+      const link = window.document.createElement('a')
+      link.href = url
+      link.download = safeFilename(source?.title ?? nextDocument.title ?? 'reflection')
+      link.click()
+      URL.revokeObjectURL(url)
+      const exportMetadata: ExportMetadata = {
+        exportedAt: new Date().toISOString(),
+        format: 'image/png',
+        width: result.width,
+        height: result.height,
       }
-      context.fillText(`${nameOf(section.type)}: ${section.content.slice(0, 80)}`, 80, y)
-      y += 90
+      await persist(nextDocument, exportMetadata)
+      setMessage(`Exported and saved ${result.width} × ${result.height} PNG.`)
+    } catch (caught) {
+      setMessage(null)
+      setError(caught instanceof Error ? caught.message : 'Unable to export the composition')
     }
-    const link = document.createElement('a')
-    link.download = `${creation.title}.png`
-    link.href = canvas.toDataURL('image/png')
-    link.click()
+  }
+
+  function rebuildFromSelection() {
+    if (!source) return
+    setDocument(buildChatStudioDocument(source, passage, selectedField))
+    setMessage('Card rebuilt from the exact saved reflection. Save to keep it.')
+  }
+
+  function reportRender(result: StudioRenderResult) {
+    if (result.issues.length > 0) setError(result.issues.map(({ message: issue }) => issue).join(' '))
   }
 
   return (
     <section className={styles.page}>
-      <h1>Create</h1>
-      <p>
-        Layout and style are applied by the app. Text is never sent to an image
-        model.
-      </p>
-      <div className={styles.controls}>
-        <select value={conversationId} onChange={(event) => setConversationId(event.target.value)}>
-          {conversations.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.title}
-            </option>
-          ))}
-        </select>
-        <select value={layout} onChange={(event) => setLayout(event.target.value as CreateLayout)}>
-          {Object.values(CREATE_LAYOUTS).map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </select>
-        <select value={style} onChange={(event) => setStyle(event.target.value as CreateStyle)}>
-          {Object.values(CREATE_STYLES).map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </select>
-        <button type="button" onClick={() => void preview()}>
-          Preview
-        </button>
-        <button type="button" onClick={exportPng} disabled={!creation}>
-          Export PNG
-        </button>
-      </div>
-      {error ? <p>{error}</p> : null}
-      {creation ? (
-        <article className={styles.card} data-style={style} data-layout={layout}>
-          <p className={styles.kicker}>{creation.scriptureReference}</p>
-          <h2>{creation.title}</h2>
-          {Object.values(creation.sections).map((section) =>
-            section.content ? (
-              <p key={section.type}>
-                <strong>{nameOf(section.type)}:</strong> {section.content}
-              </p>
-            ) : null,
-          )}
-          <p className={styles.note}>Text rendered by {creation.textRenderedBy}</p>
-        </article>
+      <header className={styles.header}>
+        <div>
+          <p className="eyebrow">Create Studio</p>
+          <h1>Create an image</h1>
+          <p>Text is rendered deterministically in C.H.A.T. and is never sent to an image model.</p>
+        </div>
+        <label className={styles.reflectionPicker}>
+          <span>Reflection</span>
+          <select
+            value={conversationId}
+            onChange={(event) => {
+              const id = event.currentTarget.value
+              setConversationId(id)
+              setSearchParams(id ? { c: id } : {})
+            }}
+          >
+            {conversations.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+          </select>
+        </label>
+      </header>
+
+      {loading ? <p role="status">Opening Studio…</p> : null}
+      {!loading && conversations.length === 0 ? <p>Finish a reflection before creating an image.</p> : null}
+      {source && fields.length > 0 ? (
+        <div className={styles.sourceControls}>
+          <label>
+            <span>Reflection field on card</span>
+            <select value={selectedField ?? ''} onChange={(event) => setSelectedField(event.currentTarget.value as ReflectionField)}>
+              {fields.map((field) => <option key={field} value={field}>{FIELD_LABELS[field]}</option>)}
+            </select>
+          </label>
+          <button type="button" className="btn btn-secondary" onClick={rebuildFromSelection}>Rebuild from reflection</button>
+        </div>
+      ) : null}
+      {message ? <p className={styles.status} role="status">{message}</p> : null}
+      {error ? <p className={styles.error} role="alert">{error}</p> : null}
+      {document ? (
+        <div className={styles.studio}>
+          <CreateStudio
+            document={document}
+            onDocumentChange={setDocument}
+            onSave={save}
+            onExport={exportPng}
+            onRenderResult={reportRender}
+            capabilities={{ images: false }}
+          />
+        </div>
       ) : null}
     </section>
   )
