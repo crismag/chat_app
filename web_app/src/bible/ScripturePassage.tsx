@@ -26,6 +26,7 @@
  */
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { TranslationPicker } from './TranslationPicker.tsx'
 import {
   BIBLE_OUTCOMES,
   asLookupFailure,
@@ -33,6 +34,7 @@ import {
   fetchSavedPassage,
   fetchTranslations,
   readPreviousTranslationId,
+  readRecentTranslationIds,
   rememberTranslationId,
   saveSavedPassage,
   type BiblePassage,
@@ -82,13 +84,11 @@ export function ScripturePassage({
   const [phase, setPhase] = useState<Phase>('loading-translations')
   const [failure, setFailure] = useState<LookupFailure | null>(null)
   const [choosing, setChoosing] = useState(false)
+  const [recentIds, setRecentIds] = useState<number[]>(() => readRecentTranslationIds())
   const [reference, setReference] = useState(initialReference ?? '')
-  const [search, setSearch] = useState('')
 
   const formId = useId()
   const referenceId = `${formId}-reference`
-  const translationInputId = `${formId}-translation`
-  const listId = `${formId}-translations`
   /** The last attempt, so Retry repeats it rather than guessing. */
   const lastAttempt = useRef<{ translationId: number; reference: string } | null>(null)
   /**
@@ -193,6 +193,7 @@ export function ScripturePassage({
         setReference(answer.passage.reference)
         setChoosing(false)
         rememberTranslationId(answer.passage.translationId)
+        setRecentIds(readRecentTranslationIds())
         onPassageChange?.(answer.passage)
         if (conversationId) {
           /*
@@ -223,24 +224,6 @@ export function ScripturePassage({
   }, [load])
 
   /* ------------------------------------------------------------ selector */
-
-  /**
-   * The catalog, filtered by abbreviation and by name.
-   *
-   * Both, because people search for both — "NIV" and "New International" have
-   * to find the same entry — and because the abbreviation alone is a poor
-   * search key when several translations share a family.
-   */
-  const matches = useMemo(() => {
-    const list = translations ?? []
-    const needle = search.trim().toLowerCase()
-    if (!needle) return list
-    return list.filter(
-      (entry) =>
-        entry.abbreviation.toLowerCase().includes(needle) ||
-        entry.name.toLowerCase().includes(needle),
-    )
-  }, [translations, search])
 
   const selected = useMemo(
     () => (translations ?? []).find((entry) => entry.id === translationId) ?? null,
@@ -410,48 +393,12 @@ export function ScripturePassage({
             </span>
           </div>
 
-          <div className={styles.field}>
-            <label className={styles.label} htmlFor={translationInputId}>
-              Translation
-            </label>
-            {/*
-              A search box beside a listbox rather than a bare `<select>`: the
-              catalog is searchable by abbreviation AND by name, and a native
-              select cannot do that. The value that travels is always the
-              numeric id — the abbreviation is a label, never an identifier.
-            */}
-            <input
-              id={translationInputId}
-              className={styles.input}
-              value={search}
-              placeholder={selected ? `${selected.abbreviation} — ${selected.name}` : 'Search translations'}
-              role="combobox"
-              aria-expanded="true"
-              aria-controls={listId}
-              aria-autocomplete="list"
-              onChange={(event) => setSearch(event.target.value)}
-            />
-            <ul className={styles.options} id={listId} role="listbox" aria-label="Translations">
-              {matches.map((entry) => (
-                <li key={entry.id}>
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={entry.id === translationId}
-                    className={styles.option}
-                    data-selected={entry.id === translationId ? 'true' : undefined}
-                    onClick={() => setTranslationId(entry.id)}
-                  >
-                    <span className={styles.optionAbbreviation}>{entry.abbreviation}</span>
-                    <span className={styles.optionName}>{entry.name}</span>
-                  </button>
-                </li>
-              ))}
-              {translations !== null && matches.length === 0 ? (
-                <li className={styles.optionEmpty}>No translation matches that.</li>
-              ) : null}
-            </ul>
-          </div>
+          <TranslationPicker
+            translations={translations ?? []}
+            value={translationId}
+            onChange={setTranslationId}
+            recentIds={recentIds}
+          />
 
           <div className={styles.chooserActions}>
             <button

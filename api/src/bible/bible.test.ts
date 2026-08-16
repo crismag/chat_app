@@ -119,6 +119,8 @@ function fakeFetch(options: {
   status?: number;
   body?: unknown;
   throwOn?: (url: string) => boolean;
+  /** Per-language catalogs. An absent language answers 500. */
+  byLanguage?: Record<string, unknown[]>;
   log?: FetchLog[];
 } = {}) {
   let pageIndex = 0;
@@ -144,14 +146,46 @@ function fakeFetch(options: {
     const single = /\/bibles\/(\d+)(?:\?|$)/.exec(url);
     if (single) {
       const id = Number(single[1]);
-      const row = ENGLISH_LIST.find((entry) => entry.id === id);
+      const everything = [
+        ...ENGLISH_LIST,
+        ...Object.values(options.byLanguage ?? {}).flat(),
+      ] as ReturnType<typeof listRow>[];
+      const row = everything.find((entry) => entry.id === id);
       if (!row) return new Response(JSON.stringify({ message: 'not found' }), { status: 404 });
       return new Response(
-        JSON.stringify(
-          detailRow(row.id, row.abbreviation, row.localized_abbreviation, row.title, COPYRIGHTS[id] ?? null),
-        ),
+        JSON.stringify({
+          ...detailRow(
+            row.id,
+            row.abbreviation,
+            row.localized_abbreviation,
+            row.title,
+            COPYRIGHTS[id] ?? null,
+          ),
+          /*
+           * The detail response keeps the row's own language. Rebuilding it
+           * from the English template quietly relabelled every Tagalog Bible as
+           * English — which the language-name test caught, and which in
+           * production would have put the wrong language on every row.
+           */
+          language_tag: row.language_tag,
+        }),
         { status: 200 },
       );
+    }
+
+    /*
+     * A list request. Answered per language, because the catalog is assembled
+     * from several and the merge is the thing worth testing.
+     */
+    const language = new URL(url, 'http://test').searchParams.get('language_ranges[]') ?? 'en';
+    if (options.byLanguage) {
+      const answer = options.byLanguage[language];
+      if (answer === undefined) {
+        return new Response(JSON.stringify({ message: 'no such language' }), { status: 500 });
+      }
+      return new Response(JSON.stringify({ data: answer, total_size: answer.length, next_page_token: null }), {
+        status: 200,
+      });
     }
 
     const pages = options.pages ?? [{ data: ENGLISH_LIST, next_page_token: null }];
@@ -168,6 +202,7 @@ function config(overrides: Partial<ReturnType<typeof readBibleConfig>> = {}) {
     enabled: true,
     configured: true,
     baseUrl: 'https://provider.test/v1',
+    languages: ['en'],
     timeoutMs: 500,
     catalogTtlMs: 60_000,
     passageTtlMs: 60_000,
@@ -529,7 +564,7 @@ describe('the YouVersion adapter', () => {
 
 describe('the service', () => {
   test('normalises the catalog and hydrates attribution the list omits', async () => {
-    const result = await withKey(() => serviceWith(fakeFetch()).translations('en', caller));
+    const result = await withKey(() => serviceWith(fakeFetch()).translations(caller));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -539,6 +574,7 @@ describe('the service', () => {
       abbreviation: 'NIV',
       name: 'New International Version',
       language: 'en',
+      languageName: 'English',
       copyright: COPYRIGHTS[111],
       publisherUrl: 'https://www.biblica.com/yv-learn-more/',
       youVersionUrl: 'https://www.bible.com/versions/111',
@@ -550,7 +586,7 @@ describe('the service', () => {
   });
 
   test('a translation with genuinely no copyright is listed without one', async () => {
-    const result = await withKey(() => serviceWith(fakeFetch()).translations('en', caller));
+    const result = await withKey(() => serviceWith(fakeFetch()).translations(caller));
     if (!result.ok) throw new Error('expected ok');
     const asv = result.value.translations.find((entry) => entry.id === 12);
     expect(asv).toBeDefined();
@@ -635,7 +671,7 @@ describe('the service', () => {
       throw new TypeError('fetch failed');
     }) as unknown as typeof fetch;
     const result = await withKey(() =>
-      serviceWith(fetchImpl).translations('en', caller),
+      serviceWith(fetchImpl).translations(caller),
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.outcome).toBe(BIBLE_OUTCOMES.PROVIDER_UNAVAILABLE);
@@ -668,7 +704,7 @@ describe('the service', () => {
         new YouVersionProvider({ baseUrl: 'https://provider.test/v1', fetchImpl: fakeFetch({ log }) }),
       logger: () => {},
     });
-    const result = await service.translations('en', caller);
+    const result = await service.translations(caller);
     expect(result.ok).toBe(false);
     expect(log).toHaveLength(0);
   });
@@ -676,8 +712,8 @@ describe('the service', () => {
   test('a rate limit is reported with a retry-after and no provider call', async () => {
     const log: FetchLog[] = [];
     const service = serviceWith(fakeFetch({ log }), { rateLimit: { perMinute: 1 } });
-    await withKey(() => service.translations('en', caller));
-    const second = await withKey(() => service.translations('en', caller));
+    await withKey(() => service.translations(caller));
+    const second = await withKey(() => service.translations(caller));
     expect(second.ok).toBe(false);
     if (!second.ok) {
       expect(second.outcome).toBe(BIBLE_OUTCOMES.RATE_LIMITED);
@@ -688,9 +724,9 @@ describe('the service', () => {
   test('the catalog is fetched once and reused', async () => {
     const log: FetchLog[] = [];
     const service = serviceWith(fakeFetch({ log }));
-    await withKey(() => service.translations('en', caller));
+    await withKey(() => service.translations(caller));
     const afterFirst = log.length;
-    await withKey(() => service.translations('en', caller));
+    await withKey(() => service.translations(caller));
     expect(log.length).toBe(afterFirst);
   });
 
@@ -752,6 +788,230 @@ describe('the service', () => {
   });
 });
 
+/* ---------------------------------------------------- the whole catalog */
+
+describe('a catalog in more than one language', () => {
+  /* Real rows, from the real per-language responses. */
+  const TAGALOG = [
+    listRow(1290, 'TLAB', 'TLAB', 'Ang Biblia 1978'),
+    listRow(1291, 'ASD', 'ASD', 'Ang Salita ng Dios'),
+  ].map((row) => ({ ...row, language_tag: 'tl' }));
+  const CEBUANO = [listRow(1396, 'APD', 'APD', 'Ang Pulong Sa Dios')].map((row) => ({
+    ...row,
+    language_tag: 'ceb',
+  }));
+
+  function multilingual(overrides: Record<string, unknown[]> = {}, log?: FetchLog[]) {
+    const byLanguage = { en: ENGLISH_LIST, tl: TAGALOG, ceb: CEBUANO, ...overrides };
+    return new BibleService({
+      config: config({ languages: ['en', 'tl', 'ceb'] }),
+      createProvider: (built) =>
+        new YouVersionProvider({
+          baseUrl: built.baseUrl,
+          fetchImpl: fakeFetch({ byLanguage, ...(log ? { log } : {}) }),
+        }),
+      logger: () => {},
+      jitter: () => 0,
+    });
+  }
+
+  test('merges every configured language into one catalog', async () => {
+    const result = await withKey(() => multilingual().translations(caller));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const ids = result.value.translations.map((entry) => entry.id);
+    expect(ids).toContain(111);
+    expect(ids).toContain(1290);
+    expect(ids).toContain(1396);
+    expect(result.value.translations).toHaveLength(ENGLISH_LIST.length + 3);
+  });
+
+  test('carries a language name people can search for', async () => {
+    const result = await withKey(() => multilingual().translations(caller));
+    if (!result.ok) throw new Error('expected ok');
+
+    const tagalog = result.value.translations.find((entry) => entry.id === 1290);
+    expect(tagalog?.language).toBe('tl');
+    /* The platform calls `tl` "Filipino"; most people would type "Tagalog", so
+     * both have to reach it. */
+    expect(tagalog?.languageName).toBe('Filipino');
+    expect(tagalog?.languageAliases).toContain('Tagalog');
+
+    const cebuano = result.value.translations.find((entry) => entry.id === 1396);
+    expect(cebuano?.languageName).toBe('Cebuano');
+  });
+
+  /*
+   * The behaviour that matters most in a multi-language fetch: one language
+   * going down must not empty the picker. "Spanish is briefly unavailable" and
+   * "there are no Bibles" are very different messages.
+   */
+  test('one language failing does not lose the others', async () => {
+    const service = new BibleService({
+      config: config({ languages: ['en', 'tl', 'ceb'] }),
+      createProvider: (built) =>
+        new YouVersionProvider({
+          baseUrl: built.baseUrl,
+          /* `tl` is absent from the map, so it answers 500. */
+          fetchImpl: fakeFetch({ byLanguage: { en: ENGLISH_LIST, ceb: CEBUANO } }),
+        }),
+      logger: () => {},
+      jitter: () => 0,
+    });
+
+    const result = await withKey(() => service.translations(caller));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const ids = result.value.translations.map((entry) => entry.id);
+    expect(ids).toContain(111);
+    expect(ids).toContain(1396);
+    expect(ids).not.toContain(1290);
+    /* And NIV is still resolved, so the default is unaffected. */
+    expect(result.value.defaultId).toBe(111);
+  });
+
+  /*
+   * Written after this exact regression: gathering languages independently
+   * turned a rejected credential — which fails every language at once — into
+   * seven ignored errors and a generic "provider unavailable". The reader
+   * would be told to retry something that cannot succeed until an operator
+   * fixes a key.
+   */
+  test('when every language fails, the most actionable reason survives', async () => {
+    const service = new BibleService({
+      config: config({ languages: ['en', 'tl'] }),
+      createProvider: (built) =>
+        new YouVersionProvider({
+          baseUrl: built.baseUrl,
+          fetchImpl: fakeFetch({ status: 401, body: { fault: 'Invalid ApiKey' } }),
+        }),
+      logger: () => {},
+      jitter: () => 0,
+    });
+
+    const result = await withKey(() => service.translations(caller));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.outcome).toBe(BIBLE_OUTCOMES.NOT_CONFIGURED);
+  });
+
+  test('a total outage is not cached as an empty catalog', async () => {
+    let failing = true;
+    const good = fakeFetch({ byLanguage: { en: ENGLISH_LIST } });
+    const service = new BibleService({
+      config: config({ languages: ['en'] }),
+      createProvider: (built) =>
+        new YouVersionProvider({
+          baseUrl: built.baseUrl,
+          fetchImpl: (async (input: string | URL | Request, init?: RequestInit) => {
+            if (failing) return new Response('{}', { status: 503 });
+            return good(input as never, init as never);
+          }) as unknown as typeof fetch,
+        }),
+      logger: () => {},
+      jitter: () => 0,
+    });
+
+    const first = await withKey(() => service.translations(caller));
+    expect(first.ok).toBe(false);
+
+    failing = false;
+    const second = await withKey(() => service.translations(caller));
+    expect(second.ok).toBe(true);
+    if (second.ok) expect(second.value.translations.length).toBeGreaterThan(0);
+  });
+
+  test('one request per language, and the catalog is then reused', async () => {
+    const log: FetchLog[] = [];
+    const service = multilingual({}, log);
+    await withKey(() => service.translations(caller));
+    const lists = log.filter((entry) => entry.url.includes('language_ranges'));
+    expect(lists).toHaveLength(3);
+    expect(lists.map((entry) => decodeURIComponent(entry.url)).join(' ')).toContain(
+      'language_ranges[]=tl',
+    );
+
+    const before = log.length;
+    await withKey(() => service.translations(caller));
+    expect(log.length).toBe(before);
+  });
+
+  /*
+   * The sharpest case for never keying on an abbreviation, and it is real:
+   * bible 9 (Cebuano, "Ang Pulong sa Dios") and bible 36 (Chinese, "当代译本")
+   * BOTH have the raw abbreviation `CCB`. They are told apart only by their
+   * localized abbreviation — APD and CCB — and by their language. Displaying
+   * the raw one would put two identical-looking rows in the picker for Bibles
+   * in unrelated languages.
+   */
+  test('two Bibles sharing a raw abbreviation stay distinguishable', async () => {
+    const cebCCB = { ...listRow(9, 'CCB', 'APD', 'Ang Pulong sa Dios'), language_tag: 'ceb' };
+    const zhCCB = { ...listRow(36, 'CCB', 'CCB', '当代译本'), language_tag: 'zh' };
+
+    const service = new BibleService({
+      config: config({ languages: ['ceb', 'zh'] }),
+      createProvider: (built) =>
+        new YouVersionProvider({
+          baseUrl: built.baseUrl,
+          fetchImpl: fakeFetch({ byLanguage: { ceb: [cebCCB], zh: [zhCCB] } }),
+        }),
+      logger: () => {},
+      jitter: () => 0,
+    });
+
+    const result = await withKey(() => service.translations(caller));
+    if (!result.ok) throw new Error('expected ok');
+
+    /* Both survive — neither is deduplicated away by its abbreviation. */
+    expect(result.value.translations).toHaveLength(2);
+    const cebuano = result.value.translations.find((entry) => entry.id === 9);
+    const chinese = result.value.translations.find((entry) => entry.id === 36);
+    expect(cebuano?.abbreviation).toBe('APD');
+    expect(chinese?.abbreviation).toBe('CCB');
+    expect(cebuano?.languageName).toBe('Cebuano');
+    expect(chinese?.languageName).toBe('Chinese');
+  });
+
+  test('a passage can be fetched in a language other than English', async () => {
+    const result = await withKey(() =>
+      multilingual().passage({ translationId: 1290, reference: 'John 3:16' }, caller),
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.translationId).toBe(1290);
+  });
+});
+
+describe('the configured language set', () => {
+  test('defaults to the languages this product serves', () => {
+    const languages = readBibleConfig({} as NodeJS.ProcessEnv).languages;
+    expect(languages).toContain('en');
+    /* The communities this product was built for. */
+    expect(languages).toContain('tl');
+    expect(languages).toContain('ceb');
+  });
+
+  test('is configuration, so a language can be added without a deploy', () => {
+    const languages = readBibleConfig({
+      BIBLE_LANGUAGES: 'en, sw ,ko',
+    } as NodeJS.ProcessEnv).languages;
+    expect(languages).toEqual(['en', 'sw', 'ko']);
+  });
+
+  test('drops a tag that is not a language rather than forwarding it', () => {
+    /* These values are interpolated into a request to the provider; an
+     * operator's typo must cost them one language, not corrupt the query. */
+    const languages = readBibleConfig({
+      BIBLE_LANGUAGES: 'en,../etc/passwd,tl&page_size=100',
+    } as NodeJS.ProcessEnv).languages;
+    expect(languages).toEqual(['en']);
+  });
+
+  test('an entirely invalid setting falls back rather than emptying the catalog', () => {
+    const languages = readBibleConfig({ BIBLE_LANGUAGES: '!!!' } as NodeJS.ProcessEnv).languages;
+    expect(languages).toContain('en');
+  });
+});
+
 /* --------------------------------------------------------------- logging */
 
 describe('logging', () => {
@@ -793,7 +1053,7 @@ describe('logging', () => {
       logger: (event) => lines.push(bibleLogLine(event)),
       jitter: () => 0,
     });
-    await withKey(() => service.translations('en', caller));
+    await withKey(() => service.translations(caller));
     const serialised = JSON.stringify(lines);
     expect(serialised).not.toContain(FAKE_KEY);
     /* Nor the provider's own words about the credential. */

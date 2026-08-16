@@ -93,6 +93,13 @@ Drives the card above the four sections: loads the catalog, checks the selected
 translation, looks a passage up, changes translation on the same reference, and
 forces a failure to prove the previous passage and the draft survive it.
 
+It also drives the translation search, and **every search assertion reads the
+rendered rows rather than any internal state**. That is deliberate: the bug
+report behind that work was "the search does not work", and a check that
+inspected state would have passed while the list on screen did not change.
+The queries it runs are the ones people actually type — `berean`, `bsb`,
+`tagalog`, `tl`, `TLAB`, `reina`, `niv`, a misspelling, and nonsense.
+
 Needs the API started with a real `YVP_APP_KEY`, because there is no
 deterministic stand-in for a Bible:
 

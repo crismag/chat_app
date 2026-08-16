@@ -21,22 +21,88 @@ afterEach(() => {
   window.localStorage.clear()
 })
 
-/* The real catalog's awkward cases: NIV11 vs NIrV vs NIVUK, and engWEBUS. */
+/*
+ * The real catalog's awkward cases, in several languages.
+ *
+ * `NIV11` vs `NIrV` vs `NIVUK`; `engWEBUS`; and — because the catalog is no
+ * longer English-only — Tagalog, Cebuano and Spanish, where `CCB` is Chinese
+ * while the Cebuano Bible is `APD`.
+ */
 const TRANSLATIONS: BibleTranslation[] = [
-  { id: 12, abbreviation: 'ASV', name: 'American Standard Version', language: 'en' },
-  { id: 110, abbreviation: 'NIrV', name: 'New International Reader’s Version 2014', language: 'en' },
+  { id: 12, abbreviation: 'ASV', name: 'American Standard Version', language: 'en', languageName: 'English' },
+  {
+    id: 110,
+    abbreviation: 'NIrV',
+    name: 'New International Reader’s Version 2014',
+    language: 'en',
+    languageName: 'English',
+  },
   {
     id: 111,
     abbreviation: 'NIV',
     name: 'New International Version',
     language: 'en',
-    copyright: 'The Holy Bible, New International Version® NIV®\nCopyright © 1973, 1978, 1984, 2011 by Biblica, Inc.®',
+    languageName: 'English',
+    copyright:
+      'The Holy Bible, New International Version® NIV®\nCopyright © 1973, 1978, 1984, 2011 by Biblica, Inc.®',
     publisherUrl: 'https://www.biblica.com/yv-learn-more/',
     youVersionUrl: 'https://www.bible.com/versions/111',
   },
-  { id: 113, abbreviation: 'NIVUK', name: 'New International Version (Anglicized)', language: 'en' },
-  { id: 206, abbreviation: 'WEBUS', name: 'World English Bible', language: 'en', copyright: 'PUBLIC DOMAIN (not copyrighted)' },
-  { id: 3034, abbreviation: 'BSB', name: 'Berean Standard Bible', language: 'en', copyright: 'Public Domain' },
+  {
+    id: 113,
+    abbreviation: 'NIVUK',
+    name: 'New International Version (Anglicized)',
+    language: 'en',
+    languageName: 'English',
+  },
+  {
+    id: 206,
+    abbreviation: 'WEBUS',
+    name: 'World English Bible',
+    language: 'en',
+    languageName: 'English',
+    copyright: 'PUBLIC DOMAIN (not copyrighted)',
+  },
+  {
+    id: 3034,
+    abbreviation: 'BSB',
+    name: 'Berean Standard Bible',
+    language: 'en',
+    languageName: 'English',
+    copyright: 'Public Domain',
+  },
+  {
+    id: 1290,
+    abbreviation: 'TLAB',
+    name: 'Ang Biblia 1978',
+    language: 'tl',
+    languageName: 'Filipino',
+    languageAliases: ['Tagalog', 'Pilipino'],
+  },
+  {
+    id: 1396,
+    abbreviation: 'APD',
+    name: 'Ang Pulong Sa Dios',
+    language: 'ceb',
+    languageName: 'Cebuano',
+    languageAliases: ['Bisaya', 'Binisaya'],
+  },
+  {
+    id: 128,
+    abbreviation: 'RVES',
+    name: 'Reina Valera 1960',
+    language: 'es',
+    languageName: 'Spanish',
+    languageAliases: ['Castilian', 'Espanol'],
+  },
+  {
+    id: 36,
+    abbreviation: 'CCB',
+    name: '当代译本',
+    language: 'zh',
+    languageName: 'Chinese',
+    languageAliases: ['Mandarin'],
+  },
 ]
 
 function passageIn(translationId: number, abbreviation: string, content: string): BiblePassage {
@@ -48,7 +114,10 @@ function passageIn(translationId: number, abbreviation: string, content: string)
     passageId: 'JHN.3.16-18',
     reference: 'John 3:16-18',
     content,
-    copyright: translationId === 111 ? TRANSLATIONS[2]?.copyright : 'Public Domain',
+    copyright:
+      translationId === 111
+        ? TRANSLATIONS.find((entry) => entry.id === 111)?.copyright
+        : 'Public Domain',
     ...(translationId === 111
       ? { links: { publisher: 'https://www.biblica.com/yv-learn-more/', youVersion: 'https://www.bible.com/versions/111' } }
       : {}),
@@ -104,6 +173,24 @@ function stubFetch(options: StubOptions = {}) {
 beforeEach(() => {
   window.localStorage.clear()
 })
+
+/** The combobox, which is how every translation is chosen. */
+const searchBox = () => screen.getByRole('combobox', { name: 'Translation' })
+
+/**
+ * Choose a translation the way a person does: type enough to find it, then
+ * click the row.
+ *
+ * Deliberately goes through the search rather than reaching for a row by
+ * index. The picker opens onto a short recommended list, so most translations
+ * are only reachable by searching — and a test that bypassed the search would
+ * not notice the search breaking, which is the bug this work exists to fix.
+ */
+async function chooseTranslation(query: string, name: string | RegExp) {
+  fireEvent.change(searchBox(), { target: { value: query } })
+  const row = await screen.findByRole('option', { name: new RegExp(typeof name === 'string' ? name : name.source, 'i') })
+  fireEvent.click(row)
+}
 
 describe('the passage card', () => {
   test('loads the catalog and selects NIV by id 111 — not by the string "NIV"', async () => {
@@ -180,9 +267,7 @@ describe('the passage card', () => {
     await screen.findByTestId('scripture-text')
 
     fireEvent.click(screen.getByRole('button', { name: /change passage/i }))
-    const options = await screen.findAllByRole('option')
-    const bsb = options.find((option) => within(option).queryByText('Berean Standard Bible'))
-    fireEvent.click(bsb!)
+    await chooseTranslation('berean', 'Berean Standard Bible')
     fireEvent.click(screen.getByRole('button', { name: /load passage/i }))
 
     await waitFor(() =>
@@ -211,8 +296,7 @@ describe('the passage card', () => {
     await screen.findByTestId('scripture-text')
 
     fireEvent.click(screen.getByRole('button', { name: /change passage/i }))
-    const options = await screen.findAllByRole('option')
-    fireEvent.click(options.find((option) => within(option).queryByText('Berean Standard Bible'))!)
+    await chooseTranslation('berean', 'Berean Standard Bible')
     fireEvent.click(screen.getByRole('button', { name: /load passage/i }))
 
     const alert = await screen.findByRole('alert')
@@ -232,8 +316,7 @@ describe('the passage card', () => {
     await screen.findByTestId('scripture-text')
 
     fireEvent.click(screen.getByRole('button', { name: /change passage/i }))
-    const options = await screen.findAllByRole('option')
-    fireEvent.click(options.find((option) => within(option).queryByText('American Standard Version'))!)
+    await chooseTranslation('american standard', 'American Standard Version')
     fireEvent.click(screen.getByRole('button', { name: /load passage/i }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('not available')
@@ -283,20 +366,119 @@ describe('the passage card', () => {
     expect(screen.queryByRole('button', { name: /choose a passage/i })).toBeNull()
   })
 
-  test('the search finds a translation by abbreviation and by name', async () => {
+  test('the search finds a translation by abbreviation, name and language', async () => {
     stubFetch()
     render(<ScripturePassage conversationId="c1" />)
     fireEvent.click(await screen.findByRole('button', { name: /choose a passage/i }))
 
-    const search = screen.getByLabelText('Translation')
+    const search = searchBox()
+
     fireEvent.change(search, { target: { value: 'bsb' } })
-    expect(await screen.findAllByRole('option')).toHaveLength(1)
+    expect((await screen.findAllByRole('option')).length).toBe(1)
 
     fireEvent.change(search, { target: { value: 'berean' } })
-    expect(await screen.findAllByRole('option')).toHaveLength(1)
+    expect((await screen.findAllByRole('option')).length).toBe(1)
+
+    /* The report that started this: a language nobody could search for. */
+    fireEvent.change(search, { target: { value: 'tagalog' } })
+    expect(await screen.findByRole('option', { name: /Ang Biblia/ })).toBeInTheDocument()
+
+    fireEvent.change(search, { target: { value: 'tl' } })
+    expect(await screen.findByRole('option', { name: /Ang Biblia/ })).toBeInTheDocument()
+
+    fireEvent.change(search, { target: { value: 'reina' } })
+    expect(await screen.findByRole('option', { name: /Reina Valera/ })).toBeInTheDocument()
+
+    /* A misspelling still lands. */
+    fireEvent.change(search, { target: { value: 'tagaolg' } })
+    expect(await screen.findByRole('option', { name: /Ang Biblia/ })).toBeInTheDocument()
 
     fireEvent.change(search, { target: { value: 'nothing like this' } })
-    await waitFor(() => expect(screen.getByText(/no translation matches/i)).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByLabelText('Translation search results')).toHaveTextContent(
+        /no translation matches/i,
+      ),
+    )
+  })
+
+  test('every row says which language it is in', async () => {
+    stubFetch()
+    render(<ScripturePassage conversationId="c1" />)
+    fireEvent.click(await screen.findByRole('button', { name: /choose a passage/i }))
+
+    /*
+     * `CCB` is Chinese and the Cebuano Bible is `APD`. Without the language on
+     * the row those two are indistinguishable, and choosing wrong means reading
+     * a Bible in a language you may not speak.
+     */
+    fireEvent.change(searchBox(), { target: { value: 'cebuano' } })
+    const cebuano = await screen.findByRole('option', { name: /Ang Pulong/ })
+    expect(within(cebuano).getByText('Cebuano')).toBeInTheDocument()
+
+    fireEvent.change(searchBox(), { target: { value: 'mandarin' } })
+    const chinese = await screen.findAllByRole('option')
+    expect(within(chinese[0]!).getByText('Chinese')).toBeInTheDocument()
+  })
+
+  test('the whole catalog is reachable behind one control', async () => {
+    stubFetch()
+    render(<ScripturePassage conversationId="c1" />)
+    fireEvent.click(await screen.findByRole('button', { name: /choose a passage/i }))
+
+    /* It opens onto a short list, not an inventory. */
+    const initial = await screen.findAllByRole('option')
+    expect(initial.length).toBeLessThan(TRANSLATIONS.length)
+
+    fireEvent.click(screen.getByRole('button', { name: /show all 10 translations/i }))
+    await waitFor(() =>
+      expect(screen.getAllByRole('option').length).toBe(TRANSLATIONS.length),
+    )
+  })
+
+  test('the picker is driveable from the keyboard alone', async () => {
+    stubFetch({ passages: { 3034: BSB_PASSAGE } })
+    render(<ScripturePassage conversationId="c1" />)
+    fireEvent.click(await screen.findByRole('button', { name: /choose a passage/i }))
+
+    const search = searchBox()
+    fireEvent.change(search, { target: { value: 'berean' } })
+    await screen.findByRole('option', { name: /Berean/ })
+
+    /*
+     * `aria-activedescendant` rather than moving focus: the caret has to stay
+     * in the search box while the active row moves, or refining a query means
+     * clicking back into the field every time.
+     */
+    expect(search).toHaveAttribute('aria-activedescendant')
+    fireEvent.keyDown(search, { key: 'ArrowDown' })
+    fireEvent.keyDown(search, { key: 'Enter' })
+
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: /Berean/ })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      ),
+    )
+    /* Choosing clears the query, so the next visit does not open mid-search. */
+    expect(searchBox()).toHaveValue('')
+  })
+
+  test('Escape clears the search rather than the selection', async () => {
+    stubFetch()
+    render(<ScripturePassage conversationId="c1" />)
+    fireEvent.click(await screen.findByRole('button', { name: /choose a passage/i }))
+
+    const search = searchBox()
+    fireEvent.change(search, { target: { value: 'berean' } })
+    await screen.findByRole('option', { name: /Berean/ })
+    fireEvent.keyDown(search, { key: 'Escape' })
+
+    await waitFor(() => expect(searchBox()).toHaveValue(''))
+    /* NIV is still the selection: Escape abandoned the search, not the choice. */
+    const selected = screen
+      .getAllByRole('option')
+      .filter((option) => option.getAttribute('aria-selected') === 'true')
+    expect(within(selected[0]!).getByText('New International Version')).toBeInTheDocument()
   })
 
   test('everything is reachable and named for a screen reader', async () => {
@@ -318,8 +500,12 @@ describe('the passage card', () => {
     expect(screen.getByLabelText('Passage')).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Translation' })).toBeInTheDocument()
     expect(screen.getByRole('listbox', { name: 'Translations' })).toBeInTheDocument()
-    /* Progress is announced politely rather than by moving focus. */
-    expect(screen.getByRole('status')).toHaveAttribute('aria-live', 'polite')
+    /* Progress and result counts are announced politely rather than by moving
+     * focus — a passage arriving must not throw a screen reader out of the
+     * section somebody is writing in. */
+    for (const status of screen.getAllByRole('status')) {
+      expect(status).toHaveAttribute('aria-live', 'polite')
+    }
   })
 
   test('a reflection whose translation has gone away keeps it, and says so', async () => {

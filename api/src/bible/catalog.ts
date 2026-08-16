@@ -23,6 +23,7 @@
  */
 
 import type { BibleTranslation } from '@chat/shared';
+import { languageAliases, languageName } from './languages.ts';
 import type { ProviderTranslation } from './types.ts';
 
 /**
@@ -149,11 +150,20 @@ export function defaultTranslation(
  * depending on.
  */
 export function toWire(translation: ProviderTranslation): BibleTranslation {
+  const aliases = languageAliases(translation.language);
   return {
     id: translation.id,
     abbreviation: translation.localizedAbbreviation,
     name: translation.name,
     language: translation.language,
+    /*
+     * Resolved here rather than in the browser. The names come from the
+     * platform's CLDR data, which Node already has and which a bundle would
+     * have to ship — and doing it once per catalog build beats doing it on
+     * every keystroke of a search.
+     */
+    languageName: languageName(translation.language),
+    ...(aliases.length > 0 ? { languageAliases: aliases } : {}),
     ...(translation.copyright ? { copyright: translation.copyright } : {}),
     ...(translation.publisherUrl ? { publisherUrl: translation.publisherUrl } : {}),
     ...(translation.youVersionUrl ? { youVersionUrl: translation.youVersionUrl } : {}),

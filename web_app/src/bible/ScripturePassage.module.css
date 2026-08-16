@@ -225,17 +225,64 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  max-block-size: 12rem;
+  max-block-size: 15rem;
   overflow-y: auto;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: var(--surface);
 }
 
-.option {
+.picker {
   display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/*
+ * The group headings above Current / Recent / Recommended.
+ *
+ * Sticky, so scrolling a long list never leaves somebody looking at rows with
+ * no idea which group they are in.
+ */
+.groupHeading {
+  position: sticky;
+  inset-block-start: 0;
+  display: block;
+  padding: var(--space-2) var(--space-3) var(--space-1);
+  background: var(--surface);
+  color: var(--faint);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+
+/* A reserved row for the result count, so announcing it moves nothing. */
+.searchStatus {
+  margin: 0;
+  min-block-size: 1rem;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.optionWrap {
+  display: block;
+}
+
+/*
+ * A row.
+ *
+ * The active marker is driven by `data-active`, which BOTH the arrow keys and
+ * the pointer set. That is deliberate: a picker whose marker exists only on
+ * hover cannot be driven from a keyboard and does not exist at all on a touch
+ * screen, and one that relies on focus would drag the caret out of the search
+ * box on every arrow press.
+ */
+.option {
+  display: grid;
+  grid-template-columns: 5rem 1fr auto;
   align-items: baseline;
-  gap: var(--space-3);
+  gap: var(--space-2) var(--space-3);
   inline-size: 100%;
   padding: var(--space-2) var(--space-3);
   border: 0;
@@ -247,13 +294,8 @@
   cursor: pointer;
 }
 
-.option:hover {
+.option[data-active='true'] {
   background: var(--surface-2);
-}
-
-.option:focus-visible {
-  outline: none;
-  box-shadow: var(--ring);
 }
 
 .option[data-selected='true'] {
@@ -262,17 +304,59 @@
   font-weight: 600;
 }
 
+/* Selected AND active are different states and must look different. */
+.option[data-selected='true'][data-active='true'] {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
 .optionAbbreviation {
-  min-inline-size: 4.5rem;
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .optionName {
   color: var(--muted);
 }
 
-.option[data-selected='true'] .optionName {
+/*
+ * The language, on every row without exception.
+ *
+ * `NVI` is Spanish in one row and Portuguese in another; `CCB` is Chinese while
+ * the Cebuano Bible is `APD`. Without this column those rows are
+ * indistinguishable, and choosing wrong means reading a Bible in a language you
+ * may not speak.
+ */
+.optionLanguage {
+  justify-self: end;
+  padding: 0.05rem var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--faint);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.option[data-selected='true'] .optionName,
+.option[data-selected='true'] .optionLanguage {
   color: var(--accent-ink);
+}
+
+.showAll {
+  align-self: start;
+  padding: var(--space-1) 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  cursor: pointer;
+}
+
+.showAll:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
 }
 
 .optionEmpty {
@@ -300,7 +384,7 @@
   }
 
   .options {
-    max-block-size: 9rem;
+    max-block-size: 11rem;
   }
 
   .chooserActions button,

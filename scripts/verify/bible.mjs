@@ -29,8 +29,24 @@ function check(label, ok, detail = '') {
   if (!ok) failures += 1;
 }
 
-async function shot(driver, name) {
-  await driver.executeScript('window.scrollTo(0, 0)');
+/*
+ * A screenshot, framed on purpose.
+ *
+ * Scrolls to the top by default so shots are comparable between runs, but
+ * takes a selector when the thing being shown is further down the page — a
+ * screenshot of the picker that scrolled the picker out of frame proves
+ * nothing, which is exactly what the first version of this did.
+ */
+async function shot(driver, name, focusSelector) {
+  if (focusSelector) {
+    await driver.executeScript(
+      `const node = document.querySelector(arguments[0]);
+       if (node) node.scrollIntoView({ block: 'center' });`,
+      focusSelector,
+    );
+  } else {
+    await driver.executeScript('window.scrollTo(0, 0)');
+  }
   await wait(400);
   writeFileSync(new URL(`${name}.png`, OUT), await driver.takeScreenshot(), 'base64');
 }
@@ -167,7 +183,21 @@ try {
   await wait(800);
 
   const options = await driver.findElements(By.css('[role=option]'));
-  check('the catalog loaded', options.length > 5, `${options.length} translations`);
+  check('the picker opens onto a short list, not an inventory', options.length > 0 && options.length <= 8, `${options.length} rows`);
+
+  const catalogSize = await driver.executeScript(
+    'return fetch("/api/bible/translations").then((r) => r.json()).then((b) => b.translations.length)',
+  );
+  check('the catalog spans more than English', catalogSize > 25, `${catalogSize} translations`);
+
+  const languages = await driver.executeScript(
+    'return fetch("/api/bible/translations").then((r) => r.json()).then((b) => [...new Set(b.translations.map((t) => t.languageName))])',
+  );
+  check(
+    'Filipino and Cebuano are among them',
+    languages.includes('Filipino') && languages.includes('Cebuano'),
+    languages.join(', '),
+  );
 
   const selectedName = await driver.executeScript(`
     const chosen = document.querySelector('[role=option][aria-selected=true]');
@@ -186,23 +216,92 @@ try {
     (selectedName ?? 'nothing selected').trim().slice(0, 60),
   );
 
-  /* --- search by name and by abbreviation ------------------------------- */
+  /* --- the search, asserted on rendered rows ---------------------------- */
 
+  /*
+   * Every assertion below reads the DOM rather than any internal state. The
+   * report that prompted this work was "the search does not work", and a test
+   * that inspected state rather than rows would have passed while the list on
+   * screen did not change.
+   */
   const search = await driver.findElement(By.css('[role=combobox]'));
-  await search.sendKeys('berean');
-  await wait(400);
+  const rowsFor = async (query) => {
+    await search.sendKeys(Key.chord(Key.CONTROL, 'a'), query);
+    await wait(500);
+    return driver.executeScript(
+      `return Array.from(document.querySelectorAll('[role=option]')).map((node) => node.innerText.replace(/\\s+/g, ' ').trim());`,
+    );
+  };
+
+  const berean = await rowsFor('berean');
+  check('searching by name filters the rendered rows', berean.length === 1 && /Berean/.test(berean[0] ?? ''), berean.join(' | ') || 'nothing');
+
+  const bsb = await rowsFor('bsb');
+  check('searching by abbreviation finds the same one', bsb.length === 1 && /Berean/.test(bsb[0] ?? ''), bsb.join(' | ') || 'nothing');
+
+  /*
+   * The queries the owner reported as broken. They were broken because the
+   * catalog was English-only, so there was nothing to find.
+   */
+  const tagalog = await rowsFor('tagalog');
+  check('“tagalog” finds Filipino Bibles', tagalog.length > 0 && tagalog.every((row) => /Filipino/i.test(row)), tagalog.join(' | ') || 'nothing');
+
+  await shot(driver, 'bible-1280-search-tagalog', '[role=listbox]');
+
+  const byCode = await rowsFor('tl');
+  check('the language code “tl” finds them too', byCode.length > 0 && byCode.every((row) => /Filipino/i.test(row)), byCode.join(' | ') || 'nothing');
+
+  const tlab = await rowsFor('TLAB');
+  check('an exact abbreviation finds its Bible', tlab.length > 0 && /TLAB/.test(tlab[0] ?? ''), tlab.join(' | ') || 'nothing');
+
+  const reina = await rowsFor('reina');
+  check('“reina” finds Reina Valera', reina.length > 0 && /Reina/i.test(reina[0] ?? ''), reina.join(' | ') || 'nothing');
+
+  const niv = await rowsFor('niv');
   check(
-    'searching by name narrows the list',
-    (await driver.findElements(By.css('[role=option]'))).length === 1,
+    'an exact abbreviation ranks first — NIV above NIVUK and NIrV',
+    /^NIV\b/.test(niv[0] ?? '') && !/Reader|Anglic/i.test(niv[0] ?? ''),
+    (niv[0] ?? 'nothing') + ` (of ${niv.length})`,
   );
-  await search.sendKeys(Key.chord(Key.CONTROL, 'a'), 'bsb');
-  await wait(400);
+
+  const typo = await rowsFor('tagaolg');
+  check('a misspelling still finds it', typo.some((row) => /Filipino/i.test(row)), typo.join(' | ') || 'nothing');
+
+  const nonsense = await rowsFor('qqqzzz');
+  check('nonsense matches nothing rather than everything', nonsense.length === 0);
+
+  const cebuano = await rowsFor('cebuano');
   check(
-    'searching by abbreviation finds the same one',
-    (await driver.findElements(By.css('[role=option]'))).length === 1,
+    'every row says which language it is in',
+    cebuano.length > 0 && cebuano.every((row) => /Cebuano/.test(row)),
+    cebuano.join(' | ') || 'nothing',
   );
+
+  /* Keyboard: arrows move, Enter chooses, without touching the mouse. */
+  await search.sendKeys(Key.chord(Key.CONTROL, 'a'), 'berean');
+  await wait(500);
+  await search.sendKeys(Key.ARROW_DOWN);
+  await wait(200);
+  const activeDescendant = await search.getAttribute('aria-activedescendant');
+  check('the combobox points at an active row for a screen reader', Boolean(activeDescendant), activeDescendant ?? 'none');
+  await search.sendKeys(Key.ENTER);
+  await wait(400);
+  const chosen = await driver.executeScript(
+    `const row = document.querySelector('[role=option][aria-selected=true]');
+     return row ? row.innerText.replace(/\\s+/g, ' ').trim() : null;`,
+  );
+  check('Enter chooses the active row', /Berean/.test(chosen ?? ''), chosen ?? 'nothing selected');
+  await shot(driver, 'bible-1280-search');
+
+  /* Back to a clean list before the passage is loaded. */
   await search.sendKeys(Key.chord(Key.CONTROL, 'a'), Key.BACK_SPACE);
   await wait(300);
+  await driver.executeScript(`
+    const row = Array.from(document.querySelectorAll('[role=option]'))
+      .find((node) => node.innerText.includes('New International Version') && !node.innerText.includes('Reader') && !node.innerText.includes('Anglic'));
+    if (row) row.click();
+  `);
+  await wait(400);
 
   /* --- look a passage up ------------------------------------------------ */
 
@@ -212,8 +311,8 @@ try {
 
   const quote = await driver.findElements(By.css('blockquote'));
   check('the passage rendered', quote.length === 1);
-  const passageText = quote.length ? await quote[0].getText() : '';
-  check('it is the real verse', /For God so loved the world/i.test(passageText), passageText.slice(0, 50) + '…');
+  const verse = quote.length ? await quote[0].getText() : '';
+  check('it is the real verse', /For God so loved the world/i.test(verse), verse.slice(0, 50) + '…');
   check(
     'it is not an editable field',
     quote.length > 0 && (await quote[0].getAttribute('contenteditable')) === null,
@@ -241,6 +340,8 @@ try {
 
   await clickButton(driver, 'Change passage');
   await wait(600);
+  await typeInto(driver, '[role=combobox]', 'berean');
+  await wait(500);
   await driver.executeScript(`
     const option = Array.from(document.querySelectorAll('[role=option]'))
       .find((node) => node.textContent.includes('Berean Standard Bible'));
@@ -267,7 +368,19 @@ try {
 
   /* --- a failed lookup must not take the passage with it ---------------- */
 
-  const before = await driver.findElement(By.css('blockquote')).getText();
+  /*
+   * Read through `textContent`, not `getText()`.
+   *
+   * `getText()` returns only what is currently RENDERED, so a passage that
+   * scrolled behind the chooser came back truncated and the comparison failed
+   * for a reason that had nothing to do with the passage changing. The question
+   * here is whether the text changed, not whether it is on screen.
+   */
+  const passageText = () =>
+    driver.executeScript(
+      'const q = document.querySelector("blockquote"); return q ? q.textContent.trim() : null;',
+    );
+  const before = await passageText();
   await clickButton(driver, 'Change passage');
   await wait(600);
   await typeInto(driver, 'input[placeholder="John 3:16-18"]', 'John 99:1');
@@ -280,7 +393,7 @@ try {
     const message = await alerts[0].getText();
     check('the message says which book and how many chapters', /21 chapters/.test(message), message.slice(0, 70));
   }
-  const after = await driver.findElement(By.css('blockquote')).getText();
+  const after = await passageText();
   check('the previous passage is untouched', after === before, 'word for word');
   const draftAfterFailure = await driver.executeScript(
     'const f = document.querySelector("textarea"); return f ? f.value : "";',
@@ -311,6 +424,29 @@ try {
   );
   check('nothing overflows horizontally at 390px', !overflows);
   await shot(driver, 'bible-390-passage');
+
+  /*
+   * The picker itself on a phone. The row is a three-column grid, and a
+   * language pill squeezed off the end would take with it the one thing that
+   * tells two same-named Bibles apart.
+   */
+  await clickButton(driver, 'Change passage');
+  await wait(600);
+  await typeInto(driver, '[role=combobox]', 'tagalog');
+  await wait(600);
+  const mobileRows = await driver.executeScript(
+    `return Array.from(document.querySelectorAll('[role=option]')).map((node) => node.innerText.replace(/\\s+/g, ' ').trim());`,
+  );
+  check(
+    'the language is still readable on a phone',
+    mobileRows.length > 0 && mobileRows.every((row) => /Filipino/.test(row)),
+    mobileRows.join(' | ') || 'nothing',
+  );
+  const pickerOverflows = await driver.executeScript(
+    'return document.documentElement.scrollWidth > window.innerWidth + 2;',
+  );
+  check('the picker does not overflow at 390px', !pickerOverflows);
+  await shot(driver, 'bible-390-picker', '[role=listbox]');
 
   /*
    * The console, minus two expected noises: the unauthenticated `/auth/me`

@@ -99,15 +99,23 @@ export class BibleService {
 
   /* --------------------------------------------------------- translations */
 
+  /**
+   * Every translation this key can reach, across every configured language.
+   *
+   * `languages` narrows it; omitting it returns the whole catalog, which is the
+   * normal case. The interface searches the whole thing client-side — it is
+   * fifty short rows — so handing it a single language would be handing it a
+   * search that cannot find Tagalog.
+   */
   async translations(
-    language: string,
     caller: BibleCaller,
+    languages?: string[],
   ): Promise<BibleResult<{ translations: BibleTranslation[]; defaultId: number | null }>> {
     const gate = this.gate('translations', caller);
     if (gate) return gate;
 
     try {
-      const catalog = await this.catalog(language, caller);
+      const catalog = await this.catalog(caller, languages);
       if (catalog.length === 0) {
         this.log('translations', caller, BIBLE_OUTCOMES.PROVIDER_UNAVAILABLE, 'empty catalog');
         return { ok: false, outcome: BIBLE_OUTCOMES.PROVIDER_UNAVAILABLE };
@@ -161,7 +169,7 @@ export class BibleService {
     if (gate) return gate;
 
     try {
-      const catalog = await this.catalog(input.language ?? 'en', caller);
+      const catalog = await this.catalog(caller);
       const translation = catalog.find((entry) => entry.id === input.translationId);
       /*
        * A translation the key cannot reach is refused outright rather than
@@ -303,8 +311,13 @@ export class BibleService {
    * trade, and a translation with no attribution can still be shown, it just
    * cannot show a notice it does not have.
    */
-  private async catalog(language: string, caller: BibleCaller): Promise<ProviderTranslation[]> {
-    const key = language.toLowerCase();
+  private async catalog(
+    caller: BibleCaller,
+    languages?: string[],
+  ): Promise<ProviderTranslation[]> {
+    const wanted = (languages ?? this.readConfig().languages).map((tag) => tag.toLowerCase());
+    const key = [...wanted].sort().join(',');
+
     const cached = this.catalogCache.get(key);
     if (cached) return cached;
 
@@ -312,9 +325,81 @@ export class BibleService {
     if (existing) return existing;
 
     const build = (async () => {
-      const listed = await this.withProvider(caller, (provider, call) =>
-        provider.listTranslations(key, call),
+      /*
+       * One list request per language, and a failure in one must not cost the
+       * others.
+       *
+       * This is the difference between "Spanish is briefly unavailable" and
+       * "there are no Bibles". Each language is settled independently and a
+       * rejection contributes nothing rather than propagating — which also
+       * means a language tag an operator mistyped quietly yields no Bibles
+       * instead of emptying the catalog.
+       */
+      const listed: ProviderTranslation[] = [];
+      const seen = new Set<number>();
+      const refusals: BibleFailure[] = [];
+      let reached = 0;
+
+      const perLanguage = await Promise.allSettled(
+        wanted.map((language) =>
+          this.withProvider(caller, (provider, call) => provider.listTranslations(language, call)),
+        ),
       );
+
+      for (const [index, result] of perLanguage.entries()) {
+        if (result.status !== 'fulfilled') {
+          const failure = this.asFailure(result.reason);
+          refusals.push(failure);
+          this.log(
+            'translations',
+            caller,
+            failure.outcome,
+            `language ${wanted[index]} could not be listed`,
+          );
+          continue;
+        }
+        reached += 1;
+        for (const translation of result.value) {
+          /*
+           * Deduplicated by id, not by abbreviation. `NVI` is a real
+           * abbreviation in both Spanish and Portuguese and they are different
+           * Bibles; collapsing them would delete one of them.
+           */
+          if (seen.has(translation.id)) continue;
+          seen.add(translation.id);
+          listed.push(translation);
+        }
+      }
+
+      /*
+       * Every language failed. That is an outage, not an empty catalog, and it
+       * must NOT be cached — a cached emptiness would outlive the outage and
+       * leave the picker permanently blank. See the note in `cache.ts`.
+       */
+      if (reached === 0) {
+        /*
+         * Rethrow the most ACTIONABLE refusal, not a generic outage.
+         *
+         * This line exists because of a regression the tests caught: gathering
+         * languages independently meant a rejected credential — which fails
+         * every language at once — arrived here as seven ignored errors and
+         * left as "the provider is unavailable". The reader would be told to
+         * retry something that will never succeed until an operator fixes a
+         * key, and the operator would have no idea that is what happened.
+         *
+         * A credential problem outranks everything because it explains all the
+         * others; a rate limit outranks a generic failure because it is the one
+         * a caller can wait out.
+         */
+        const ranked =
+          refusals.find((failure) => failure.outcome === BIBLE_OUTCOMES.NOT_CONFIGURED) ??
+          refusals.find((failure) => failure.outcome === BIBLE_OUTCOMES.RATE_LIMITED) ??
+          refusals[0];
+        throw (
+          ranked ??
+          new BibleFailure(BIBLE_OUTCOMES.PROVIDER_UNAVAILABLE, 'no language could be listed')
+        );
+      }
 
       const hydrated: ProviderTranslation[] = [];
       for (let start = 0; start < listed.length; start += HYDRATION_CONCURRENCY) {
@@ -322,11 +407,11 @@ export class BibleService {
         const settled = await Promise.all(
           batch.map(async (entry) => {
             try {
-              const detail = await this.withProvider(caller, (provider, call) =>
+              return await this.withProvider(caller, (provider, call) =>
                 provider.getTranslation(entry.id, call),
               );
-              return detail;
             } catch {
+              /* Listed without attribution rather than dropped. */
               return entry;
             }
           }),
@@ -346,6 +431,7 @@ export class BibleService {
       this.inFlight.delete(key);
     }
   }
+
 
   /**
    * One provider call, with a deadline and at most one retry.

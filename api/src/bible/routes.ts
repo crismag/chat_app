@@ -182,22 +182,35 @@ export function createBibleRoutes(deps: BibleRouteDeps) {
     const user = deps.currentUser(c);
     if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
 
-    const language = (c.req.query('language') ?? 'en').trim().toLowerCase();
     /*
-     * A language range is a short tag, and anything longer is either a mistake
-     * or an attempt to put something else in the query string we build.
+     * `language` is an optional NARROWING, not a requirement.
+     *
+     * Omitting it returns every translation the key can reach, across every
+     * configured language, which is what the picker wants: the whole catalog is
+     * about fifty short rows, the browser searches it instantly, and a search
+     * that can only see English is a search that cannot find somebody a Bible
+     * in their own language.
      */
-    if (!/^[a-z]{2,3}(-[a-z0-9]{2,8})*$/.test(language)) {
+    const requested = (c.req.query('language') ?? '')
+      .split(',')
+      .map((tag) => tag.trim().toLowerCase())
+      .filter((tag) => tag.length > 0);
+
+    /*
+     * A language range is a short tag. Anything else is either a mistake or an
+     * attempt to put something of the caller's choosing into the query string
+     * we build for the provider, so it is refused rather than forwarded.
+     */
+    if (requested.some((tag) => !/^[a-z]{2,3}(-[a-z0-9]{2,8})*$/.test(tag))) {
       return fail(c, BIBLE_OUTCOMES.INVALID_REQUEST, {
         message: 'That is not a language we can look up.',
       });
     }
 
-    const result = await deps.service.translations(language, {
-      userId: user.id,
-      address: addressOf(c),
-      requestId: randomUUID(),
-    });
+    const result = await deps.service.translations(
+      { userId: user.id, address: addressOf(c), requestId: randomUUID() },
+      requested.length > 0 ? requested : undefined,
+    );
 
     if (!result.ok) {
       return fail(c, result.outcome, {

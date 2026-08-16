@@ -44,6 +44,23 @@ export interface BibleTranslation {
   name: string;
   /** BCP 47 language tag, as the provider states it. */
   language: string;
+  /**
+   * The language as a person would say it: `Filipino`, `Cebuano`, `Spanish`.
+   *
+   * Carried because a catalog spanning several languages is unreadable without
+   * it. `NVI` appears twice — once Spanish, once Portuguese — and `CCB` is
+   * Chinese while the Cebuano Bible is `APD`. A row showing only an
+   * abbreviation makes those indistinguishable, and picking the wrong one is
+   * not a small mistake when it decides which Bible somebody reads.
+   */
+  languageName: string;
+  /**
+   * Other names for that language, carried for searching only.
+   *
+   * `tl` displays as "Filipino", but a great many people would type "Tagalog",
+   * and a search that refuses them is a search that looks broken.
+   */
+  languageAliases?: string[];
   copyright?: string;
   publisherUrl?: string;
   youVersionUrl?: string;

@@ -26,6 +26,17 @@ export interface BibleConfig {
   configured: boolean;
   baseUrl: string;
   timeoutMs: number;
+  /**
+   * The languages the catalog is assembled from.
+   *
+   * Configuration rather than a constant, and it matters more than it looks:
+   * **the provider has no "list every Bible" call.** A request without
+   * `language_ranges[]` is rejected outright, so the catalog is exactly the set
+   * of languages named here — and a language nobody thought to add is a
+   * language whose Bibles do not exist as far as this application is concerned.
+   * Adding one must never need a code change and a deploy.
+   */
+  languages: string[];
   /** How long the translation catalog may be reused. */
   catalogTtlMs: number;
   /** How long a fetched passage may be held in memory. See `cache.ts`. */
@@ -55,6 +66,20 @@ const DEFAULTS = {
    */
   enabled: true,
   baseUrl: 'https://api.youversion.com/v1',
+  /*
+   * The default set, and why these seven.
+   *
+   * English because it is this application's first audience. Filipino and
+   * Cebuano because they are the languages of the communities this product was
+   * built for, and a Bible app that cannot offer someone a Bible in their own
+   * language has failed at the only thing it does. Spanish, French, German and
+   * Chinese because they are the next largest groups the key can reach and
+   * fetching them costs one list request each, once a day.
+   *
+   * Verified against the key on 2026-08-16: en 20, es 8, de 7, fr 6, zh 3,
+   * tl 2, ceb 1 — 47 translations.
+   */
+  languages: ['en', 'tl', 'ceb', 'es', 'fr', 'de', 'zh'],
   timeoutMs: 8_000,
   /* A translation catalog changes a few times a year. A day is generous. */
   catalogTtlMs: 24 * 60 * 60 * 1000,
@@ -75,6 +100,27 @@ function flag(value: string | undefined, fallback: boolean): boolean {
   return fallback;
 }
 
+/**
+ * A comma-separated language list, validated tag by tag.
+ *
+ * Anything that is not a plausible language range is DROPPED rather than
+ * passed through, because these values are interpolated into a request to the
+ * provider. An operator's typo should cost them that one language, not turn
+ * into a malformed query for the other six.
+ *
+ * An empty or entirely invalid setting falls back to the defaults. A catalog of
+ * nothing is not a useful interpretation of a misconfigured variable — it is a
+ * Bible app with no Bibles.
+ */
+function languageList(value: string | undefined): string[] {
+  const parsed = (value ?? '')
+    .split(',')
+    .map((tag) => tag.trim().toLowerCase())
+    .filter((tag) => /^[a-z]{2,3}(-[a-z0-9]{2,8})*$/.test(tag));
+  const unique = [...new Set(parsed)];
+  return unique.length > 0 ? unique : [...DEFAULTS.languages];
+}
+
 function positiveInt(value: string | undefined, fallback: number): number {
   if (value === undefined) return fallback;
   const parsed = Number.parseInt(value.trim(), 10);
@@ -92,6 +138,7 @@ export function readBibleConfig(env: NodeJS.ProcessEnv = process.env): BibleConf
     enabled: flag(env['BIBLE_ENABLED'], DEFAULTS.enabled),
     configured: (env['YVP_APP_KEY'] ?? '').trim().length > 0,
     baseUrl: (env['YVP_API_BASE_URL'] ?? '').trim() || DEFAULTS.baseUrl,
+    languages: languageList(env['BIBLE_LANGUAGES']),
     timeoutMs: positiveInt(env['BIBLE_REQUEST_TIMEOUT_MS'], DEFAULTS.timeoutMs),
     catalogTtlMs: positiveInt(env['BIBLE_CATALOG_TTL_MS'], DEFAULTS.catalogTtlMs),
     passageTtlMs: positiveInt(env['BIBLE_PASSAGE_TTL_MS'], DEFAULTS.passageTtlMs),

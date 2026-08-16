@@ -104,6 +104,66 @@ if (catalog.body) {
   );
 }
 
+/* --- more than one language ---------------------------------------------- */
+
+/*
+ * The catalog is assembled per language because there is no other way: a
+ * request with NO language range is refused outright. That makes the configured
+ * language list the whole of what this application can offer, which is worth
+ * re-establishing against the real API rather than trusting.
+ */
+const noRange = await get('/bibles?page_size=99');
+check(
+  'a request with no language range is refused',
+  noRange.status !== 200,
+  `status ${noRange.status} — there is no "list everything" call`,
+);
+
+for (const [tag, expectedName] of [
+  ['tl', 'Filipino'],
+  ['ceb', 'Cebuano'],
+  ['es', 'Spanish'],
+]) {
+  const page = await get(`/bibles?language_ranges%5B%5D=${tag}&page_size=99`);
+  const rows = page.body?.data ?? [];
+  check(
+    `${tag} (${expectedName}) has Bibles`,
+    page.status === 200 && rows.length > 0,
+    rows.map((row) => row.localized_abbreviation ?? row.abbreviation).join(', ') || 'none',
+  );
+  check(
+    `${tag} is named "${expectedName}" for search`,
+    new Intl.DisplayNames(['en'], { type: 'language' }).of(tag) === expectedName,
+  );
+}
+
+/*
+ * The sharpest reason this connector never keys anything on an abbreviation.
+ *
+ * TWO DIFFERENT BIBLES share the raw abbreviation `CCB`: id 9 is Cebuano ("Ang
+ * Pulong sa Dios") and id 36 is Chinese ("当代译本"). They are told apart only
+ * by `localized_abbreviation` — APD and CCB respectively — and by their
+ * language. An interface that displayed the raw abbreviation would show two
+ * identical-looking rows for Bibles in unrelated languages, and code that
+ * matched on it could resolve either.
+ *
+ * This is the same hazard as `NIV11` not being `NIV`, in its worst form.
+ */
+const cebuano = (await get('/bibles?language_ranges%5B%5D=ceb&page_size=99')).body?.data ?? [];
+const chinese = (await get('/bibles?language_ranges%5B%5D=zh&page_size=99')).body?.data ?? [];
+const cebCCB = cebuano.find((row) => row.abbreviation === 'CCB');
+const zhCCB = chinese.find((row) => row.abbreviation === 'CCB');
+check(
+  'two different Bibles share the raw abbreviation CCB',
+  Boolean(cebCCB && zhCCB) && cebCCB.id !== zhCCB.id,
+  `Cebuano id ${cebCCB?.id} vs Chinese id ${zhCCB?.id}`,
+);
+check(
+  'their localized abbreviations tell them apart',
+  cebCCB?.localized_abbreviation === 'APD' && zhCCB?.localized_abbreviation === 'CCB',
+  `${cebCCB?.localized_abbreviation} vs ${zhCCB?.localized_abbreviation} — this is what the picker shows`,
+);
+
 /* --- page_size --------------------------------------------------------- */
 
 const oversized = await get('/bibles?language_ranges%5B%5D=en&page_size=100');

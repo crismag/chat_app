@@ -70,8 +70,23 @@ export function asLookupFailure(error: unknown): LookupFailure {
   }
 }
 
-export function fetchTranslations(language = 'en'): Promise<TranslationsAnswer> {
-  return api<TranslationsAnswer>(`/bible/translations?language=${encodeURIComponent(language)}`)
+/**
+ * The whole catalog, in every language the server is configured for.
+ *
+ * **No language parameter by default, and that is the fix for a real bug.**
+ * This asked for `?language=en`, which the server honours as a narrowing
+ * filter — so the picker only ever held English, and searching "Tagalog",
+ * "tl" or "Reina Valera" correctly returned nothing. It looked like the search
+ * was broken. The search was fine; it had nothing to search.
+ *
+ * `language` remains available for a caller that genuinely wants one language,
+ * but the picker wants all of them: it is about fifty short rows, the browser
+ * ranks them instantly, and a search that cannot see past English cannot find
+ * somebody a Bible in their own language.
+ */
+export function fetchTranslations(language?: string): Promise<TranslationsAnswer> {
+  const query = language ? `?language=${encodeURIComponent(language)}` : ''
+  return api<TranslationsAnswer>(`/bible/translations${query}`)
 }
 
 export function fetchPassage(
@@ -123,9 +138,42 @@ export function readPreviousTranslationId(): number | null {
   }
 }
 
+const RECENT_KEY = 'chat.bible.recentTranslationIds'
+
+/** How many recent translations are worth offering before it becomes a list. */
+const RECENT_LIMIT = 3
+
+/**
+ * The handful of translations this person actually uses.
+ *
+ * Most people read one or two Bibles and occasionally compare a third. Putting
+ * those at the top of the picker is the difference between choosing and
+ * searching, every time — and it costs one small array in local storage.
+ *
+ * Read defensively: this value can be edited by hand, written by an older
+ * version of this code, or simply corrupted, and none of those may be allowed
+ * to break the picker.
+ */
+export function readRecentTranslationIds(): number[] {
+  try {
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(RECENT_KEY) ?? '[]')
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter((id): id is number => Number.isInteger(id) && (id as number) > 0)
+      .slice(0, RECENT_LIMIT)
+  } catch {
+    return []
+  }
+}
+
 export function rememberTranslationId(id: number): void {
   try {
     window.localStorage.setItem(SELECTION_KEY, String(id))
+    const next = [id, ...readRecentTranslationIds().filter((entry) => entry !== id)].slice(
+      0,
+      RECENT_LIMIT,
+    )
+    window.localStorage.setItem(RECENT_KEY, JSON.stringify(next))
   } catch {
     /* Ignored for the same reason. */
   }
