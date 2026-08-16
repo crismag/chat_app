@@ -15,6 +15,13 @@ coverage/
 .env
 .env.*
 !.env.example
+# Provider key files. Named explicitly because a key that is merely outside the
+# repo today is one careless copy away from being inside it tomorrow.
+*.api_keys
+*.apikey
+*.pem
+*.key
+!lib/**/*.key
 
 # Logs
 *.log
