@@ -30,6 +30,8 @@ import {
   sectionsFromStore,
   suggestTitles,
 } from './ai.ts';
+import { createAiRoutes } from './ai/routes.ts';
+import { AiService, type AiServiceOptions } from './ai/service.ts';
 import { SqliteStore } from './db.ts';
 import { MemoryStore, type StoredConversation } from './store.ts';
 
@@ -94,9 +96,19 @@ const sessionCookie = {
 /**
  * `store` accepts either backing. Tests hand in an in-memory SQLite database so
  * each one gets a clean schema; the server hands in a file.
+ *
+ * `ai` lets a test hand in a fake provider.
+ *
+ * Assistance is constructed here rather than imported as a singleton so a test
+ * can give this app its own service — with its own provider, its own clock and
+ * its own rate limiter — without any of them leaking into the next test.
  */
-export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) {
+export function createApp(
+  store: MemoryStore | SqliteStore = new SqliteStore(),
+  ai: AiServiceOptions = {},
+) {
   const app = new Hono();
+  const aiService = new AiService(ai);
 
   /**
    * The draft as its format's validator expects to see it.
@@ -169,12 +181,50 @@ export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) 
   });
 
   /*
-   * What assistance can do right now.
+   * What assistance can do right now — one endpoint, extended rather than
+   * duplicated.
    *
    * The interface asks before it offers a control, so an unavailable one can
    * be disabled with a reason on it rather than left live and doing nothing.
+   * The model-backed capabilities are reported by the AI service; the
+   * heuristic title suggestion that predates it keeps reporting through
+   * `aiStatus()`, and the two are merged into the one answer the client
+   * already reads. Nothing here names a project, a model, a key or a quota.
    */
-  app.get('/api/ai/status', (c) => c.json(aiStatus()));
+  app.route(
+    '/api/ai',
+    createAiRoutes({
+      service: aiService,
+      currentUser: (c) => currentUser(c),
+      status: () => {
+        /*
+         * Two independent facts, reported as one answer.
+         *
+         * The heuristic path needs no key and no network, so a server with no
+         * provider configured must still report `enabled` — otherwise the
+         * Suggest-title button that has worked since before any of this stops
+         * working the moment the AI backbone lands, which would be a
+         * regression dressed as a feature.
+         */
+        const heuristic = aiStatus();
+        const model = aiService.modelStatus();
+        return {
+          enabled: heuristic.enabled,
+          provider: model.available ? model.provider : heuristic.provider,
+          capabilities: {
+            suggestTitle: heuristic.enabled,
+            reflectionGuidance: heuristic.enabled && model.available,
+            improveWriting: heuristic.enabled && model.available,
+          },
+          ...(heuristic.enabled
+            ? model.available
+              ? {}
+              : { reason: model.reason }
+            : { reason: heuristic.reason }),
+        };
+      },
+    }),
+  );
 
   app.post('/api/auth/register', async (c) => {
     const body = await c.req.json<{ email?: string; password?: string }>();
