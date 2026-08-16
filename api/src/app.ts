@@ -250,6 +250,7 @@ export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) 
     messages.push(message);
     store.messages.set(conversation.id, messages);
     conversation.updatedAt = message.createdAt;
+    store.conversations.set(conversation.id, conversation);
     return c.json(message, 201);
   });
 
@@ -263,6 +264,7 @@ export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) 
     }
     conversation.publicationState = PUBLICATION_STATES.PUBLISHED;
     conversation.updatedAt = nowIso();
+    store.conversations.set(conversation.id, conversation);
     return c.json(summaryOf(conversation));
   });
 
@@ -276,6 +278,7 @@ export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) 
     }
     conversation.publicationState = PUBLICATION_STATES.PRIVATE;
     conversation.updatedAt = nowIso();
+    store.conversations.set(conversation.id, conversation);
     return c.json(summaryOf(conversation));
   });
 
@@ -302,6 +305,7 @@ export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) 
     };
     store.sections.set(conversation.id, current);
     conversation.updatedAt = nowIso();
+    store.conversations.set(conversation.id, conversation);
     return c.json({ sections: current });
   });
 
@@ -325,6 +329,7 @@ export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) 
       const sections = extractChatSections(messages);
       store.sections.set(conversation.id, sections);
       conversation.updatedAt = nowIso();
+      store.conversations.set(conversation.id, conversation);
       return c.json({ action, sections });
     }
 
@@ -349,6 +354,7 @@ export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) 
       messages.push(assistantMessage);
       store.messages.set(conversation.id, messages);
       conversation.updatedAt = assistantMessage.createdAt;
+      store.conversations.set(conversation.id, conversation);
       return c.json({
         action,
         original: target.content,

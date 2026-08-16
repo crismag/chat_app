@@ -85,6 +85,38 @@ describe('SQLite store', () => {
     second.close();
   });
 
+  /*
+   * A regression guard for the swap itself. Under MemoryStore a route could
+   * mutate the object it got back from the store and the Map would see it,
+   * because it was the same object. A row read out of SQLite is a copy, so a
+   * mutation that is never written back is silently lost — publish would answer
+   * 200, echo the change, and persist nothing.
+   */
+  it('persists a publish, not just the response', async () => {
+    const file = join(dir, 'publish.sqlite');
+
+    const first = new SqliteStore(file);
+    const app = createApp(first);
+    const cookie = await register(app, 'publish@example.com');
+    const created = await app.request('/api/conversations', {
+      ...json({ title: 'Trusting when I cannot see' }),
+      headers: { 'content-type': 'application/json', cookie },
+    });
+    const conversation = (await created.json()) as { id: string };
+
+    const published = await app.request(
+      `/api/conversations/${conversation.id}/publish`,
+      { method: 'POST', headers: { cookie } },
+    );
+    expect(published.status).toBe(200);
+    first.close();
+
+    const second = new SqliteStore(file);
+    const state = second.conversations.get(conversation.id);
+    expect(state?.publicationState).toBe('published');
+    second.close();
+  });
+
   it('refuses a session that has aged out, and forgets it', () => {
     const store = new SqliteStore();
     store.users.set('u1', {
