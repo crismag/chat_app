@@ -164,6 +164,16 @@ npm run build
 Browser checks against a running dev server live in `scripts/verify/`; see
 [`scripts/verify/README.md`](scripts/verify/README.md).
 
+### Third-party software
+
+C.H.A.T. bundles its required notices into an offline-capable **Open Source
+Licences** page at `/open-source-licenses`. The generated human-readable record
+is [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md), with the matching
+structured payload in [`third-party-notices.json`](third-party-notices.json).
+Create Studio is currently consumed as the pinned private package artifact
+documented in [`vendor/README.md`](vendor/README.md); this does not declare a
+public licence for Create Studio itself.
+
 ## Initial MVP
 
 The first useful release should prove the core loop:

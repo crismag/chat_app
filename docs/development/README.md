@@ -14,6 +14,7 @@ It exists so implementation work, AI-assisted development, code generation, and 
 6. [`AI_PROVIDER.md`](AI_PROVIDER.md) — how assistance is wired: setup, configuration, model selection, failure modes, privacy and logging, and how to add another provider. Document 5 is the rules; this is the mechanism that serves them.
 7. [`REFLECTION_CHAT.md`](REFLECTION_CHAT.md) — the conversation panel beside the card: the brief as the owner gave it, and what was built against it.
 8. [`PRODUCT_READINESS.md`](PRODUCT_READINESS.md) — what is actually finished, page by page, and what is not. The counterweight to the six documents above, which describe intent.
+9. [`CREATE_STUDIO_INTEGRATION.md`](CREATE_STUDIO_INTEGRATION.md) — Phase 3 host mapping, persistence, package, export, and attribution boundaries.
 
 Alongside these, [`../examples/REAL_CHAT_SAMPLES.md`](../examples/REAL_CHAT_SAMPLES.md) transcribes roughly thirty reflections people actually wrote. It is evidence, not intent, and it is why the C section holds the passage.
 
@@ -37,7 +38,7 @@ If implementation reveals that a documented assumption is wrong, update the rele
 
 ## Current status
 
-Well past scaffolding. A React/Vite web app and a Hono API, sharing domain types; email/password authentication with server-side sessions; SQLite persistence; the four C.H.A.T. sections as the page; a Gemini-backed assistance seam; and a YouVersion passage connector. Community and Create are the two product areas still essentially unbuilt.
+Well past scaffolding. A React/Vite web app and a Hono API, sharing domain types; email/password authentication with server-side sessions; SQLite persistence; the four C.H.A.T. sections as the page; a Gemini-backed assistance seam; a YouVersion passage connector; and the first Create Studio square-card integration. Community remains incomplete, and Create still has later content-rich phases beyond its working foundation.
 
 Phase-by-phase status is in [`MVP_PLAN.md`](MVP_PLAN.md); an unsparing page-by-page account is in [`PRODUCT_READINESS.md`](PRODUCT_READINESS.md).
 
