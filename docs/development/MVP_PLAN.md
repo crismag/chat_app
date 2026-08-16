@@ -166,7 +166,13 @@ A user can choose content, apply a style/layout, produce a readable polished ima
 
 ## Phase 6 — Topical AI backgrounds
 
-Status: **not started.** No image provider exists and none is wired.
+Status: **host boundary implemented; production provider not selected.** Create
+Studio supplies provider-neutral generation, cancellation, retry, regeneration,
+variation and provenance behavior. C.H.A.T. supplies authenticated permanent
+asset storage and a server-only provider seam. An original deterministic local
+fixture proves the integration without network access, credentials, cost, or a
+claim of AI generation. Mood/direction UX, prompt derivation and an
+owner-approved production provider remain.
 
 Deliverables:
 
