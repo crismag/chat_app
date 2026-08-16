@@ -39,6 +39,7 @@ import {
   buildGuidancePrompt,
   buildImprovePrompt,
   guidanceResponseSchema,
+  NO_PASSAGE_TEXT_NOTE,
 } from './prompt.ts';
 import { AiRateLimiter } from './rate-limit.ts';
 import { AiService } from './service.ts';
@@ -1976,5 +1977,191 @@ describe('suggest title, end to end', () => {
     for (const title of body['suggestions'] as string[]) {
       expect(typeof title).toBe('string');
     }
+  });
+});
+
+/* ------------------------------------------- Scripture actually in the prompt */
+
+/*
+ * The seam, wired.
+ *
+ * `bibleService.scriptureForPrompt` has existed for a while and nothing called
+ * it, so every prompt went out carrying a bare reference. Asked about
+ * "Habakkuk 3:17-19 NLT" with no text in front of it, a model does not decline
+ * — it reconstructs the verse from memory and names the translation, and the
+ * result is a false attribution of Scripture in something the writer may
+ * publish. A prompt instruction is not a constraint; the words are.
+ *
+ * Two facts are protected here, and the second matters as much as the first:
+ * the retrieved words reach the provider, and their ABSENCE reaches it too, as
+ * an explicit prohibition rather than as a silence.
+ */
+describe('the passage reaches the model', () => {
+  const passageBody = {
+    provider: 'youversion',
+    translationId: 111,
+    abbreviation: 'NIV',
+    name: 'New International Version',
+    passageId: 'ROM.8.28',
+    reference: 'Romans 8:28',
+    content:
+      'And we know that in all things God works for the good of those who love him.',
+    retrievedAt: new Date().toISOString(),
+  };
+
+  /** A provider that answers plausibly and remembers what it was asked. */
+  function recorder() {
+    const seen: {
+      passageReference: string;
+      passageText?: string;
+      passageAbbreviation?: string;
+    }[] = [];
+    const provider: AIProvider = {
+      name: 'recorder',
+      generateReflectionGuidance: async () => ({
+        sections: { heart: { questions: ['What stayed with you?'] } },
+        notice: AI_GUIDANCE_NOTICE,
+      }),
+      discussReflection: async (request) => {
+        seen.push({
+          passageReference: request.passageReference,
+          ...(request.passageText === undefined ? {} : { passageText: request.passageText }),
+          ...(request.passageAbbreviation === undefined
+            ? {}
+            : { passageAbbreviation: request.passageAbbreviation }),
+        });
+        return { reply: 'Noted.', redirected: false };
+      },
+      improveReflectionWriting: async () => {
+        throw new Error('not used');
+      },
+      suggestReflectionTitles: async () => ({ titles: ['A name'] }),
+    };
+    return { provider, seen };
+  }
+
+  async function signedIn(provider: AIProvider, email: string) {
+    const app = createApp(new MemoryStore(), {
+      config: workingConfig(),
+      createProvider: () => provider,
+      logger: () => {},
+      jitter: () => 0,
+    });
+    const registered = await app.request('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: 'secret12' }),
+    });
+    const cookie = registered.headers.get('set-cookie') ?? '';
+    const send = (path: string, body: unknown, method = 'POST') =>
+      app.request(path, {
+        method,
+        headers: { 'Content-Type': 'application/json', Cookie: cookie },
+        body: JSON.stringify(body),
+      });
+    return { send };
+  }
+
+  test('a stored passage travels with the request, as its own words', async () => {
+    const { provider, seen } = recorder();
+    const { send } = await signedIn(provider, 'scripture@example.com');
+
+    const created = await send('/api/conversations', { scriptureReference: 'Romans 8:28' });
+    const { id } = (await created.json()) as { id: string };
+
+    /* The passage the author chose, saved against the reflection. */
+    const saved = await send(`/api/bible/reflections/${id}/passage`, passageBody, 'PUT');
+    expect(saved.status).toBe(200);
+
+    await send('/api/ai/reflection-chat', { conversationId: id, message: 'What is this about?' });
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.passageText).toBe(passageBody.content);
+    /*
+     * And the translation with it. Left out, the model names one anyway: given
+     * the World English Bible's wording it wrote "(WEB)" where the reflection's
+     * passage says `WEBUS` — close enough to look right and wrong on the page.
+     */
+    expect(seen[0]?.passageAbbreviation).toBe('NIV');
+    const prompt = buildChatPrompt(
+      {
+        passageReference: 'Romans 8:28',
+        passageText: passageBody.content,
+        passageAbbreviation: 'WEBUS',
+        sections: {},
+        history: [],
+        message: 'Prepare my Content section.',
+      },
+      'NONCE3',
+    );
+    expect(prompt).toContain('"WEBUS"');
+    expect(prompt).toMatch(/never as a different abbreviation/i);
+  });
+
+  test('with no stored passage nothing is invented — the prompt says so', async () => {
+    const { provider, seen } = recorder();
+    const { send } = await signedIn(provider, 'noscripture@example.com');
+
+    const created = await send('/api/conversations', { scriptureReference: 'Habakkuk 3:17-19' });
+    const { id } = (await created.json()) as { id: string };
+
+    await send('/api/ai/reflection-chat', { conversationId: id, message: 'What is this about?' });
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.passageText).toBeUndefined();
+    expect(seen[0]?.passageReference).toBe('Habakkuk 3:17-19');
+
+    /*
+     * And an absent text is not an absent instruction. This is the half that
+     * was missing: the model is told it does not have the wording and is
+     * forbidden to supply one.
+     */
+    const prompt = buildChatPrompt(
+      { passageReference: 'Habakkuk 3:17-19', sections: {}, history: [], message: 'Explain it.' },
+      'NONCE1',
+    );
+    expect(prompt).toContain(NO_PASSAGE_TEXT_NOTE);
+    expect(prompt).toMatch(/do not name a translation/i);
+  });
+
+  test('the same rule governs the guidance prompt, not only the conversation', () => {
+    const withText = buildGuidancePrompt(
+      {
+        passageReference: 'Romans 8:28',
+        passageText: passageBody.content,
+        sections: ['heart'],
+        written: {},
+      },
+      'NONCE2',
+    );
+    expect(withText).toContain('<<<BEGIN_PASSAGE_TEXT_NONCE2>>>');
+    expect(withText).not.toContain(NO_PASSAGE_TEXT_NOTE);
+
+    const without = buildGuidancePrompt(
+      { passageReference: 'Romans 8:28', sections: ['heart'], written: {} },
+      'NONCE2',
+    );
+    expect(without).toContain(NO_PASSAGE_TEXT_NOTE);
+  });
+
+  test('the client cannot describe its own passage text', async () => {
+    const { provider, seen } = recorder();
+    const { send } = await signedIn(provider, 'liar@example.com');
+
+    const created = await send('/api/conversations', { scriptureReference: 'Romans 8:28' });
+    const { id } = (await created.json()) as { id: string };
+
+    /*
+     * A body claiming a passage. It must be ignored exactly as the sections
+     * and the thread are — the server builds this context or it is not
+     * trustworthy, and text the client chose is text an attacker chose.
+     */
+    await send('/api/ai/reflection-chat', {
+      conversationId: id,
+      message: 'What is this about?',
+      passageText: 'A verse I made up and attributed to the NIV.',
+    });
+
+    expect(seen[0]?.passageText).toBeUndefined();
   });
 });

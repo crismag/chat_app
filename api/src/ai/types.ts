@@ -25,8 +25,14 @@ import {
 export interface ReflectionGuidanceRequest {
   /** The passage being reflected on, as the writer named it. */
   passageReference: string;
-  /** Optional passage text the writer supplied. Never fetched by us. */
+  /**
+   * The passage's own words, when the server has them and policy allows them
+   * to be sent. Absent means the prompt tells the model it has no wording and
+   * forbids it inventing one — see `NO_PASSAGE_TEXT_NOTE`.
+   */
   passageText?: string;
+  /** The passage's translation, so the model names the writer's, not a guess. */
+  passageAbbreviation?: string;
   /** Which sections to return questions for. At least one. */
   sections: AiGuidanceSection[];
   /**
@@ -53,8 +59,14 @@ export interface ReflectionGuidanceRequest {
  */
 export interface ReflectionChatRequest {
   passageReference: string;
-  /** Passage text the writer supplied. Never fetched by us. */
+  /**
+   * The passage's own words, supplied by the server through the Bible seam —
+   * never by the client. Absent means the prompt says so explicitly rather
+   * than leaving a gap the model will fill from memory.
+   */
   passageText?: string;
+  /** The passage's translation, so the model names the writer's, not a guess. */
+  passageAbbreviation?: string;
   /** The reflection's current sections, so a reply can build on what is there. */
   sections: Partial<Record<AiGuidanceSection, string>>;
   /** Recent turns of THIS conversation, oldest first and bounded in length. */

@@ -124,6 +124,9 @@ export class GeminiProvider implements AIProvider {
         {
           passageReference: request.passageReference,
           ...(request.passageText === undefined ? {} : { passageText: request.passageText }),
+          ...(request.passageAbbreviation === undefined
+            ? {}
+            : { passageAbbreviation: request.passageAbbreviation }),
           sections: request.sections,
           written,
         },
@@ -153,6 +156,9 @@ export class GeminiProvider implements AIProvider {
         {
           passageReference: request.passageReference,
           ...(request.passageText === undefined ? {} : { passageText: request.passageText }),
+          ...(request.passageAbbreviation === undefined
+            ? {}
+            : { passageAbbreviation: request.passageAbbreviation }),
           sections,
           history: request.history,
           message: request.message,

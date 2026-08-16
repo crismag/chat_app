@@ -511,28 +511,31 @@ Written down rather than discovered later.
   written rather than repeating it, and it is more than the strict minimum for
   the request. It is bounded by `AI_MAX_INPUT_CHARS` and is the one place the
   minimum-fields rule is traded for answer quality.
-- **The Scripture reference field loses keystrokes.** Typed immediately after
-  the first message creates a reflection, the characters entered before the
-  creation round-trip completes are thrown away and only the tail survives.
-  Reproduced on 2026-08-16 against the live provider by
-  `scripts/verify/readiness-reference.mjs`: typing `Psalm 23` a moment after
-  Send left the field reading **`alm 23`**, the stored `scriptureReference`
-  **`null`**, and the chat panel headed *"Reflect on alm 23"*. Typed before the
-  first message, or into an existing reflection, it is fine — the same script
-  checks that control case and it passes.
+- **The Scripture reference field still loses keystrokes, and the check for it
+  no longer catches it.** Typed immediately after the first message creates a
+  reflection, characters entered while the creation round-trip is in flight are
+  discarded.
 
-  The cause is not a remount. `referenceDraft` (`web_app/src/chat/ChatPage.tsx`
-  L126) is set back to `null` twice while the creation is in flight — once at
-  L565 when `POST /conversations` resolves and again at L315 inside
-  `openConversation`, which still sees `switching === true` because `openedRef`
-  is assigned only after its own awaited GET (L303–306). The input's value falls
-  back to the server's copy when the draft is null (L1324), so each reset
-  silently replaces whatever has been typed since.
+  Commit `e924e0c` fixed the cause it identified — creating a reflection looked,
+  from inside `openConversation`, exactly like switching to a different one, so
+  it ran the reset that discards unsaved drafts — and its
+  `scripts/verify/reference-race.mjs` passes 5/5. That script sends with
+  `Ctrl`+`Enter` under 500ms of induced latency.
 
-  It now matters more than it did: the reference is what every AI request is
-  scoped to, so a mangled one asks the model about a passage that does not
-  exist. `scripts/verify/ai-assist.mjs` sets the value directly and asserts it
-  landed, so verification cannot be fooled by it. **Not fixed.**
+  Sending with the **send button** instead still loses characters: nine trials
+  on 2026-08-16, nine losses, on a second reflection with the disclosure already
+  dismissed. `Psalm 23` came back as `salm 23`, `lm 23`, `alm 23`, `salm`, `23`
+  and — losing a character from the middle rather than the front — `Psalm23`.
+  So it is not one wipe at the start; it is repeated resets racing individual
+  keystrokes.
+
+  This matters here rather than only in the identity inputs: the reference is
+  what every AI request is scoped to, so a mangled one asks the model about a
+  passage that does not exist, and the panel header says so out loud —
+  *"Reflect on 23"*. `scripts/verify/ai-assist.mjs` sets the value directly and
+  asserts it landed, so assistance verification cannot be fooled by it.
+  **Partly fixed, and currently unguarded** — widen `reference-race.mjs` to
+  press the send button as well as the shortcut.
 - **Chat history is bounded by turn count and characters, not by tokens.**
   Characters are a proxy. A long reflection in a language that tokenises poorly
   could still make a larger request than the budget implies.

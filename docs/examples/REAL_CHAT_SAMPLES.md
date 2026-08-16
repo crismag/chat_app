@@ -156,6 +156,7 @@ server-side note behind it forbids quoting verse text from memory and asks for
 the passage as an author would write it. `api/src/ai/ai.test.ts` fails if the
 old commentary phrasing returns to the prompt.
 
-**What did not.** The chip is still called *"Draft Content"* — a name that
-describes composing prose, which is the habit this finding exists to break.
-*"Add passage"* would say what the button does. It has not been renamed.
+The chip that said *"Draft Content"* is now **"Prepare Content"**, and the
+passage card says what the passage is for: *"Choose a passage and its words
+come with it — the text, the reference and the translation, ready to put into
+Content."*

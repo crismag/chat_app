@@ -106,6 +106,18 @@ export interface AiRouteDeps {
       conversationId: string,
     ): {
       passageReference: string;
+      /**
+       * The passage's own words, decided by the Bible seam.
+       *
+       * Loaded here with everything else, so the client cannot supply it and
+       * cannot suppress it. Undefined means there is nothing to send — either
+       * no passage was retrieved for this reflection, or configuration says a
+       * translation's words may not leave the building — and in both cases the
+       * prompt says so out loud instead of leaving the model a gap to fill.
+       */
+      passageText?: string;
+      /** The translation those words came from, named exactly. */
+      passageAbbreviation?: string;
       sections: Record<string, string>;
       history: { role: 'user' | 'assistant'; content: string }[];
     } | null;
@@ -276,6 +288,10 @@ export function createAiRoutes(deps: AiRouteDeps) {
     const result = await deps.service.discussReflection(
       {
         passageReference: context.passageReference,
+        ...(context.passageText === undefined ? {} : { passageText: context.passageText }),
+        ...(context.passageAbbreviation === undefined
+          ? {}
+          : { passageAbbreviation: context.passageAbbreviation }),
         sections: context.sections,
         history: context.history,
         message: parsed.message,

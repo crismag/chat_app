@@ -191,5 +191,31 @@ export interface ScriptureForPrompt {
   unavailable: boolean;
 }
 
-/** Whether a translation's text may be included in a provider prompt. */
-export const SCRIPTURE_IN_PROMPTS_DEFAULT = false;
+/**
+ * Whether a translation's text may be included in a provider prompt.
+ *
+ * ON by default, which reverses the original position. The reversal was not
+ * decided on convenience; it was decided by watching what the other setting
+ * actually produces.
+ *
+ * With no passage text in the prompt, a model asked about "Habakkuk 3:17-19
+ * NLT" does not decline. It reconstructs the verse from memory, names the
+ * translation, and hands it to someone who is about to paste it into a
+ * reflection they may publish. A prompt instruction is not a constraint: the
+ * only reliable way to stop a model inventing Scripture is to put the real
+ * words in front of it. **A false attribution of Scripture to a named
+ * publisher is a worse licensing outcome than sending them a passage they
+ * already licensed to this application.**
+ *
+ * What is sent, and to whom, is already disclosed: `AI_DISCLOSURE` tells the
+ * writer that the selected passage and the reflection text needed for the
+ * request go to the AI provider. It is one passage, for one person's own
+ * request, as ephemeral prompt context — not a corpus, not a redistribution,
+ * not a stored copy on anyone else's side.
+ *
+ * An operator whose licence forbids it sets `BIBLE_SCRIPTURE_IN_PROMPTS=false`
+ * and keeps the old behaviour — but not the old silence. With the text
+ * withheld, the prompt now says so explicitly and forbids quoting or
+ * reconstructing the passage, which is the part that was missing before.
+ */
+export const SCRIPTURE_IN_PROMPTS_DEFAULT = true;

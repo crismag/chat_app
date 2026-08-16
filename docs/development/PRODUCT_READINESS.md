@@ -5,6 +5,11 @@ application in a browser at 1280 and 390 rather than from reading source.
 Everything below was observed on **2026-08-16** against the dev server with
 Gemini and YouVersion live.
 
+This is a snapshot, and it dated while it was being written: three of its
+findings were fixed by the owner during the review and are recorded at the
+bottom as **fixed during review** rather than deleted, because the trail
+matters. Re-run the scripts before trusting a line item.
+
 The other documents in this directory describe intent. This one is the
 counterweight, and it is deliberately unflattering. Where it disagrees with
 them, believe this one and fix the code.
@@ -47,21 +52,8 @@ redirects to `/reflections`.
 
 ## Auth — sign in and register
 
-**Verdict: the best-looking page in the application, and it opens by telling
-the reader something untrue about the product's central idea.**
-
-- **Blocker — the sign-in page still defines C the Context way.**
-  `web_app/src/auth/AuthPage.tsx` L10: *"What the passage is saying, and what
-  is happening around it."* That is the definition the product spent a whole
-  migration abandoning. Content holds **the passage itself** — the verse text,
-  its reference and its translation, with explanation optional. The very first
-  screen a stranger sees teaches them the wrong model, and every other surface
-  then contradicts it.
-
-  Sharpening the point: `api/src/ai/ai.test.ts` L183 asserts that the phrase
-  *"what the passage means and what is happening"* has been removed from the AI
-  prompt. There is a regression test guarding the model's instructions against
-  wording that is still printed on the marketing panel.
+**Verdict: the best-looking page in the application, and now the most accurate
+one. Nothing here is a blocker.**
 
 - **Important — the submit button never disables.** `AuthPage.tsx` L363–365
   has no pending state, so a double-click on a slow network sends two
@@ -91,22 +83,34 @@ This is the product. It is also where the two worst defects are.
 **Verdict: the loop works and the writing is preserved, but the card is
 illegible to a newcomer and the reference field destroys typed input.**
 
-- **Blocker — the Scripture-reference field throws away keystrokes, and
-  corrupts what it keeps.** Reproduced live by
-  `scripts/verify/readiness-reference.mjs`: typing `Psalm 23` immediately after
-  the first message left the field reading **`alm 23`**, the stored
-  `scriptureReference` **`null`**, and the conversation panel headed *"Reflect
-  on alm 23"* — so every subsequent AI request was scoped to a passage that
-  does not exist. Typing the same thing into an existing reflection works, so a
-  person meets this exactly once: on their first reflection.
+- **Blocker — the Scripture-reference field still throws away keystrokes,
+  after a fix that made it better rather than gone.**
 
-  It is not a remount. `referenceDraft` (`web_app/src/chat/ChatPage.tsx` L126)
-  is reset to `null` twice while creation is in flight — L565 when
-  `POST /conversations` resolves, and L315 inside `openConversation`, which
-  still sees `switching === true` because `openedRef` is assigned only after
-  its own awaited GET (L303–306). The input falls back to the server's value
-  when the draft is null (L1324), so each reset silently discards whatever has
-  been typed since. Screenshot: `out/ref-card-full-1280.png`.
+  Commit `e924e0c` ("Stop the reflection's own creation from erasing what is
+  being typed") lands the right diagnosis — creating a reflection looked, from
+  inside `openConversation`, exactly like switching to a different one, so it
+  ran the reset that discards unsaved drafts — and ships
+  `scripts/verify/reference-race.mjs`, which passes 5/5 against the running
+  app. That script sends with `Ctrl`+`Enter` and 500ms of induced latency.
+
+  **Send with the send button instead and the loss comes back**, on a
+  second reflection with the disclosure already dismissed — which is the
+  ordinary path for a returning user, not an edge case. Nine trials, nine
+  losses, varying the gap between keystrokes and the delay after Send:
+
+  ```text
+  typed "Psalm 23" → "salm 23"  "lm 23"  "Psalm23"  "salm"
+                     "salm 2"   "alm 23" "alm 23"   "alm 23"  "23"
+  ```
+
+  Note `"Psalm23"`: a character is dropped from the *middle*, so this is not
+  one wipe at the start but repeated resets racing individual keystrokes. The
+  observable damage is the same as before — a reference the author did not
+  type, silently, and the conversation panel headed *"Reflect on 23"*, which
+  is what every AI request is then scoped to.
+
+  Because `reference-race.mjs` now passes, this defect is currently
+  **unguarded**: the check written for it no longer detects it.
 
 - **Blocker — the four sections are visually indistinguishable.** The only
   section heading is `sr-only` (`web_app/src/chat/ChatArtifact.tsx` L116). On
@@ -155,16 +159,11 @@ illegible to a newcomer and the reference field destroys typed input.**
   point silently never runs. Screenshot:
   `out/ref-disclosure-over-card.png`.
 
-- **Important — Enter does not send.** The composer requires the send button;
-  Enter inserts a newline (verified: the textarea still held the message).
-  Every chat interface a person has used sends on Enter. There is no hint that
-  this one does not.
-
-- **Important — "Draft Content" was never renamed.** `web_app/src/chat/chips.ts`
-  L78 and L93. `docs/examples/REAL_CHAT_SAMPLES.md` names this framing as the
-  thing that "asks for a commentary nobody writes"; the fix reached the prompt
-  and the section copy but not the button. *"Add passage"* would say what it
-  does.
+- **Important — Enter does not send, and nothing says what does.** Enter
+  inserts a newline (verified: the textarea still held the message afterwards).
+  `Ctrl`+`Enter` and the send button both work, but neither is hinted anywhere
+  in the composer, whose placeholder is *"Ask about the passage or share a
+  reflection…"*. Every chat interface a person has used sends on Enter.
 
 - **Important — the two reference fields can disagree.** The header field and
   the passage card's own field are separate state:
@@ -301,6 +300,30 @@ embarrassment, because a stranger can find it without being shown it.**
 
 ---
 
+## Fixed during review
+
+Recorded rather than deleted, because a defect that came back is worth being
+able to recognise.
+
+- **The sign-in page defined Content the Context way.** `AuthPage.tsx` L10 read
+  *"What the passage is saying, and what is happening around it."* — the
+  definition the product spent a migration abandoning, printed on the first
+  screen a stranger saw, while `api/src/ai/ai.test.ts` L183 held a regression
+  test guarding the *model's prompt* against the same wording. Now *"The
+  passage itself — the verse, its reference and its translation."*
+- **"Draft Content" was never renamed.** Now **"Prepare Content"**
+  (`web_app/src/chat/chips.ts`). The old name described composing prose, which
+  is the habit `REAL_CHAT_SAMPLES.md` exists to break.
+- **The passage card did not say what a passage was for.** It now reads
+  *"Choose a passage and its words come with it — the text, the reference and
+  the translation, ready to put into Content."*, which finally connects the
+  connector to the section it feeds.
+- **The Scripture-reference race, partly.** See the Reflect section: the
+  diagnosis and the `Ctrl`+`Enter` path are fixed; the send-button path is not,
+  and the check written for it no longer catches it.
+
+---
+
 ## What would have to be true before showing this to anyone outside the project
 
 Not a wish list. The minimum for the application to stop making false claims
@@ -316,18 +339,22 @@ about itself.
 3. **The card can be read.** Four unlabelled identical boxes behind a 345px
    window is not a reflection people will want to return to, and returning is
    the entire product thesis.
-4. **The first screen tells the truth about C.** One line in
-   `AuthPage.tsx`.
-5. **A wrong URL does not end the session.** One route.
+4. **A wrong URL does not end the session.** One route.
 
-Until 1, 2 and 4 are done, this should be demonstrated by someone driving, on
+Until 1 and 2 are done, this should be demonstrated by someone driving, on
 Reflect and Reflections only, and not handed over.
 
 ### The three to fix first
 
-1. `ChatPage.tsx` — the reference field losing keystrokes. It is data loss, it
-   poisons AI scoping, and it happens on the first reflection.
-2. `CommunityPage.tsx` and `CreatePage.tsx` — remove them from the navigation,
-   the profile menu and the "Create visual" button until they are real.
-3. `AuthPage.tsx` L10 — the Context-era definition of Content on the first
-   screen. A one-line fix guarding the product's central idea.
+1. **`ChatPage.tsx` — finish the reference race.** It is data loss, it scopes
+   every AI request to a passage the author never named, and it is now
+   *unguarded*, because `reference-race.mjs` passes while the send-button path
+   still fails. Widen that script to press the button as well as the shortcut
+   before doing anything else, so the fix can be seen to work.
+2. **Take Community and Create out of reach.** Remove them from the
+   navigation, the profile menu and the "Create visual" button until they are
+   real. Both are reachable today by a stranger with no warning, and Create in
+   particular looks like a different, much worse application.
+3. **Put the section names back on the card.** Four identical unlabelled boxes
+   is the decluttering gone one step too far, and it undoes the comprehension
+   the C.H.A.T. framework is entirely made of.

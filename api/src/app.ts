@@ -223,8 +223,30 @@ export function createApp(
             if (section.content.trim()) sections[type] = section.content;
           }
 
+          /*
+           * The passage's own words, through the Bible connector's seam.
+           *
+           * `scriptureForPrompt` is the only thing allowed to decide whether a
+           * translation's text may be sent to a third party, and it is also
+           * what reports an absence as an absence. Both answers matter: with
+           * the words, the model quotes what the writer actually chose; with
+           * `unavailable`, the prompt forbids it reconstructing a verse from
+           * memory and naming a translation for it. Reaching past this call to
+           * the stored passage would quietly opt out of both.
+           */
+          const scripture = bibleService.scriptureForPrompt(
+            biblePassages.get(conversationId),
+            conversation.scriptureReference ?? '',
+          );
+
           return {
             passageReference: conversation.scriptureReference ?? '',
+            ...(scripture.text === undefined
+              ? {}
+              : {
+                  passageText: scripture.text,
+                  ...(scripture.abbreviation ? { passageAbbreviation: scripture.abbreviation } : {}),
+                }),
             sections,
             history: (store.messages.get(conversationId) ?? []).map((message) => ({
               role: message.role,

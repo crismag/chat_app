@@ -91,6 +91,19 @@ Empty states are one story and populated ones are another. Sends a first
 message, then reports the assistance controls, the card's scroll region and the
 Create selects with a real reflection to choose from.
 
+## `reference-race.mjs` — the reference that kept only a fragment
+
+Types a Scripture reference immediately after the first message creates the
+reflection, under half a second of induced network latency — because on
+loopback the window is a few milliseconds wide, which is why the defect was
+carried so long. It logs every focus, blur and value change on the field, so a
+failure says which of them did the damage.
+
+It sends with `Ctrl`+`Enter`. **It does not press the send button**, and the
+loss is still reproducible on that path — see the Reflect section of
+[`PRODUCT_READINESS.md`](../../docs/development/PRODUCT_READINESS.md). Widen it
+before treating a pass as proof.
+
 ## `readiness-reference.mjs` — the reference field losing keystrokes
 
 Types the Scripture reference character by character immediately after the first
@@ -239,3 +252,45 @@ re-establishes the four facts the connector depends on: `page_size` tops out at
 `GET /bibles/{id}` and not from the list, and passage content is plain text.
 
 Do not run either of these in CI.
+
+## `reference-race.mjs` — the reference that lost what was typed into it
+
+Types a Scripture reference into the header field IMMEDIATELY after the first
+message has created the reflection, which is the report: only a fragment
+survived, and one reflection saved as `"R"`.
+
+It instruments the input from inside the page first — focus, blur, and the
+React-driven value writes — because the interesting event is the one nobody
+watches for, and a wrong value in a screenshot does not say why. It also adds
+**half a second of network latency**, deliberately: the window this bug lives
+in is between "send" and the reflection existing, and on loopback that window is
+a few milliseconds wide, which is why it was carried for so long.
+
+```bash
+node scripts/verify/reference-race.mjs
+```
+
+Before the fix it lost `Roman` and saved `s 8:28`. It ends with the control —
+the same reference typed *before* the first message, which always worked.
+
+## `scripture-in-prompts.mjs` — does it invent a verse when it has none?
+
+The second live check in this repository, and opt-in **twice** for the same
+reason as `ai-live-smoke.mjs`: `GEMINI_API_KEY` present *and* `AI_LIVE_TEST=1`.
+
+```bash
+set -a; . ~/.config/chat_app/gemini.env; set +a
+AI_LIVE_TEST=1 node scripts/verify/scripture-in-prompts.mjs
+```
+
+It asks the real model to prepare a Content section twice: once for a reference
+with nothing stored against it, once for a passage actually fetched from
+YouVersion. The first must produce no verse; the second must quote the words it
+was given and name the translation it was given, exactly.
+
+The passage it fetches is the World English Bible (id 206), which is public
+domain, so nothing it prints belongs to a publisher. It never prints a key.
+Do not run it in CI.
+
+**Read what it prints.** "No invented verse" is finally a judgement about prose,
+and the quotation-mark heuristic is a signal rather than a verdict.

@@ -25,7 +25,7 @@ import {
  * It goes into the structured log on every call, so a change in answer quality
  * can be traced to the change in wording that caused it.
  */
-export const PROMPT_VERSION = '2026-08-16.5';
+export const PROMPT_VERSION = '2026-08-16.7';
 
 /**
  * The standing instruction.
@@ -235,6 +235,23 @@ Return options that differ in ANGLE, not in wording. Three rewordings of one ide
 
 If the reflection barely has anything in it yet, return fewer good options rather than padding the list with weak ones.`;
 
+/**
+ * What the model is told when there is no passage text.
+ *
+ * The important half of the scripture seam, and the half that is easy to skip.
+ * Supplying the words is a licensing decision; saying plainly that there are no
+ * words is a truthfulness one. A model handed a bare reference does not decline
+ * — it reconstructs a remembered verse, in a translation it names, and hands it
+ * to someone about to paste it into a reflection they may publish.
+ *
+ * So the absence is stated, and stated as a prohibition rather than as a gap.
+ */
+export const NO_PASSAGE_TEXT_NOTE = `You have NOT been given the words of this passage — only its reference.
+
+Do not quote it. Do not paraphrase it. Do not reconstruct it from memory, and do not name a translation as though you had its text. If the writer needs the wording, say which reference and translation you would need and ask them to bring the passage in. Inventing verse text, or attributing wording to a named translation you were not given, is a false attribution of Scripture and is worse than an unhelpful answer.
+
+You may still speak about the passage in general terms — its setting, its place in the book, the questions it raises — as long as you make no claim about its exact wording.`;
+
 /* ------------------------------------------------------------- delimiting */
 
 /**
@@ -414,11 +431,27 @@ export const IMPROVE_RESPONSE_SCHEMA: Record<string, unknown> = {
 };
 
 /* ----------------------------------------------------------- the messages */
+/**
+ * The heading over the passage text, naming the translation it came from.
+ *
+ * The abbreviation used to be left out, and the model filled the gap: handed
+ * the World English Bible's wording it wrote "(WEB)" where the reflection's
+ * passage says `WEBUS`. Close enough to look right and wrong on the page. The
+ * translation is a fact about the words, so it travels with them.
+ */
+function passageTextHeading(abbreviation?: string): string {
+  const named = abbreviation?.trim();
+  return named
+    ? `Passage text, as retrieved for the writer. Its translation is "${named}" — name it exactly that way, and never as a different abbreviation:`
+    : 'Passage text, as the writer supplied it:';
+}
+
 
 export function buildGuidancePrompt(
   input: {
     passageReference: string;
     passageText?: string;
+    passageAbbreviation?: string;
     sections: readonly string[];
     written: Record<string, string>;
   },
@@ -433,8 +466,11 @@ export function buildGuidancePrompt(
 
   if (input.passageText) {
     parts.push('');
-    parts.push('Passage text, as the writer supplied it:');
+    parts.push(passageTextHeading(input.passageAbbreviation));
     parts.push(delimit('passage_text', input.passageText, nonce));
+  } else {
+    parts.push('');
+    parts.push(NO_PASSAGE_TEXT_NOTE);
   }
 
   const written = Object.entries(input.written).filter(([, value]) => value.trim() !== '');
@@ -511,6 +547,7 @@ export function buildChatPrompt(
   input: {
     passageReference: string;
     passageText?: string;
+    passageAbbreviation?: string;
     sections: Record<string, string>;
     history: { role: string; content: string }[];
     message: string;
@@ -558,8 +595,11 @@ export function buildChatPrompt(
 
   if (input.passageText) {
     parts.push('');
-    parts.push('Passage text, as the writer supplied it:');
+    parts.push(passageTextHeading(input.passageAbbreviation));
     parts.push(delimit('passage_text', input.passageText, nonce));
+  } else {
+    parts.push('');
+    parts.push(NO_PASSAGE_TEXT_NOTE);
   }
 
   const written = Object.entries(input.sections).filter(([, value]) => value.trim() !== '');

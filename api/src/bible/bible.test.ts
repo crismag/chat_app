@@ -16,7 +16,11 @@
  */
 
 import { describe, expect, test, vi } from 'vitest';
-import { BIBLE_OUTCOMES, BIBLE_OUTCOME_MESSAGES } from '@chat/shared';
+import {
+  BIBLE_OUTCOMES,
+  BIBLE_OUTCOME_MESSAGES,
+  SCRIPTURE_IN_PROMPTS_DEFAULT,
+} from '@chat/shared';
 import { createApp } from '../app.ts';
 import { MemoryStore } from '../store.ts';
 import { TtlCache } from './cache.ts';
@@ -207,7 +211,8 @@ function config(overrides: Partial<ReturnType<typeof readBibleConfig>> = {}) {
     catalogTtlMs: 60_000,
     passageTtlMs: 60_000,
     rateLimit: { perMinute: 500 },
-    scriptureInPrompts: false,
+    /* The product default, so a test that does not care gets what ships. */
+    scriptureInPrompts: SCRIPTURE_IN_PROMPTS_DEFAULT,
     ...overrides,
   });
 }
@@ -756,8 +761,17 @@ describe('the service', () => {
     expect(first).toBeDefined();
   });
 
-  test('the AI seam withholds the text by default and reports absence loudly', () => {
-    const service = serviceWith(fakeFetch());
+  /*
+   * The seam, in both of its settings and in its failure.
+   *
+   * The default is now ON: a model given a bare reference reconstructs the
+   * verse from memory and names a translation, which is a false attribution of
+   * Scripture and a worse outcome than sending words the app already licensed.
+   * An operator whose licence forbids it turns it off, and the OFF path still
+   * has to report the absence rather than leave the prompt silent.
+   */
+  test('the AI seam supplies the text by default, withholds it on request, and reports absence loudly', () => {
+    const service = serviceWith(fakeFetch(), { scriptureInPrompts: false });
     const passage: BiblePassage = {
       provider: 'youversion',
       translationId: 111,
@@ -774,11 +788,10 @@ describe('the service', () => {
     expect(withheld.text).toBeUndefined();
     expect(withheld.reference).toBe('John 3:16');
 
-    const allowed = serviceWith(fakeFetch(), { scriptureInPrompts: true }).scriptureForPrompt(
-      passage,
-      'John 3:16',
-    );
+    /* The default: no override, and the words travel. */
+    const allowed = serviceWith(fakeFetch()).scriptureForPrompt(passage, 'John 3:16');
     expect(allowed.text).toBe('For God so loved the world…');
+    expect(allowed.abbreviation).toBe('NIV');
 
     /* The rule that stops a model supplying a remembered verse: a failed
      * lookup reaches the prompt as an explicit absence, not as a gap. */

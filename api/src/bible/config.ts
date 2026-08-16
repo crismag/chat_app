@@ -19,6 +19,8 @@
  * location into the repository.
  */
 
+import { SCRIPTURE_IN_PROMPTS_DEFAULT } from '@chat/shared';
+
 export interface BibleConfig {
   /** The kill switch. False means no provider call is made, for any reason. */
   enabled: boolean;
@@ -46,9 +48,13 @@ export interface BibleConfig {
   /**
    * Whether passage TEXT may be included in a prompt sent to the AI provider.
    *
-   * Off by default and read from configuration rather than assumed, because it
-   * is a licensing decision and not an engineering one. See
-   * `ScriptureForPrompt` in `@chat/shared`.
+   * ON by default, and still read from configuration rather than hard-coded,
+   * because it is a licensing decision and not an engineering one. The default
+   * changed when it became clear what the other setting produces: a model with
+   * no verse text in front of it reconstructs one from memory and names a
+   * translation, which is a false attribution of Scripture. The reasoning is
+   * written out in full at `SCRIPTURE_IN_PROMPTS_DEFAULT` in `@chat/shared`,
+   * beside the `ScriptureForPrompt` seam that enforces it.
    */
   scriptureInPrompts: boolean;
 }
@@ -143,7 +149,7 @@ export function readBibleConfig(env: NodeJS.ProcessEnv = process.env): BibleConf
     catalogTtlMs: positiveInt(env['BIBLE_CATALOG_TTL_MS'], DEFAULTS.catalogTtlMs),
     passageTtlMs: positiveInt(env['BIBLE_PASSAGE_TTL_MS'], DEFAULTS.passageTtlMs),
     rateLimit: { perMinute: positiveInt(env['BIBLE_RATE_LIMIT_PER_MINUTE'], DEFAULTS.ratePerMinute) },
-    scriptureInPrompts: flag(env['BIBLE_SCRIPTURE_IN_PROMPTS'], false),
+    scriptureInPrompts: flag(env['BIBLE_SCRIPTURE_IN_PROMPTS'], SCRIPTURE_IN_PROMPTS_DEFAULT),
   };
 }
 

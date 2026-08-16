@@ -32,8 +32,10 @@ Status: **done.** Email/password registration and login with server-side
 sessions in a `chat_session` cookie; SQLite persistence via `node:sqlite`;
 conversations, messages and sections stored and re-openable; ownership checked
 on every route. The one known defect is the Scripture-reference field losing
-keystrokes when typed immediately after the first message — see the known
-limitations in [`AI_PROVIDER.md`](./AI_PROVIDER.md).
+keystrokes when typed immediately after the first message. It has been fixed
+once and is still reproducible when the message is sent with the send button
+rather than the keyboard shortcut — see the known limitations in
+[`AI_PROVIDER.md`](./AI_PROVIDER.md).
 
 Deliverables:
 
