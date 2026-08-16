@@ -36,8 +36,12 @@ import { AiService, type AiServiceOptions } from './ai/service.ts';
 import { createBibleRoutes } from './bible/routes.ts';
 import { createPassageStore } from './bible/passage-store.ts';
 import { BibleService } from './bible/service.ts';
-import { createProfileRoutes } from './profile/routes.ts';
+import { createProfileRoutes, ensureProfile } from './profile/routes.ts';
 import { createProfileStore } from './profile/store.ts';
+import { createCommunityRoutes } from './community/routes.ts';
+import { createCommunityStore } from './community/store.ts';
+import { createStudioCreationStore } from './create/store.ts';
+import { readStudioCreation } from './create/validation.ts';
 import { SqliteStore } from './db.ts';
 import { MemoryStore, type StoredConversation } from './store.ts';
 
@@ -117,6 +121,7 @@ export function createApp(
   const aiService = new AiService(ai);
   const bibleService = new BibleService();
   const biblePassages = createPassageStore(store);
+  const studioCreations = createStudioCreationStore(store);
 
   /**
    * The draft as its format's validator expects to see it.
@@ -351,11 +356,51 @@ export function createApp(
    * `profile/store.ts` is what makes "authorisation before retrieval" checkable
    * in one place instead of spread across a route, a mapper and a component.
    */
+  const profiles = createProfileStore(store);
+
   app.route(
     '/api/profiles',
     createProfileRoutes({
       currentUser: (c) => currentUser(c),
-      profiles: createProfileStore(store),
+      profiles,
+    }),
+  );
+
+  /*
+   * Community, mounted the same way and for the same reasons.
+   *
+   * The module owns its tables, its migration and — the part that matters — the
+   * single visibility predicate that decides which publications a request may
+   * see. Everything it needs from this file arrives as a function, so it never
+   * learns what a store is, and `reflection` is visibly read-only: publishing
+   * copies a reflection into a publication and issues no write against the
+   * author's private source material.
+   *
+   * It is handed `null` when the backing cannot carry membership, and answers
+   * 503 rather than pretending. Membership that disappears on restart is not
+   * membership.
+   */
+  app.route(
+    '/api',
+    createCommunityRoutes({
+      currentUser: (c) => currentUser(c),
+      store: createCommunityStore(store),
+      reflection: (userId, conversationId) => {
+        const conversation = store.conversations.get(conversationId);
+        if (!conversation || conversation.userId !== userId) return null;
+        const stored = store.sections.get(conversationId);
+        return {
+          format: conversation.format,
+          title: conversation.title,
+          scriptureReference: conversation.scriptureReference,
+          sections:
+            conversation.format === CHAT_FORMATS.CONDENSED
+              ? condensedFromStore(stored)
+              : sectionsFromStore(stored),
+        };
+      },
+      userIdByEmail: (email) => store.usersByEmail.get(email) ?? null,
+      ensureIdentity: (user) => ensureProfile(profiles, user),
     }),
   );
 
@@ -998,6 +1043,39 @@ export function createApp(
       .filter((conversation) => conversation.publicationState === PUBLICATION_STATES.PUBLISHED)
       .map(summaryOf);
     return c.json(items);
+  });
+
+  /*
+   * Create Studio remains a controlled component. These endpoints persist its
+   * canonical document and release metadata; they never render, interpret a
+   * reflection, or expose another user's creation.
+   */
+  app.get('/api/studio-creations/:conversationId', (c) => {
+    const { error, conversation } = ownedConversation(c, c.req.param('conversationId'));
+    if (error === 401) return c.json({ error: 'Unauthenticated.' }, 401);
+    if (!conversation) return c.json({ error: 'Conversation not found.' }, 404);
+    return c.json({ creation: studioCreations.get(conversation.id) });
+  });
+
+  app.put('/api/studio-creations/:conversationId', async (c) => {
+    const { error, conversation } = ownedConversation(c, c.req.param('conversationId'));
+    if (error === 401) return c.json({ error: 'Unauthenticated.' }, 401);
+    if (!conversation) return c.json({ error: 'Conversation not found.' }, 404);
+    const previous = studioCreations.get(conversation.id);
+    const creation = readStudioCreation(
+      await c.req.json().catch(() => null),
+      conversation.id,
+      previous,
+      nowIso(),
+    );
+    if (!creation) {
+      return c.json(
+        { error: 'The Studio document or its persistence metadata is invalid.' },
+        400,
+      );
+    }
+    studioCreations.set(creation);
+    return c.json({ creation });
   });
 
   app.post('/api/creations', async (c) => {
