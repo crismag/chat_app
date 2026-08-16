@@ -5,8 +5,13 @@ import { cors } from 'hono/cors';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { SESSION_TTL_MS } from './db.ts';
 import {
+  AUTHOR_ORIGINS,
   CHAT_FORMATS,
+  CHAT_SECTION_TYPES,
+  CONDENSED_SECTION_TYPES,
+  FORMAT_LIMITS,
   validateChat,
+  type AuthorOrigin,
   type ChatFormat,
   AI_ACTIONS,
   CREATE_LAYOUTS,
@@ -17,7 +22,12 @@ import {
   type CreateStyle,
   type HealthResponse,
 } from '@chat/shared';
-import { applyNamedAiAction, extractChatSections, sectionsFromStore } from './ai.ts';
+import {
+  applyNamedAiAction,
+  condensedFromStore,
+  extractChatSections,
+  sectionsFromStore,
+} from './ai.ts';
 import { SqliteStore } from './db.ts';
 import { MemoryStore, type StoredConversation } from './store.ts';
 
@@ -53,6 +63,16 @@ function summaryOf(conversation: StoredConversation) {
   };
 }
 
+/** Every field name a section row may carry, for validating a write. */
+const SECTION_TYPES = [
+  ...Object.values(CHAT_SECTION_TYPES),
+  ...Object.values(CONDENSED_SECTION_TYPES),
+] as const;
+
+type SectionType = (typeof SECTION_TYPES)[number];
+
+const AUTHOR_ORIGIN_VALUES = Object.values(AUTHOR_ORIGINS) as readonly AuthorOrigin[];
+
 /**
  * The session cookie's options.
  *
@@ -75,6 +95,38 @@ const sessionCookie = {
  */
 export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) {
   const app = new Hono();
+
+  /**
+   * The draft as its format's validator expects to see it.
+   *
+   * A Full C.H.A.T. is validated on its four sections; a Condensed one on its
+   * verse and reflection. Building it in one place is what stops a Condensed
+   * reflection being judged against Full's rules — which is how a format switch
+   * quietly starts reporting the wrong field.
+   */
+  const draftOf = (conversation: StoredConversation): Record<string, unknown> => {
+    const stored = store.sections.get(conversation.id);
+    const base = {
+      title: conversation.title,
+      scriptureReference: conversation.scriptureReference ?? '',
+    };
+    if (conversation.format === CHAT_FORMATS.CONDENSED) {
+      const condensed = condensedFromStore(stored);
+      return {
+        ...base,
+        verse: condensed.verse.content,
+        reflection: condensed.reflection.content,
+      };
+    }
+    const sections = sectionsFromStore(stored);
+    return {
+      ...base,
+      context: sections.context.content,
+      heart: sections.heart.content,
+      application: sections.application.content,
+      testimony: sections.testimony.content,
+    };
+  };
 
   app.use(
     '/api/*',
@@ -233,11 +285,108 @@ export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) 
     if (!conversation) {
       return c.json({ error: 'Conversation not found.' }, 404);
     }
+    const stored = store.sections.get(conversation.id);
     return c.json({
       ...summaryOf(conversation),
       messages: store.messages.get(conversation.id) ?? [],
-      sections: sectionsFromStore(store.sections.get(conversation.id)),
+      sections: sectionsFromStore(stored),
+      /*
+       * Both drafts travel together. The page shows the one the format calls
+       * for, and the other is still there to come back to.
+       */
+      condensed: condensedFromStore(stored),
     });
+  });
+
+  /**
+   * Rename, re-reference, and change format.
+   *
+   * None of these are settings made once at creation: a reflection is named
+   * after it is understood, the passage is often pinned down later, and the
+   * format is a choice the author may revise. Nothing here deletes content —
+   * changing format leaves both drafts in place.
+   */
+  app.patch('/api/conversations/:id', async (c) => {
+    const { error, conversation } = ownedConversation(c, c.req.param('id'));
+    if (error === 401) {
+      return c.json({ error: 'Unauthenticated.' }, 401);
+    }
+    if (!conversation) {
+      return c.json({ error: 'Conversation not found.' }, 404);
+    }
+    const body = await c.req
+      .json<{ title?: string; scriptureReference?: string | null; format?: ChatFormat }>()
+      .catch(() => ({}) as { title?: string; scriptureReference?: string | null; format?: ChatFormat });
+
+    if (body.format !== undefined && !Object.values(CHAT_FORMATS).includes(body.format)) {
+      return c.json({ error: 'Unknown format.' }, 400);
+    }
+    const format = body.format ?? conversation.format;
+
+    /*
+     * Length is checked against the format being moved to, not the one being
+     * left, and it is refused rather than trimmed — the app never silently
+     * shortens what someone wrote.
+     */
+    const limits = FORMAT_LIMITS[format].fields;
+    const proposedTitle = body.title !== undefined ? body.title.trim() : conversation.title;
+    const proposedReference =
+      body.scriptureReference !== undefined
+        ? (body.scriptureReference ?? '').trim() || null
+        : conversation.scriptureReference;
+
+    for (const [field, value] of [
+      ['title', proposedTitle],
+      ['scriptureReference', proposedReference ?? ''],
+    ] as const) {
+      const limit = limits[field];
+      if (limit && value.length > limit.hard) {
+        return c.json(
+          {
+            error: `The ${field === 'title' ? 'title' : 'Scripture reference'} is ${value.length - limit.hard} characters over its maximum.`,
+            validation: {
+              field,
+              length: value.length,
+              recommended: limit.recommended,
+              hard: limit.hard,
+            },
+          },
+          422,
+        );
+      }
+    }
+
+    if (body.title !== undefined && !proposedTitle) {
+      return c.json({ error: 'A title cannot be empty.' }, 400);
+    }
+
+    conversation.title = proposedTitle;
+    conversation.scriptureReference = proposedReference;
+    conversation.format = format;
+    conversation.updatedAt = nowIso();
+    store.conversations.set(conversation.id, conversation);
+    return c.json(summaryOf(conversation));
+  });
+
+  /**
+   * Delete a reflection, and everything that is part of it.
+   *
+   * The messages and the sections are the reflection, not satellites of it, so
+   * they go too. Confirmation is the interface's job; by the time a request
+   * arrives here the author has said yes.
+   */
+  app.delete('/api/conversations/:id', (c) => {
+    const { error, conversation } = ownedConversation(c, c.req.param('id'));
+    if (error === 401) {
+      return c.json({ error: 'Unauthenticated.' }, 401);
+    }
+    if (!conversation) {
+      return c.json({ error: 'Conversation not found.' }, 404);
+    }
+    store.sections.delete(conversation.id);
+    store.messages.delete(conversation.id);
+    store.conversations.delete(conversation.id);
+    return c.json({ id: conversation.id, deleted: true });
   });
 
   app.post('/api/conversations/:id/messages', async (c) => {
@@ -285,19 +434,9 @@ export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) 
      * answers with the structured report so the interface can say exactly which
      * field is at fault and by how much.
      */
-    const sections = sectionsFromStore(store.sections.get(conversation.id));
-    const validation = validateChat(
-      conversation.format,
-      {
-        title: conversation.title,
-        scriptureReference: conversation.scriptureReference ?? '',
-        context: sections.context.content,
-        heart: sections.heart.content,
-        application: sections.application.content,
-        testimony: sections.testimony.content,
-      },
-      { extensionAcknowledged: c.req.query('acknowledgeExtension') === 'true' },
-    );
+    const validation = validateChat(conversation.format, draftOf(conversation), {
+      extensionAcknowledged: c.req.query('acknowledgeExtension') === 'true',
+    });
 
     if (!validation.publishable) {
       return c.json({ error: 'This reflection is not ready to publish.', validation }, 422);
@@ -332,22 +471,60 @@ export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) 
       return c.json({ error: 'Conversation not found.' }, 404);
     }
     const body = await c.req.json<{
-      type?: 'context' | 'heart' | 'application' | 'testimony';
+      type?: SectionType;
       content?: string;
+      authorOrigin?: AuthorOrigin;
     }>();
-    if (!body.type) {
-      return c.json({ error: 'Section type is required.' }, 400);
+    if (!body.type || !SECTION_TYPES.includes(body.type)) {
+      return c.json({ error: 'A known section type is required.' }, 400);
     }
-    const current = sectionsFromStore(store.sections.get(conversation.id));
-    current[body.type] = {
-      type: body.type,
-      content: body.content ?? '',
-      authorOrigin: 'user',
-    };
-    store.sections.set(conversation.id, current);
+
+    const content = body.content ?? '';
+    const limit = FORMAT_LIMITS[conversation.format].fields[body.type];
+    if (limit && content.length > limit.hard) {
+      return c.json(
+        {
+          error: `${body.type} is ${content.length - limit.hard} characters over its maximum of ${limit.hard}.`,
+          validation: {
+            field: body.type,
+            length: content.length,
+            recommended: limit.recommended,
+            hard: limit.hard,
+          },
+        },
+        422,
+      );
+    }
+
+    /*
+     * Provenance is stated by the caller, and defaults to the author.
+     *
+     * When someone accepts an AI suggestion into a section, the interface says
+     * so here and the badge on the card keeps saying so. Silently re-labelling
+     * assisted wording as the author's own would be a lie the data model is
+     * perfectly capable of avoiding.
+     */
+    const authorOrigin: AuthorOrigin =
+      body.authorOrigin && AUTHOR_ORIGIN_VALUES.includes(body.authorOrigin)
+        ? body.authorOrigin
+        : AUTHOR_ORIGINS.USER;
+
+    /*
+     * One field is written, and only that field. The record handed to the store
+     * used to be a whole rebuilt set, which is how an empty value for a section
+     * nobody touched could reach the database.
+     */
+    store.sections.set(conversation.id, {
+      [body.type]: { type: body.type, content, authorOrigin },
+    });
     conversation.updatedAt = nowIso();
     store.conversations.set(conversation.id, conversation);
-    return c.json({ sections: current });
+
+    const stored = store.sections.get(conversation.id);
+    return c.json({
+      sections: sectionsFromStore(stored),
+      condensed: condensedFromStore(stored),
+    });
   });
 
   app.post('/api/conversations/:id/ai', async (c) => {
@@ -367,11 +544,41 @@ export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) 
     const messages = store.messages.get(conversation.id) ?? [];
 
     if (action === AI_ACTIONS.EXTRACT_CHAT) {
-      const sections = extractChatSections(messages);
-      store.sections.set(conversation.id, sections);
-      conversation.updatedAt = nowIso();
-      store.conversations.set(conversation.id, conversation);
-      return c.json({ action, sections });
+      /*
+       * Extraction proposes. It does not write.
+       *
+       * This route used to store its result over the whole section record, so
+       * pressing "Extract from conversation" deleted every section the author
+       * had written by hand — the worst possible reading of a rule that already
+       * forbade the model inventing Heart, Application or Testimony. Deleting
+       * them is worse than inventing them.
+       *
+       * Now the proposal comes back, the author reviews it section by section,
+       * and accepting one is an ordinary section write carrying `ai_assisted`.
+       */
+      const derived = extractChatSections(messages);
+      const existing = sectionsFromStore(store.sections.get(conversation.id));
+
+      /* Nothing the author wrote is offered up for replacement silently. */
+      const proposed = Object.fromEntries(
+        Object.entries(derived).filter(([type, section]) => {
+          const current = existing[type as keyof typeof existing];
+          return section.content.trim() !== '' && section.content !== current.content;
+        }),
+      );
+
+      return c.json({
+        action,
+        applied: false,
+        /* `sections` stays the stored truth; `proposed` is what is on offer. */
+        sections: existing,
+        proposed,
+        conflicts: Object.keys(proposed).filter(
+          (type) =>
+            existing[type as keyof typeof existing].content.trim() !== '' &&
+            existing[type as keyof typeof existing].authorOrigin === AUTHOR_ORIGINS.USER,
+        ),
+      });
     }
 
     const target =
@@ -442,15 +649,8 @@ export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) 
        * remembered to set.
        */
       if (filter !== 'all') {
-        const sections = sectionsFromStore(store.sections.get(conversation.id));
-        const complete = validateChat(conversation.format, {
-          title: conversation.title,
-          scriptureReference: conversation.scriptureReference ?? '',
-          context: sections.context.content,
-          heart: sections.heart.content,
-          application: sections.application.content,
-          testimony: sections.testimony.content,
-        }).missing.length === 0;
+        const complete =
+          validateChat(conversation.format, draftOf(conversation)).missing.length === 0;
 
         if (filter === 'drafts' && complete) return false;
         if (filter === 'completed' && !complete) return false;

@@ -16,6 +16,26 @@ export const CHAT_SECTION_TYPES = {
 export type ChatSectionType =
   (typeof CHAT_SECTION_TYPES)[keyof typeof CHAT_SECTION_TYPES];
 
+/*
+ * Condensed C.H.A.T. carries its own two fields, and they are stored beside the
+ * four rather than on top of them. That is what makes conversion safe in both
+ * directions: changing format proposes and preserves, and never overwrites the
+ * draft the author already has in the other form.
+ */
+export const CONDENSED_SECTION_TYPES = {
+  VERSE: 'verse',
+  REFLECTION: 'reflection',
+} as const;
+
+export type CondensedSectionType =
+  (typeof CONDENSED_SECTION_TYPES)[keyof typeof CONDENSED_SECTION_TYPES];
+
+export type CondensedSection = {
+  type: CondensedSectionType;
+  content: string;
+  authorOrigin: AuthorOrigin;
+};
+
 export const AUTHOR_ORIGINS = {
   USER: 'user',
   AI_ASSISTED: 'ai_assisted',

@@ -221,6 +221,17 @@ class ConversationTable {
       .prepare('SELECT * FROM conversations')
       .all() as unknown as StoredConversation[];
   }
+
+  /**
+   * Deleting a reflection deletes all of it.
+   *
+   * `PRAGMA foreign_keys = ON` and the `ON DELETE CASCADE` on messages and
+   * sections mean the thread and the artifact go with the row, rather than
+   * being left orphaned in two tables nothing can reach.
+   */
+  delete(id: string): boolean {
+    return this.db.prepare('DELETE FROM conversations WHERE id = ?').run(id).changes > 0;
+  }
 }
 
 /**
@@ -278,6 +289,13 @@ class MessageTable {
     }
     return this;
   }
+
+  delete(conversationId: string): boolean {
+    return (
+      this.db.prepare('DELETE FROM messages WHERE conversationId = ?').run(conversationId)
+        .changes > 0
+    );
+  }
 }
 
 /** Conversation id → its C.H.A.T. sections, keyed by type. */
@@ -325,6 +343,13 @@ class SectionTable {
       throw error;
     }
     return this;
+  }
+
+  delete(conversationId: string): boolean {
+    return (
+      this.db.prepare('DELETE FROM sections WHERE conversationId = ?').run(conversationId)
+        .changes > 0
+    );
   }
 }
 

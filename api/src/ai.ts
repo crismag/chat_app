@@ -2,10 +2,13 @@ import {
   AI_ACTIONS,
   AUTHOR_ORIGINS,
   CHAT_SECTION_TYPES,
+  CONDENSED_SECTION_TYPES,
   emptyChatSections,
   type AiAction,
   type ChatSection,
   type ChatSectionType,
+  type CondensedSection,
+  type CondensedSectionType,
 } from '@chat/shared';
 import type { StoredMessage, StoredSection } from './store.ts';
 
@@ -52,8 +55,25 @@ function collectUserText(messages: StoredMessage[]): string {
     .join('\n');
 }
 
-export function extractChatSections(messages: StoredMessage[]): Record<ChatSectionType, ChatSection> {
-  const sections = emptyChatSections();
+/**
+ * What extraction could derive from the conversation — and nothing else.
+ *
+ * This used to return all four sections, padded with empty strings for the ones
+ * no rule matched. Any caller that stored that record wiped whatever the author
+ * had written by hand into Heart, Application and Testimony, because by the
+ * time it reaches storage an empty string is indistinguishable from "delete
+ * this". That is exactly what happened, and it was a wholesale replace that
+ * looked like a save.
+ *
+ * A partial record cannot do it. A section that was not derived is absent
+ * rather than blank, so the worst a careless caller can do is leave existing
+ * content alone. The shape is the safeguard; review before applying is the
+ * second one.
+ */
+export function extractChatSections(
+  messages: StoredMessage[],
+): Partial<Record<ChatSectionType, ChatSection>> {
+  const sections: Partial<Record<ChatSectionType, ChatSection>> = {};
   const userText = collectUserText(messages);
 
   if (userText.trim()) {
@@ -97,6 +117,32 @@ export function extractChatSections(messages: StoredMessage[]): Record<ChatSecti
     };
   }
 
+  return sections;
+}
+
+/**
+ * The two Condensed fields, read from the same table.
+ *
+ * They live beside the four rather than instead of them, so an author who
+ * changes format keeps both drafts and can change back.
+ */
+export function condensedFromStore(
+  stored: Record<string, StoredSection> | undefined,
+): Record<CondensedSectionType, CondensedSection> {
+  const empty = (): Record<CondensedSectionType, CondensedSection> => ({
+    verse: { type: 'verse', content: '', authorOrigin: AUTHOR_ORIGINS.USER },
+    reflection: { type: 'reflection', content: '', authorOrigin: AUTHOR_ORIGINS.USER },
+  });
+  const sections = empty();
+  if (!stored) {
+    return sections;
+  }
+  for (const type of Object.values(CONDENSED_SECTION_TYPES)) {
+    const item = stored[type];
+    if (item) {
+      sections[type] = { type, content: item.content, authorOrigin: item.authorOrigin };
+    }
+  }
   return sections;
 }
 

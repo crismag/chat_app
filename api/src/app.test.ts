@@ -188,14 +188,247 @@ describe('C.H.A.T. extraction authorship', () => {
     );
     expect(extracted.status).toBe(200);
     const body = await json<{
-      original?: string;
-      revised?: string;
-      replaced?: boolean;
-      sections?: { context: { content: string }; heart: { content: string }; testimony: { content: string } };
+      applied?: boolean;
+      proposed?: Record<string, { content: string }>;
+      sections?: Record<string, { content: string }>;
     }>(extracted);
-    expect(body.sections?.context.content.length).toBeGreaterThan(0);
-    expect(body.sections?.heart.content).toBe('');
-    expect(body.sections?.testimony.content).toBe('');
+
+    // What it proposes: Context only. Nothing was said that Heart or Testimony
+    // could be honestly drawn from, so neither is offered.
+    expect(body.applied).toBe(false);
+    expect(body.proposed?.['context']?.content.length).toBeGreaterThan(0);
+    expect(body.proposed?.['heart']).toBeUndefined();
+    expect(body.proposed?.['testimony']).toBeUndefined();
+
+    // And nothing has been written yet: a proposal is not a save.
+    expect(body.sections?.['context']?.content).toBe('');
+  });
+
+  /*
+   * The regression this repository exists to not repeat.
+   *
+   * "Extract from conversation" replaced the entire section record with one
+   * built from empty strings, so every section the author had typed by hand was
+   * silently deleted. Written from the author's side: four sections in, four
+   * sections still there afterwards.
+   */
+  test('extraction cannot delete sections the author wrote by hand', async () => {
+    const app = createApp(new MemoryStore());
+    const { cookie } = await register(app, 'ada@example.com');
+    const created = await app.request('/api/conversations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ title: 'Romans 8' }),
+    });
+    const conversation = await json<{ id: string }>(created);
+
+    await app.request(`/api/conversations/${conversation.id}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ content: 'All things work together for good.' }),
+    });
+
+    const written = {
+      context: 'Paul is writing to a church under pressure.',
+      heart: 'It met me on a week I could not see the good.',
+      application: 'I will pray before I answer my brother.',
+      testimony: 'I declare that he is working even where I cannot see it.',
+    } as const;
+
+    for (const [type, content] of Object.entries(written)) {
+      const saved = await app.request(`/api/conversations/${conversation.id}/sections`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Cookie: cookie },
+        body: JSON.stringify({ type, content }),
+      });
+      expect(saved.status).toBe(200);
+    }
+
+    await app.request(`/api/conversations/${conversation.id}/ai`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ action: 'extract_chat' }),
+    });
+
+    const after = await app.request(`/api/conversations/${conversation.id}`, {
+      headers: { Cookie: cookie },
+    });
+    const detail = await json<{
+      sections: Record<string, { content: string; authorOrigin: string }>;
+    }>(after);
+
+    for (const [type, content] of Object.entries(written)) {
+      expect(detail.sections[type]?.content).toBe(content);
+      expect(detail.sections[type]?.authorOrigin).toBe('user');
+    }
+  });
+
+  test('accepting an extraction records that the model assisted', async () => {
+    const app = createApp(new MemoryStore());
+    const { cookie } = await register(app, 'ada@example.com');
+    const created = await app.request('/api/conversations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ title: 'Psalm 23' }),
+    });
+    const conversation = await json<{ id: string }>(created);
+
+    await app.request(`/api/conversations/${conversation.id}/sections`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({
+        type: 'context',
+        content: 'A shepherd psalm.',
+        authorOrigin: 'ai_assisted',
+      }),
+    });
+
+    const after = await app.request(`/api/conversations/${conversation.id}`, {
+      headers: { Cookie: cookie },
+    });
+    const detail = await json<{ sections: Record<string, { authorOrigin: string }> }>(after);
+    expect(detail.sections['context']?.authorOrigin).toBe('ai_assisted');
+  });
+});
+
+describe('editing a reflection', () => {
+  async function start(app: ReturnType<typeof createApp>, cookie: string) {
+    const created = await app.request('/api/conversations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({}),
+    });
+    return json<{ id: string; title: string }>(created);
+  }
+
+  test('title, Scripture reference and format can all be changed after starting', async () => {
+    const app = createApp(new MemoryStore());
+    const { cookie } = await register(app, 'ada@example.com');
+    const conversation = await start(app, cookie);
+
+    const patched = await app.request(`/api/conversations/${conversation.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({
+        title: 'The week I could not see it',
+        scriptureReference: 'Romans 8:28',
+        format: 'condensed',
+      }),
+    });
+    expect(patched.status).toBe(200);
+
+    const reloaded = await app.request(`/api/conversations/${conversation.id}`, {
+      headers: { Cookie: cookie },
+    });
+    const detail = await json<{
+      title: string;
+      scriptureReference: string;
+      format: string;
+    }>(reloaded);
+    expect(detail).toMatchObject({
+      title: 'The week I could not see it',
+      scriptureReference: 'Romans 8:28',
+      format: 'condensed',
+    });
+  });
+
+  test('changing format keeps both drafts', async () => {
+    const app = createApp(new MemoryStore());
+    const { cookie } = await register(app, 'ada@example.com');
+    const conversation = await start(app, cookie);
+
+    await app.request(`/api/conversations/${conversation.id}/sections`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ type: 'heart', content: 'It met me where I was.' }),
+    });
+    await app.request(`/api/conversations/${conversation.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ format: 'condensed' }),
+    });
+    await app.request(`/api/conversations/${conversation.id}/sections`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ type: 'reflection', content: 'A shorter telling of it.' }),
+    });
+
+    const reloaded = await app.request(`/api/conversations/${conversation.id}`, {
+      headers: { Cookie: cookie },
+    });
+    const detail = await json<{
+      sections: Record<string, { content: string }>;
+      condensed: Record<string, { content: string }>;
+    }>(reloaded);
+
+    expect(detail.sections['heart']?.content).toBe('It met me where I was.');
+    expect(detail.condensed['reflection']?.content).toBe('A shorter telling of it.');
+  });
+
+  test('an over-long title is refused with the numbers, never trimmed', async () => {
+    const app = createApp(new MemoryStore());
+    const { cookie } = await register(app, 'ada@example.com');
+    const conversation = await start(app, cookie);
+
+    const response = await app.request(`/api/conversations/${conversation.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ title: 'x'.repeat(140) }),
+    });
+    expect(response.status).toBe(422);
+    const body = await json<{ validation: { field: string; length: number; hard: number } }>(
+      response,
+    );
+    expect(body.validation).toMatchObject({ field: 'title', length: 140, hard: 100 });
+  });
+
+  test('a deleted reflection takes its messages and sections with it', async () => {
+    const app = createApp(new MemoryStore());
+    const { cookie } = await register(app, 'ada@example.com');
+    const conversation = await start(app, cookie);
+
+    await app.request(`/api/conversations/${conversation.id}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ content: 'Something written down.' }),
+    });
+    await app.request(`/api/conversations/${conversation.id}/sections`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ type: 'heart', content: 'And something felt.' }),
+    });
+
+    const deleted = await app.request(`/api/conversations/${conversation.id}`, {
+      method: 'DELETE',
+      headers: { Cookie: cookie },
+    });
+    expect(deleted.status).toBe(200);
+
+    const gone = await app.request(`/api/conversations/${conversation.id}`, {
+      headers: { Cookie: cookie },
+    });
+    expect(gone.status).toBe(404);
+
+    const list = await app.request('/api/conversations', { headers: { Cookie: cookie } });
+    expect(await json<unknown[]>(list)).toEqual([]);
+  });
+
+  test('one person cannot delete another person’s reflection', async () => {
+    const app = createApp(new MemoryStore());
+    const owner = await register(app, 'owner@example.com');
+    const stranger = await register(app, 'stranger@example.com');
+    const conversation = await start(app, owner.cookie);
+
+    const attempt = await app.request(`/api/conversations/${conversation.id}`, {
+      method: 'DELETE',
+      headers: { Cookie: stranger.cookie },
+    });
+    expect(attempt.status).toBe(404);
+
+    const still = await app.request(`/api/conversations/${conversation.id}`, {
+      headers: { Cookie: owner.cookie },
+    });
+    expect(still.status).toBe(200);
   });
 
   test('grammar assistance preserves the original message', async () => {
