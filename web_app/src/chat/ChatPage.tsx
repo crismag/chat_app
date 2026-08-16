@@ -298,10 +298,28 @@ export function ChatPage() {
     setConversations(await api<Summary[]>('/conversations'))
   }, [])
 
+  /**
+   * Load a reflection and show it.
+   *
+   * `continuing` says this is the SAME piece of work, not a move to another
+   * one. It is passed by the two paths that create a reflection out of the
+   * blank page, and it exists because of a specific bug:
+   *
+   * Creating a reflection from the first message used to look, from here, like
+   * switching to a different reflection — `openedRef` was null and the new id
+   * is not null, so every unsaved draft on the page was thrown away. Anything
+   * typed into the Scripture reference during the round trip was wiped back to
+   * the server's value mid-word, and what survived was whichever fragment
+   * happened to be typed after the wipe. That is the "it saved as R" report.
+   * The same clear took the section edits and the title with it.
+   *
+   * Nothing about creating a reflection means the author has stopped writing,
+   * so nothing about it may discard what they are writing.
+   */
   const openConversation = useCallback(
-    async (id: string) => {
+    async (id: string, options: { continuing?: boolean } = {}) => {
       const next = await api<ConversationDetail>(`/conversations/${id}`)
-      const switching = openedRef.current !== id
+      const switching = openedRef.current !== id && !options.continuing
       openedRef.current = id
       setActiveId(id)
       setDetail(next)
@@ -552,24 +570,32 @@ export function ChatPage() {
     setError(null)
     try {
       let id = activeId
+      let created = false
       if (!id) {
-        const reference = referenceDraft?.trim()
-        const created = await api<Summary>('/conversations', {
+        const sent = referenceDraft
+        const reference = sent?.trim()
+        const conversation = await api<Summary>('/conversations', {
           method: 'POST',
           body: JSON.stringify({
             title: deriveTitle(content),
             ...(reference ? { scriptureReference: reference } : {}),
           }),
         })
-        id = created.id
-        setReferenceDraft(null)
+        id = conversation.id
+        created = true
+        /*
+         * Forget the draft only if it is still the one that was just sent. A
+         * round trip is long enough to type a reference in, and clearing it
+         * unconditionally deleted whatever had been typed in the meantime.
+         */
+        setReferenceDraft((current) => (current === sent ? null : current))
       }
       await api(`/conversations/${id}/messages`, {
         method: 'POST',
         body: JSON.stringify({ content }),
       })
       setDraft('')
-      await openConversation(id)
+      await openConversation(id, { continuing: created })
       await refreshList()
 
       /*
@@ -991,23 +1017,27 @@ export function ChatPage() {
     setChatError(null)
 
     let id = activeId
+    let created = false
     try {
       if (!id) {
-        const reference = referenceDraft?.trim()
-        const created = await api<Summary>('/conversations', {
+        const sent = referenceDraft
+        const reference = sent?.trim()
+        const conversation = await api<Summary>('/conversations', {
           method: 'POST',
           body: JSON.stringify({
             title: deriveTitle(chip.message),
             ...(reference ? { scriptureReference: reference } : {}),
           }),
         })
-        id = created.id
+        id = conversation.id
+        created = true
+        setReferenceDraft((current) => (current === sent ? null : current))
       }
       await api(`/conversations/${id}/messages`, {
         method: 'POST',
         body: JSON.stringify({ content: chip.message }),
       })
-      await openConversation(id)
+      await openConversation(id, { continuing: created })
       await refreshList()
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : 'Unable to send that')
