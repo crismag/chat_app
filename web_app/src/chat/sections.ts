@@ -1,3 +1,5 @@
+import { AI_GUIDANCE_SECTIONS, type AiGuidanceSection } from '@chat/shared'
+
 /*
  * The four sections, with the question each one answers.
  *
@@ -56,6 +58,18 @@ export const CONDENSED_FIELDS = [
 ]
 
 export type FieldMeta = (typeof SECTIONS)[number] | (typeof CONDENSED_FIELDS)[number]
+
+/**
+ * Which of the four sections assistance may be asked about.
+ *
+ * Condensed's Verse and Reflection are deliberately outside it: Verse is the
+ * passage itself rather than the writer's response to it, and Reflection is not
+ * one of the four the guidance schema knows. Narrowing here is what stops a
+ * request for a section the server would refuse.
+ */
+export function isGuidanceSection(field: string): field is AiGuidanceSection {
+  return (AI_GUIDANCE_SECTIONS as readonly string[]).includes(field)
+}
 
 /** Which form a format is written in. */
 export function fieldsFor(format: string): readonly FieldMeta[] {

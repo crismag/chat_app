@@ -1,4 +1,5 @@
 import type {
+  AiGuidanceSection,
   ChatFormat,
   ChatSection,
   ChatSectionType,
@@ -54,4 +55,47 @@ export type Proposal = {
   origin: 'ai_assisted' | 'ai_generated'
   /** The field it was raised from, when it came from a section. */
   field: FieldType | null
+}
+
+/* ------------------------------------------------------- assistance state */
+
+/** Which kind of request is in flight, if any. */
+export type AssistBusy = 'questions' | 'improve' | null
+
+export type FieldGuidance = { questions: string[]; notice: string }
+
+export type FieldImprovement = {
+  original: string
+  suggested: string
+  summaryOfChanges: string[]
+}
+
+/**
+ * All of assistance's state and handlers, passed down as one thing.
+ *
+ * A bundle rather than fifteen props threaded through two components. It is
+ * also the shape that makes the single-flight rule expressible: `busyField` and
+ * `busyKind` are one pair for the whole page, so a second request cannot be
+ * started from another section while one is still out.
+ *
+ * None of this is the reflection. It is thrown away when the page moves on, and
+ * the only route from any of it into the C.H.A.T. is the ordinary section write
+ * the author triggers by pressing a button that says so.
+ */
+export type AssistState = {
+  available: boolean
+  unavailableReason: string | null
+  busyField: FieldType | null
+  busyKind: AssistBusy
+  guidance: Partial<Record<FieldType, FieldGuidance>>
+  improvement: ({ field: FieldType } & FieldImprovement) | null
+  clarification: { field: FieldType; question: string } | null
+  error: { field: FieldType; message: string } | null
+  undoable: { field: FieldType; previous: string } | null
+  onAsk: (field: AiGuidanceSection) => void
+  onImprove: (field: AiGuidanceSection) => void
+  onAccept: () => void
+  onDiscard: () => void
+  onDismissGuidance: (field: AiGuidanceSection) => void
+  onUndo: () => void
 }

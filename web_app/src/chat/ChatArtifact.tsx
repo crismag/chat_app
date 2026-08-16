@@ -1,8 +1,15 @@
 import { useEffect, useRef } from 'react'
 import { counterFor, splitAtLimit, type ChatFormat } from '@chat/shared'
 import { CheckIcon, SendIcon } from '../shared/ui/icons.tsx'
-import { ORIGIN_CLASSES, ORIGIN_LABELS, fieldsFor, type FieldMeta } from './sections.ts'
-import type { FieldType, Proposal } from './types.ts'
+import { FieldAssist } from './FieldAssist.tsx'
+import {
+  ORIGIN_CLASSES,
+  ORIGIN_LABELS,
+  fieldsFor,
+  isGuidanceSection,
+  type FieldMeta,
+} from './sections.ts'
+import type { AssistState, FieldType, Proposal } from './types.ts'
 import styles from './ChatPage.module.css'
 
 /**
@@ -22,6 +29,7 @@ function Field({
   dirty,
   discussing,
   proposal,
+  assist,
   onChange,
   onSave,
   onDiscuss,
@@ -35,6 +43,7 @@ function Field({
   dirty: boolean
   discussing: boolean
   proposal: Proposal | null
+  assist: AssistState
   onChange: (value: string, overflow: string) => void
   onSave: () => void
   onDiscuss: () => void
@@ -57,6 +66,12 @@ function Field({
 
   const counter = counterFor(format, meta.type, value)
   const filled = value.trim().length > 0
+
+  /*
+   * Narrowed once, into a const, so the callbacks below keep the narrowing.
+   * Non-null exactly when this field is one of the four assistance understands.
+   */
+  const section = isGuidanceSection(meta.type) ? meta.type : null
 
   return (
     <article
@@ -146,6 +161,35 @@ function Field({
       </div>
 
       {/*
+        Assistance for this section, in the section. Only the four C.H.A.T.
+        sections can be asked about — Condensed's Verse is the passage itself
+        and its Reflection is not one of the four the guidance schema knows.
+      */}
+      {section ? (
+        <FieldAssist
+          field={section}
+          name={meta.name}
+          available={assist.available}
+          unavailableReason={assist.unavailableReason}
+          hasText={filled}
+          busy={assist.busyField === section ? assist.busyKind : null}
+          guidance={assist.guidance[section] ?? null}
+          improvement={assist.improvement?.field === section ? assist.improvement : null}
+          clarification={
+            assist.clarification?.field === section ? assist.clarification.question : null
+          }
+          error={assist.error?.field === section ? assist.error.message : null}
+          undoable={assist.undoable?.field === section}
+          onAsk={() => assist.onAsk(section)}
+          onImprove={() => assist.onImprove(section)}
+          onAccept={assist.onAccept}
+          onDiscard={assist.onDiscard}
+          onDismissGuidance={() => assist.onDismissGuidance(section)}
+          onUndo={assist.onUndo}
+        />
+      ) : null}
+
+      {/*
         A result comes back to the field it was raised from, and it arrives as
         a suggestion sitting beside the author's words — never as a silent
         replacement, and never wearing their name.
@@ -182,6 +226,7 @@ export function ChatArtifact({
   discussing,
   proposal,
   overflow,
+  assist,
   onChange,
   onSave,
   onDiscuss,
@@ -196,6 +241,7 @@ export function ChatArtifact({
   discussing: FieldType | null
   proposal: Proposal | null
   overflow: { field: FieldType; text: string } | null
+  assist: AssistState
   onChange: (field: FieldType, value: string, overflow: string) => void
   onSave: (field: FieldType) => void
   onDiscuss: (field: FieldType) => void
@@ -245,6 +291,7 @@ export function ChatArtifact({
           dirty={dirtyFields.has(meta.type)}
           discussing={discussing === meta.type}
           proposal={proposal && proposal.field === meta.type ? proposal : null}
+          assist={assist}
           onChange={(value, over) => onChange(meta.type, value, over)}
           onSave={() => onSave(meta.type)}
           onDiscuss={() => onDiscuss(meta.type)}

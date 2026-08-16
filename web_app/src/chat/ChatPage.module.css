@@ -903,6 +903,151 @@
   gap: var(--space-2);
 }
 
+/* --- Assistance, beside a section ------------------------------------- */
+
+/*
+ * Small, quiet, and in the row of controls the field already has. Assistance
+ * is an offer next to the work, not a second assistant competing with the
+ * conversation for the middle of the screen.
+ */
+.assistActions {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.assistButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.assistButton:hover:not(:disabled) {
+  border-color: var(--ai-generated);
+  color: var(--ai-generated);
+}
+
+.assistButton:disabled {
+  opacity: 0.45;
+}
+
+.assistStatus {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.assistError {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--text-xs);
+}
+
+/*
+ * Dashed, and in the AI colour. A suggestion must not be able to be mistaken
+ * for the author's own saved words at a glance — the badge says it in words,
+ * this says it before anyone has read a word.
+ */
+.assistPanel {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px dashed var(--ai-generated);
+  border-radius: var(--radius-md);
+  background: var(--ai-generated-soft);
+}
+
+.assistPanelHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.assistQuestions {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-inline-start: 1.1rem;
+  font-family: var(--font-serif);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+  color: var(--ink);
+}
+
+.assistQuestion {
+  font-family: var(--font-serif);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+  color: var(--ink);
+}
+
+.assistNotice {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  line-height: var(--leading-body);
+}
+
+.assistCompare {
+  display: grid;
+  gap: var(--space-3);
+}
+
+@media (min-width: 720px) {
+  .assistCompare {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.assistCompareLabel {
+  margin-block-end: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.assistCompareText {
+  font-family: var(--font-serif);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+
+.assistCompareText[data-suggested='true'] {
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--ai-assisted-soft);
+}
+
+.assistChanges {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding-inline-start: 1.1rem;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.assistPanelActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 .artifactWaiting {
   display: grid;
   align-content: center;
