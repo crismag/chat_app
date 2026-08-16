@@ -33,6 +33,13 @@ The shortest check there is: register a throwaway account, land signed in,
 screenshot, and print any severe console errors. Run it first when something is
 broken, because it tells you whether the problem is the app or the check.
 
+## `create-studio.mjs` — Phase 3 host integration
+
+Creates a reflection and exact saved passage, opens the selected `?c=` record in
+the Fabric-backed Studio, saves and reloads the canonical document, exports a
+1080 × 1080 PNG, and opens the bundled Fabric.js notice. It writes the Studio
+screenshot and downloaded PNG to `scripts/verify/out/`.
+
 ## `reflect.mjs` — Reflect, driven end to end
 
 The claims a unit test cannot make honestly: that a person can register and
