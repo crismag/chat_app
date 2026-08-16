@@ -122,7 +122,7 @@ underneath a running server. Check the current list at
 
 ## Architecture
 
-```
+```text
 CHAT UI  →  /api/ai/*  →  AiService  →  AIProvider  →  GeminiProvider
                                           (seam)
 ```
@@ -311,6 +311,33 @@ usage and an outcome code — never the key, the prompt or the response.
 Gating, limits, timeouts, cancellation, retry, logging and rate limiting all
 live **above** the seam in `AiService` and are inherited for free. If you find
 yourself re-implementing one of them in an adapter, it is in the wrong place.
+
+---
+
+## Known limitations
+
+Written down rather than discovered later.
+
+- **Rate limiting is in-memory and per-process.** It does not survive a restart
+  and does not span instances, so a multi-instance deployment needs a shared
+  store (Redis, or the database) before the ceiling means anything. Single
+  process today, which is what this is sized for.
+- **The disclosure is remembered in `localStorage`.** It is therefore per
+  browser rather than per account: the same person on a second device sees it
+  again. That is the safe direction to be wrong in, but it is not a consent
+  record, and anything that needs to be auditable belongs on the user row.
+- **No structured-output conformance has been measured against the live API.**
+  The schema is what the docs specify and validation catches anything that
+  disagrees, but how often a real model returns something the validator rejects
+  is unmeasured. Run `ai-live-smoke.mjs` a few times before trusting a number.
+- **Guidance sends every written section, not only the one being asked about.**
+  That is what makes a question follow on from what the person has already
+  written rather than repeating it, and it is more than the strict minimum for
+  the request. It is bounded by `AI_MAX_INPUT_CHARS` and is the one place the
+  minimum-fields rule is traded for answer quality.
+- **`x-forwarded-for` is spoofable**, which is why the per-address ceiling sits
+  *behind* the per-user one rather than in front of it. Behind a proxy that does
+  not set it, all traffic shares one bucket.
 
 ---
 
