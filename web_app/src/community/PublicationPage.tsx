@@ -84,7 +84,7 @@ export function PublicationPage() {
             ? 'It may have been unshared by its author, or it may belong to a community you are not part of.'
             : 'Something went wrong reaching the server. It is worth trying again.'}
         </p>
-        <Link className="btn btn-secondary" to="/community">
+        <Link className={`btn btn-secondary ${styles.recover}`} to="/community">
           Return to Community
         </Link>
       </section>

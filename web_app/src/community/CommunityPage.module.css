@@ -615,6 +615,11 @@
   white-space: pre-wrap;
 }
 
+/* The recovery action is a button, not a banner across the column. */
+.recover {
+  justify-self: start;
+}
+
 .detailSkeleton {
   min-height: 20rem;
   border: 1px dashed var(--line);
