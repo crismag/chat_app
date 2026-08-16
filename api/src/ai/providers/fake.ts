@@ -153,12 +153,19 @@ export class FakeProvider implements AIProvider {
 
     const message = request.message.toLowerCase();
 
-    const asksForAuthorship =
-      /\b(write|compose|draft|create|generate|fill in|make up)\b[\s\S]{0,40}\b(heart|testimony|application)\b/.test(
-        message,
-      ) || /\bignore\b[\s\S]{0,60}\binstructions?\b/.test(message);
+    /*
+     * Only the injection case now.
+     *
+     * This used to refuse any request to write a Heart or Testimony, which was
+     * right under the old rule and is a DEFECT under the current one: an
+     * explicit request for a draft is answered with a draft, because the
+     * safeguards are that it is labelled, never inserted, and carries its
+     * provenance — not that it is withheld. What is still refused is an attempt
+     * to talk the assistant out of its instructions.
+     */
+    const attemptsOverride = /\bignore\b[\s\S]{0,60}\binstructions?\b/.test(message);
 
-    if (asksForAuthorship) {
+    if (attemptsOverride) {
       return {
         reply:
           'That part has to be yours — a testimony written for you would not be one. Tell me what happened, even roughly, and I can help you find the words for it. What did this passage stir in you?',
@@ -175,6 +182,24 @@ export class FakeProvider implements AIProvider {
       return {
         reply: `That is outside what I can help with here — I am only the helper for this reflection. Shall we stay with ${request.passageReference}?`,
         redirected: true,
+      };
+    }
+
+    /*
+     * A draft, when one was plainly asked for.
+     *
+     * The real provider decides this from the instruction; a deterministic
+     * stand-in needs a deterministic rule, so this is a regex. It returns TEXT
+     * only — the fake has no way to name a destination either, because the
+     * shape it returns has no field for one.
+     */
+    if (/\b(draft|write|compose|generate)\b/.test(message)) {
+      return {
+        reply: 'Here is a draft you could start from.',
+        redirected: false,
+        draft:
+          `Reading ${request.passageReference}, I want to hold on to what it says even on the days I cannot feel it. ` +
+          'This is a starting point in my own words, and I would change it to match what I actually mean.',
       };
     }
 

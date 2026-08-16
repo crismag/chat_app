@@ -14,6 +14,7 @@
 
 import {
   AI_OUTCOMES,
+  type AiChatAction,
   type AiGuidanceSection,
   type AiOutcome,
   type ReflectionChatTurn,
@@ -60,6 +61,17 @@ export interface ReflectionChatRequest {
   history: ReflectionChatTurn[];
   /** The message just sent. Untrusted data, exactly like everything else. */
   message: string;
+  /**
+   * Scoped mode, from the application's own state.
+   *
+   * Guidance for the model, and — separately, in `draft-target.ts` — one of the
+   * two trusted sources for deciding where a draft is offered.
+   */
+  focusSection?: AiGuidanceSection;
+  /** A structured action the client chose from a fixed set. Never free text. */
+  action?: AiChatAction;
+  /** That action's own destination, already enum-validated. */
+  actionSection?: AiGuidanceSection;
 }
 
 export interface ImproveWritingRequest {
@@ -85,6 +97,15 @@ export interface ReflectionGuidanceResult {
 
 export interface ReflectionChatResult {
   reply: string;
+  /**
+   * Draft text, when the writer explicitly asked for one.
+   *
+   * Text and nothing else. There is deliberately no section on this type: the
+   * model has no way to name a destination, and the destination is resolved by
+   * trusted code in `draft-target.ts`. If you are adding a `section` field
+   * here, read that file first — it is the boundary this shape protects.
+   */
+  draft?: string;
   /**
    * True when the request fell outside the boundary and the reply is a redirect.
    *

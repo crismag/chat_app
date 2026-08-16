@@ -159,8 +159,67 @@ export const AI_CHAT_NOTE_ONLY_MESSAGE =
  * for settled theological authority rather than mistaken for the writer's own
  * words.
  */
+export const AI_CHAT_SHORT_NOTICE =
+  'AI suggestions are for reflection. Review before saving.';
+
+/**
+ * The full wording, for the popover.
+ *
+ * The short line above is what sits beside a draft; this is what someone gets
+ * when they ask what it means. A caveat pinned permanently between the thread
+ * and the composer is prime space spent on a sentence people stop seeing.
+ */
 export const AI_CHAT_NOTICE =
   'This is assistance for your thinking, not a verdict on the passage. Weigh it, and keep only what you believe to be true.';
+
+/**
+ * The structured actions a chip can invoke.
+ *
+ * A fixed set, chosen by the client from this list and validated by the server
+ * against it. Never a free-form prompt string, and — the reason that matters
+ * most — never taken from model output.
+ *
+ * Two things follow from making these identifiers rather than prompt text:
+ *
+ *   1. Whether a turn produces CONVERSATION or a DRAFT is decided by trusted
+ *      code from the action, before anything is sent. It is not inferred from
+ *      what came back. A model that volunteers draft text on an
+ *      `explain_simply` turn has it discarded.
+ *   2. The wording of each prompt lives on the server and can change without a
+ *      client release, and the thread still reads correctly because the visible
+ *      message is stored separately.
+ */
+export const AI_CHAT_ACTIONS = {
+  EXPLAIN_SIMPLY: 'explain_simply',
+  HISTORICAL_CONTEXT: 'historical_context',
+  ASK_REFLECTION_QUESTION: 'ask_reflection_question',
+  /** The only action that may produce a draft. Carries its own section. */
+  DRAFT_SECTION: 'draft_section',
+} as const;
+
+export type AiChatAction = (typeof AI_CHAT_ACTIONS)[keyof typeof AI_CHAT_ACTIONS];
+
+/**
+ * What the thread shows for an action.
+ *
+ * Stored as an ordinary user message so the conversation still reads as a
+ * conversation when someone comes back to it — a thread with a silent gap where
+ * a button was pressed is a thread that no longer makes sense.
+ */
+export const AI_CHAT_ACTION_MESSAGES: Record<AiChatAction, string> = {
+  [AI_CHAT_ACTIONS.EXPLAIN_SIMPLY]: 'Explain this passage simply.',
+  [AI_CHAT_ACTIONS.HISTORICAL_CONTEXT]:
+    'What is the historical and literary background to this passage?',
+  [AI_CHAT_ACTIONS.ASK_REFLECTION_QUESTION]:
+    'Ask me one question to help me reflect on this passage.',
+  [AI_CHAT_ACTIONS.DRAFT_SECTION]: 'Draft this section for me.',
+};
+
+/** What a draft-section action shows, per destination. */
+export function draftActionMessage(section: AiGuidanceSection): string {
+  const name = section.charAt(0).toUpperCase() + section.slice(1);
+  return `Draft my ${name} section.`;
+}
 
 export type ReflectionChatTurn = {
   role: 'user' | 'assistant';
@@ -175,6 +234,14 @@ export type ReflectionChatResponse = {
     content: string;
     authorOrigin: string;
     createdAt: string;
+    /** Draft text, when one was asked for. Offered, never applied. */
+    draftText?: string | null;
+    /**
+     * Where the draft is offered for — decided by trusted server code from the
+     * scoped state and the author's own words, never by the model. Null means
+     * the destination was not knowable and the author will be asked.
+     */
+    draftSection?: string | null;
   };
   /** True when the request was off-topic and the reply is a kind redirect. */
   redirected: boolean;

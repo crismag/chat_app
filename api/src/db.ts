@@ -80,6 +80,23 @@ function migrate(db: DatabaseSync): void {
       ON messages(conversationId, position);
     CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expiresAt);
   `);
+
+  /*
+   * Columns added after the table existed.
+   *
+   * `CREATE TABLE IF NOT EXISTS` does nothing for a database that already has
+   * the table, so a new column needs its own step — and it has to be safe to
+   * run on every start, including on a database that already has it. SQLite has
+   * no `ADD COLUMN IF NOT EXISTS`, so the existing columns are read first.
+   */
+  addColumn(db, 'messages', 'draftText', 'TEXT');
+  addColumn(db, 'messages', 'draftSection', 'TEXT');
+}
+
+function addColumn(db: DatabaseSync, table: string, column: string, type: string): void {
+  const existing = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (existing.some((row) => row.name === column)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
 }
 
 /** Rows come back as plain objects; this keeps the casts in one place. */
@@ -252,7 +269,8 @@ class MessageTable {
   get(conversationId: string): StoredMessage[] | undefined {
     const rows = this.db
       .prepare(
-        `SELECT id, conversationId, role, content, originalContent, authorOrigin, createdAt
+        `SELECT id, conversationId, role, content, originalContent, authorOrigin, createdAt,
+                draftText, draftSection
          FROM messages WHERE conversationId = ? ORDER BY position`,
       )
       .all(conversationId) as unknown as StoredMessage[];
@@ -274,8 +292,9 @@ class MessageTable {
     this.db
       .prepare(
         `INSERT INTO messages
-           (id, conversationId, position, role, content, originalContent, authorOrigin, createdAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, conversationId, position, role, content, originalContent, authorOrigin, createdAt,
+            draftText, draftSection)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         message.id,
@@ -286,6 +305,8 @@ class MessageTable {
         message.originalContent,
         message.authorOrigin,
         message.createdAt,
+        message.draftText ?? null,
+        message.draftSection ?? null,
       );
     return this;
   }
@@ -293,8 +314,9 @@ class MessageTable {
   set(conversationId: string, messages: StoredMessage[]): this {
     const insert = this.db.prepare(
       `INSERT INTO messages
-         (id, conversationId, position, role, content, originalContent, authorOrigin, createdAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, conversationId, position, role, content, originalContent, authorOrigin, createdAt,
+          draftText, draftSection)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     this.db.exec('BEGIN');
     try {
@@ -311,6 +333,8 @@ class MessageTable {
           message.originalContent,
           message.authorOrigin,
           message.createdAt,
+          message.draftText ?? null,
+          message.draftSection ?? null,
         );
       });
       this.db.exec('COMMIT');

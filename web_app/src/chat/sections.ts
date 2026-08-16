@@ -92,3 +92,24 @@ export const ORIGIN_CLASSES: Record<string, string> = {
   ai_assisted: 'badge-ai-assisted',
   ai_generated: 'badge-ai-generated',
 }
+
+/**
+ * Combine incoming text with what is already in a section.
+ *
+ * Pure and exported so the preview in the sheet and the write itself cannot
+ * disagree — a preview computed differently from the thing it previews is
+ * worse than no preview at all.
+ */
+export function mergeInto(
+  existing: string,
+  incoming: string,
+  mode: 'append' | 'replace' | 'insert',
+  caret: number,
+): string {
+  if (mode === 'replace') return incoming
+  if (mode === 'insert') {
+    const at = Math.max(0, Math.min(caret, existing.length))
+    return `${existing.slice(0, at)}${incoming}${existing.slice(at)}`
+  }
+  return existing.trim() ? `${existing.trimEnd()}\n\n${incoming}` : incoming
+}

@@ -189,3 +189,30 @@ export function BookIcon(props: IconProps) {
     </svg>
   )
 }
+
+/**
+ * A document taking something in — the "use this response in my reflection"
+ * mark.
+ *
+ * Deliberately not a bare plus. A plus alone says "add" without saying add
+ * what, or where; a page with an arrow entering it says the response is going
+ * into the thing being written.
+ */
+export function UseInIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9" />
+      <path d="M12 12h7" />
+      <path d="m16 9 3 3-3 3" />
+    </svg>
+  )
+}

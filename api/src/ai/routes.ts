@@ -32,6 +32,7 @@ import {
   parseGuidanceRequest,
   parseImproveRequest,
 } from './validation.ts';
+import { isDraftTurn, resolveDraftTarget } from './draft-target.ts';
 import type { AiService } from './service.ts';
 
 /** What a failure means in HTTP terms. */
@@ -111,7 +112,16 @@ export interface AiRouteDeps {
     appendAssistantMessage(
       conversationId: string,
       content: string,
-    ): { id: string; role: 'assistant'; content: string; authorOrigin: string; createdAt: string };
+      draft?: { text: string; section: string | null },
+    ): {
+      id: string;
+      role: 'assistant';
+      content: string;
+      authorOrigin: string;
+      createdAt: string;
+      draftText?: string | null;
+      draftSection?: string | null;
+    };
   };
 }
 
@@ -269,6 +279,9 @@ export function createAiRoutes(deps: AiRouteDeps) {
         sections: context.sections,
         history: context.history,
         message: parsed.message,
+        ...(parsed.focusSection ? { focusSection: parsed.focusSection } : {}),
+        ...(parsed.action ? { action: parsed.action } : {}),
+        ...(parsed.actionSection ? { actionSection: parsed.actionSection } : {}),
       },
       { userId: user.id, address: addressOf(c), requestId: randomUUID() },
     );
@@ -284,6 +297,41 @@ export function createAiRoutes(deps: AiRouteDeps) {
     }
 
     /*
+     * ── The mutation boundary, in the one place a reader will look for it. ──
+     *
+     * The model returned a reply and, at most, some draft TEXT. It did not and
+     * cannot name a destination: the response schema has no field for one.
+     *
+     * Where the draft is offered is decided here, by trusted code, from the
+     * application's own scoped state and the author's own words — never from
+     * anything in `result.value`. `resolveDraftTarget` returns a member of the
+     * section enum or null, and null is fine: the draft is still offered and
+     * the interface asks the author to choose.
+     *
+     * Nothing below writes a section. This handler appends to the message
+     * thread and touches the sections table not at all. The write happens later
+     * through the authenticated, owned-conversation section endpoint, on a
+     * gesture the author makes. See `draft-target.ts`.
+     */
+    /*
+     * Whether this turn may produce a draft at all is OURS, decided before the
+     * provider was called and applied again here. A model that volunteers draft
+     * text on an "Explain simply" turn has it dropped: producing conversation
+     * versus producing generated material is the first half of the insertion
+     * decision, and the model does not get to make either half.
+     */
+    const mayDraft = isDraftTurn({ action: parsed.action, userMessage: parsed.message });
+    const draftText = mayDraft ? result.value.draft : undefined;
+
+    const target = draftText
+      ? resolveDraftTarget({
+          actionSection: parsed.actionSection,
+          focusSection: parsed.focusSection,
+          userMessage: parsed.message,
+        })
+      : null;
+
+    /*
      * Stored before it is returned, so a reply the person can see is a reply
      * that survives a reload. The thread is the record of the conversation; a
      * message that existed only in one browser tab would not be.
@@ -291,9 +339,15 @@ export function createAiRoutes(deps: AiRouteDeps) {
     const message = deps.conversation.appendAssistantMessage(
       parsed.conversationId,
       result.value.reply,
+      draftText ? { text: draftText, section: target?.section ?? null } : undefined,
     );
 
-    return c.json({ message, redirected: result.value.redirected, notice: AI_CHAT_NOTICE });
+    return c.json({
+      message,
+      redirected: result.value.redirected,
+      notice: AI_CHAT_NOTICE,
+      ...(target ? { draftTargetSource: target.source } : {}),
+    });
   });
 
   return routes;

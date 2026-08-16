@@ -45,18 +45,22 @@ import {
 import { ConversationSidebar } from './ConversationSidebar.tsx'
 import { AiDisclosureSheet } from './FieldAssist.tsx'
 import { deriveTitle, displayTitle } from './history.ts'
-import { fieldsFor } from './sections.ts'
+import type { Chip } from './chips.ts'
+import { fieldsFor, mergeInto } from './sections.ts'
 import type {
+  AddedNotice,
   AssistBusy,
   AssistState,
   ConversationDetail,
   FieldGuidance,
   FieldImprovement,
   FieldType,
+  PendingAdd,
   Proposal,
   SaveState,
   Summary,
 } from './types.ts'
+import { AddToSectionSheet } from './ChatSheets.tsx'
 import styles from './ChatPage.module.css'
 
 const SIDEBAR_KEY = 'chat.reflect.sidebar'
@@ -167,7 +171,45 @@ export function ChatPage() {
   const [replying, setReplying] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
   /* A message whose reply is waiting behind the disclosure. */
-  const [pendingChat, setPendingChat] = useState<{ id: string; message: string } | null>(null)
+  const [pendingChat, setPendingChat] = useState<
+    { id: string; message: string; chip?: Chip } | null
+  >(null)
+  /** The last reply request, so "Try again" repeats it without re-sending it. */
+  const [lastRequest, setLastRequest] = useState<
+    { conversationId: string; message: string; chip?: Chip } | null
+  >(null)
+
+  /*
+   * Adding a draft into a section.
+   *
+   * `pendingAdd` is only ever set when the destination ALREADY HAS TEXT. An
+   * empty section is written straight away; a section with the author's words
+   * in it raises the choice — Append, Replace, Insert at cursor, Cancel —
+   * because silently replacing what someone wrote is the one outcome none of
+   * this is allowed to produce.
+   */
+  const [pendingAdd, setPendingAdd] = useState<PendingAdd | null>(null)
+  const [addedNotice, setAddedNotice] = useState<AddedNotice | null>(null)
+  /** Where the caret was, per section, so "insert at cursor" can mean it. */
+  const [carets, setCarets] = useState<Partial<Record<FieldType, number>>>({})
+  /*
+   * Provenance for text sitting in the unsaved buffer.
+   *
+   * Generated material lands as UNSAVED writing rather than as a commit, so by
+   * the time it is written down the stored origin still says `user` — and
+   * `saveAll` would record the author as having written it. This remembers what
+   * actually landed, so the badge cannot quietly become a claim nobody made.
+   */
+  const [pendingOrigins, setPendingOrigins] = useState<Partial<Record<FieldType, string>>>({})
+  /**
+   * The section that just received something, briefly marked.
+   *
+   * Named `flash` rather than the obvious word: "highlight" is forbidden across
+   * this codebase because it is the plausible-wrong name for the H in C.H.A.T.,
+   * and there is a regression test that will not — and should not — try to tell
+   * a visual flash apart from a mislabelled section.
+   */
+  const [flashField, setFlashField] = useState<FieldType | null>(null)
 
   const [shareOpen, setShareOpen] = useState(false)
   const [formatOpen, setFormatOpen] = useState(false)
@@ -330,9 +372,10 @@ export function ChatPage() {
          * become a claim nobody made.
          */
         const origin =
-          storedOrigin(field as FieldType) === AUTHOR_ORIGINS.USER
+          pendingOrigins[field as FieldType] ??
+          (storedOrigin(field as FieldType) === AUTHOR_ORIGINS.USER
             ? AUTHOR_ORIGINS.USER
-            : AUTHOR_ORIGINS.AI_ASSISTED
+            : AUTHOR_ORIGINS.AI_ASSISTED)
         await api(`/conversations/${activeId}/sections`, {
           method: 'PATCH',
           body: JSON.stringify({ type: field, content: value, authorOrigin: origin }),
@@ -362,7 +405,7 @@ export function ChatPage() {
       })
       return false
     }
-  }, [activeId, edits, storedValue, storedOrigin, refreshList])
+  }, [activeId, edits, storedValue, storedOrigin, refreshList, pendingOrigins])
 
   /*
    * Typing settles, and it is written down.
@@ -455,13 +498,32 @@ export function ChatPage() {
    * than read from state — the first message of a new reflection creates the
    * conversation, and `activeId` has not caught up by the time this runs.
    */
-  async function requestReply(conversationId: string, message: string) {
+  async function requestReply(conversationId: string, message: string, chip?: Chip) {
     setReplying(true)
     setChatError(null)
+    setLastRequest({ conversationId, message, ...(chip ? { chip } : {}) })
     try {
       await api('/ai/reflection-chat', {
         method: 'POST',
-        body: JSON.stringify({ conversationId, message }),
+        body: JSON.stringify({
+          conversationId,
+          message,
+          /*
+           * An identifier from a fixed set, not prompt text. The server decides
+           * what it means and — crucially — whether this turn may produce a
+           * draft at all.
+           */
+          ...(chip ? { action: chip.action } : {}),
+          ...(chip?.section ? { section: chip.section } : {}),
+          /*
+           * Scoped mode travels as application state. The server validates it
+           * against the section enum anyway and uses it — not anything the
+           * model says — to decide where a draft would go.
+           */
+          ...(discussing && SECTION_FIELDS.includes(discussing as never)
+            ? { focusSection: discussing }
+            : {}),
+        }),
       })
       /* The reply was stored server-side; re-reading is what puts it on screen. */
       await openConversation(conversationId)
@@ -476,9 +538,9 @@ export function ChatPage() {
     }
   }
 
-  async function sendMessage(event: FormEvent) {
+  async function sendMessage(event: FormEvent, override?: string) {
     event.preventDefault()
-    const content = draft.trim()
+    const content = (override ?? draft).trim()
     if (!content || sending) return
     setSending(true)
     setError(null)
@@ -792,6 +854,142 @@ export function ChatPage() {
     }
   }
 
+  /**
+   * Offer a draft into a section — the only route from the chat into the C.H.A.T.
+   *
+   * This runs because the author pressed a button. Nothing upstream of it can
+   * reach a section: the chat endpoint appends messages and never touches the
+   * sections table, and the model has no way to name a destination. The write
+   * below goes through the same authenticated section endpoint used when
+   * someone types into the field by hand.
+   */
+  function addDraftToSection(field: FieldType, text: string) {
+    const existing = valueOf(field)
+    if (!existing.trim()) {
+      /* Nothing there to protect, so it goes straight into the unsaved buffer. */
+      void applyAdd(field, text, 'replace')
+      return
+    }
+    setPendingAdd({ field, text, existing, caret: carets[field] ?? null })
+  }
+
+  /**
+   * Put the text into the section's UNSAVED buffer — never a commit.
+   *
+   * This is the difference between "review in Context" and "write to Context".
+   * The text appears in the editor as unsaved writing the author can change,
+   * the header says Unsaved, and the ordinary Save they already use is what
+   * commits it. Nothing generated is ever written down without them.
+   */
+  async function applyAdd(
+    field: FieldType,
+    text: string,
+    mode: 'append' | 'replace' | 'insert',
+  ) {
+    const existing = valueOf(field)
+    const next = mergeInto(existing, text, mode, carets[field] ?? existing.length)
+
+    /*
+     * Replacing stashes the previous text where Undo already looks, so a
+     * replacement the author regrets is one press away from being undone.
+     */
+    if (mode === 'replace' && existing.trim()) {
+      setUndoable({ field, previous: existing })
+    }
+
+    setPendingAdd(null)
+    setEdits((current) => ({ ...current, [field]: next }))
+    setPendingOrigins((current) => ({ ...current, [field]: AUTHOR_ORIGINS.AI_GENERATED }))
+    setAddedNotice({ field, at: Date.now() })
+    flashSection(field)
+
+    /*
+     * Bring them to it — unless they are typing somewhere else, in which case
+     * moving the page under them is worse than letting them find it.
+     */
+    const active = document.activeElement
+    const typingElsewhere =
+      active instanceof HTMLTextAreaElement && active.id !== `chat-field-${field}`
+    if (!typingElsewhere) viewSection(field)
+  }
+
+  /** Mark the destination, briefly, so it is seen to have received something. */
+  function flashSection(field: FieldType) {
+    setFlashField(field)
+    window.setTimeout(
+      () => setFlashField((current) => (current === field ? null : current)),
+      2200,
+    )
+  }
+
+  /** Take the author to the section that just changed. */
+  function viewSection(field: FieldType) {
+    const input = document.getElementById(`chat-field-${field}`)
+    if (!input) return
+    input.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    ;(input as HTMLTextAreaElement).focus({ preventScroll: true })
+    flashSection(field)
+  }
+
+  /**
+   * Ask again for the same thing.
+   *
+   * It repeats the REQUEST without re-posting the message that caused it, so
+   * retrying does not duplicate the author's turn in the thread. It does not
+   * tell the model what was wrong with the first attempt, so a second draft can
+   * resemble the first — a known limitation rather than a surprise.
+   */
+  function retryLast() {
+    if (!lastRequest || replying) return
+    void requestReply(lastRequest.conversationId, lastRequest.message, lastRequest.chip)
+  }
+
+  /**
+   * Invoke a structured action from a chip.
+   *
+   * The request fires immediately — a chip that filled the composer and waited
+   * for Send is a control that looks like it did something and did not, which
+   * is the defect this replaces.
+   *
+   * The human-readable message is stored as an ordinary user turn so the thread
+   * still reads as a conversation later; the ACTION is what the server acts on,
+   * and it is an identifier from a fixed list rather than that text.
+   */
+  async function runChip(chip: Chip) {
+    if (!chatReady || sending || replying) return
+    setChatError(null)
+
+    let id = activeId
+    try {
+      if (!id) {
+        const reference = referenceDraft?.trim()
+        const created = await api<Summary>('/conversations', {
+          method: 'POST',
+          body: JSON.stringify({
+            title: deriveTitle(chip.message),
+            ...(reference ? { scriptureReference: reference } : {}),
+          }),
+        })
+        id = created.id
+      }
+      await api(`/conversations/${id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ content: chip.message }),
+      })
+      await openConversation(id)
+      await refreshList()
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'Unable to send that')
+      return
+    }
+
+    if (window.localStorage.getItem(DISCLOSURE_KEY) === 'accepted') {
+      void requestReply(id, chip.message, chip)
+    } else {
+      setPendingChat({ id, message: chip.message, chip })
+    }
+  }
+
   /** Send a section into the conversation, to be talked through. */
   async function discussField(field: FieldType) {
     if (!activeId) return
@@ -935,6 +1133,9 @@ export function ChatPage() {
    * per section, which is what makes "no duplicate in-flight requests" a fact
    * about the state rather than a rule each handler has to remember.
    */
+  /* Whether a reply can be asked for at all. */
+  const chatReady = ai.capabilities?.reflectionChat === true
+
   const assist: AssistState = {
     available: ai.capabilities?.improveWriting === true && detail !== null,
     unavailableReason: !detail
@@ -1026,6 +1227,7 @@ export function ChatPage() {
   const helper = (
     <ChatHelper
       format={format}
+      reference={referenceDraft ?? detail?.scriptureReference ?? ''}
       messages={detail?.messages ?? []}
       draft={draft}
       sending={sending}
@@ -1034,6 +1236,7 @@ export function ChatPage() {
       busyAction={busyAction}
       onDraft={setDraft}
       onSend={(event) => void sendMessage(event)}
+      onChip={(chip) => void runChip(chip)}
       onAction={(action) => void runAi(action)}
       onUseInField={(field, content, origin) => void putIntoField(field, content, origin)}
       onStopDiscussing={() => setDiscussing(null)}
@@ -1044,6 +1247,11 @@ export function ChatPage() {
       chatAvailable={ai.capabilities?.reflectionChat === true}
       chatNotice={AI_CHAT_NOTICE}
       onDismissChatError={() => setChatError(null)}
+      onAddDraft={addDraftToSection}
+      onRetryDraft={retryLast}
+      addedNotice={addedNotice}
+      onViewSection={viewSection}
+      onDismissAdded={() => setAddedNotice(null)}
     />
   )
 
@@ -1292,6 +1500,8 @@ export function ChatPage() {
             proposal={proposal}
             overflow={overflow}
             assist={assist}
+            flashed={flashField}
+            onCaret={(field, at) => setCarets((current) => ({ ...current, [field]: at }))}
             onChange={(field, value, over) => {
               setEdits((current) => ({ ...current, [field]: value }))
               setOverflow(over ? { field, text: over } : null)
@@ -1427,6 +1637,24 @@ export function ChatPage() {
         />
       ) : null}
 
+      {/*
+        The only place existing section text can be displaced, and it asks
+        first. There is no code path that replaces what the author wrote
+        without this sheet returning an answer.
+      */}
+      {pendingAdd ? (
+        <AddToSectionSheet
+          sectionName={
+            fields.find((meta) => meta.type === pendingAdd.field)?.name ?? pendingAdd.field
+          }
+          text={pendingAdd.text}
+          existing={pendingAdd.existing}
+          caret={pendingAdd.caret}
+          onCancel={() => setPendingAdd(null)}
+          onChoose={(mode) => void applyAdd(pendingAdd.field, pendingAdd.text, mode)}
+        />
+      ) : null}
+
       {pendingAssist || pendingChat ? (
         <AiDisclosureSheet
           disclosure={AI_DISCLOSURE}
@@ -1442,7 +1670,7 @@ export function ChatPage() {
                 ? askForQuestions(assist.field)
                 : askForImprovement(assist.field))
             }
-            if (chat) void requestReply(chat.id, chat.message)
+            if (chat) void requestReply(chat.id, chat.message, chat.chip)
           }}
           /*
            * Declining sends nothing. A message already written stays written —

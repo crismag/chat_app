@@ -13,7 +13,23 @@ export type Message = {
   role: 'user' | 'assistant'
   content: string
   authorOrigin: string
+  /** Generated draft text hanging off this reply. Offered, never applied. */
+  draftText?: string | null
+  /** Its destination, decided server-side by trusted code. May be null. */
+  draftSection?: string | null
 }
+
+/** Where a draft would land, and what to do about text already there. */
+export type PendingAdd = {
+  field: FieldType
+  text: string
+  existing: string
+  /** The caret in that section's editor, when one is known. */
+  caret: number | null
+}
+
+/** Said after a write, so the destination is seen to have received it. */
+export type AddedNotice = { field: FieldType; at: number }
 
 /** Every field of the artifact that can be written, in either format. */
 export type FieldType = ChatSectionType | CondensedSectionType

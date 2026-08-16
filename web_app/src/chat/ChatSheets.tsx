@@ -8,7 +8,8 @@ import {
   type ValidationResult,
 } from '@chat/shared'
 import { CloseIcon, GlobeIcon, LockIcon, CommunityIcon } from '../shared/ui/icons.tsx'
-import { SECTIONS } from './sections.ts'
+
+import { SECTIONS, mergeInto } from './sections.ts'
 import type { FieldType } from './types.ts'
 import styles from './ChatPage.module.css'
 
@@ -600,6 +601,135 @@ export function DeleteSheet({
         <strong>{title}</strong> will be deleted, along with its conversation and every
         section of its C.H.A.T. This cannot be undone.
       </p>
+    </Sheet>
+  )
+}
+
+/* ------------------------------------------------------- adding to a section */
+
+/**
+ * Where a draft goes when the section already has words in it.
+ *
+ * This sheet exists to make one outcome impossible: text the author wrote
+ * disappearing because they pressed a button. So it shows the RESULT before it
+ * happens, defaults to the mode that loses nothing, and puts Replace behind a
+ * second, deliberate confirmation.
+ *
+ * The preview is computed by the same function that performs the merge, because
+ * a preview computed a different way from the thing it previews is worse than
+ * no preview at all.
+ *
+ * "Insert at cursor" is offered ONLY when a caret in that section is actually
+ * known. Offering it and quietly meaning "at the end" would be a small lie in
+ * exactly the place this sheet exists to be trustworthy.
+ */
+export function AddToSectionSheet({
+  sectionName,
+  text,
+  existing,
+  caret,
+  onCancel,
+  onChoose,
+}: {
+  sectionName: string
+  text: string
+  existing: string
+  caret: number | null
+  onCancel: () => void
+  onChoose: (mode: 'append' | 'replace' | 'insert') => void
+}) {
+  /* Append is the default, because it is the one that cannot lose anything. */
+  const [mode, setMode] = useState<'append' | 'replace' | 'insert'>('append')
+  const [confirmedReplace, setConfirmedReplace] = useState(false)
+
+  const modes: { id: 'append' | 'replace' | 'insert'; label: string; hint: string }[] = [
+    { id: 'append', label: 'Add to the end', hint: 'Your writing stays, this goes after it.' },
+    ...(caret !== null
+      ? ([
+          {
+            id: 'insert' as const,
+            label: 'Insert where I left the cursor',
+            hint: 'Your writing stays, this goes in at that point.',
+          },
+        ])
+      : []),
+    {
+      id: 'replace',
+      label: 'Replace what I have written',
+      hint: 'Your current writing is removed. You can undo this afterwards.',
+    },
+  ]
+
+  const preview = mergeInto(existing, text, mode, caret ?? existing.length)
+  const blocked = mode === 'replace' && !confirmedReplace
+
+  return (
+    <Sheet
+      title={`Add to ${sectionName}`}
+      onClose={onCancel}
+      footer={
+        <>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={blocked}
+            onClick={() => onChoose(mode)}
+          >
+            {mode === 'replace' ? `Replace my ${sectionName}` : `Add to ${sectionName}`}
+          </button>
+          <button type="button" className="btn btn-ghost" onClick={onCancel}>
+            Cancel
+          </button>
+        </>
+      }
+    >
+      <p className={styles.sheetLead}>
+        Your {sectionName} already has something in it. Nothing has changed yet, and nothing is
+        saved until you save it.
+      </p>
+
+      <div className={styles.addChoices} role="radiogroup" aria-label="How to add this">
+        {modes.map((option) => (
+          <label key={option.id} className={styles.addChoice} data-selected={mode === option.id}>
+            <input
+              type="radio"
+              name="add-mode"
+              value={option.id}
+              checked={mode === option.id}
+              onChange={() => {
+                setMode(option.id)
+                setConfirmedReplace(false)
+              }}
+            />
+            <span>
+              <span className={styles.addChoiceLabel}>{option.label}</span>
+              <span className={styles.addChoiceHint}>{option.hint}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+
+      {/*
+        Replacing is the one choice that removes something, so it takes a
+        second deliberate act rather than a single click near the others.
+      */}
+      {mode === 'replace' ? (
+        <label className={styles.addConfirm}>
+          <input
+            type="checkbox"
+            checked={confirmedReplace}
+            onChange={(event) => setConfirmedReplace(event.target.checked)}
+          />
+          <span>Yes, remove what I have written in {sectionName}.</span>
+        </label>
+      ) : null}
+
+      <div>
+        <h3 className={styles.addCompareLabel}>Result</h3>
+        <p className={styles.addCompareText} data-incoming="true">
+          {preview}
+        </p>
+      </div>
     </Sheet>
   )
 }

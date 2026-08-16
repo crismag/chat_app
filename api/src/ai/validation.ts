@@ -13,14 +13,17 @@
  */
 
 import {
+  AI_CHAT_ACTIONS,
   AI_CHAT_REPLY_MAX_CHARS,
   AI_GUIDANCE_SECTIONS,
   AI_OUTCOMES,
   AI_QUESTIONS_PER_SECTION,
   AI_QUESTION_MAX_CHARS,
+  type AiChatAction,
   type AiGuidanceSection,
   type ReflectionChatTurn,
 } from '@chat/shared';
+import { validSection } from './draft-target.ts';
 import { AiFailure } from './types.ts';
 import type {
   ImproveWritingRequest,
@@ -198,7 +201,13 @@ export function boundHistory(
 export function parseChatRequest(
   body: unknown,
   limits: { maxInputChars: number },
-): { conversationId: string; message: string } {
+): {
+  conversationId: string;
+  message: string;
+  focusSection?: AiGuidanceSection;
+  action?: AiChatAction;
+  actionSection?: AiGuidanceSection;
+} {
   if (!isRecord(body)) {
     throw new AiRequestError('A request body is required.');
   }
@@ -214,6 +223,28 @@ export function parseChatRequest(
   }
 
   /*
+   * Scoped mode arrives from our own client, and is still validated against the
+   * enum — "our own client" is only ever a claim about the sender.
+   */
+  const focusSection = validSection(body['focusSection']);
+
+  /*
+   * The action, checked against the fixed list rather than believed.
+   *
+   * A client sends an identifier; anything that is not one of ours becomes
+   * "no action", which degrades to an ordinary conversational turn. It can
+   * never become prompt text, because there is no path from this value to
+   * anything but a lookup in a table the server owns.
+   */
+  const rawAction = body['action'];
+  const action =
+    typeof rawAction === 'string' &&
+    (Object.values(AI_CHAT_ACTIONS) as string[]).includes(rawAction)
+      ? (rawAction as AiChatAction)
+      : undefined;
+  const actionSection = validSection(body['section']);
+
+  /*
    * Only the message is checked here. The passage, the sections and the history
    * are the server's own to load and measure — the client does not send them,
    * and would not be trusted to describe them if it did.
@@ -225,7 +256,13 @@ export function parseChatRequest(
     );
   }
 
-  return { conversationId, message };
+  return {
+    conversationId,
+    message,
+    ...(focusSection ? { focusSection } : {}),
+    ...(action ? { action } : {}),
+    ...(actionSection ? { actionSection } : {}),
+  };
 }
 
 /** Everything a chat request will put in front of a provider. */
@@ -326,14 +363,30 @@ export function validateChatPayload(payload: unknown): ReflectionChatResult {
   }
 
   /*
-   * Truncated rather than refused, and this is the one place that is right.
-   * An over-long reply is still a good reply that ran on; refusing it would
-   * throw away a whole useful answer over its last sentence, where refusing a
-   * malformed *suggestion* protects the writer from something unusable.
+   * Read three keys and discard the rest.
+   *
+   * This is the adapter's half of the mutation boundary. A response that
+   * invents a `section`, a `target`, an `action` or any other instruction to
+   * act cannot carry it past this line — not because those keys are rejected,
+   * but because nothing here ever looks for them. Building the result key by
+   * key rather than spreading the payload is what makes that true by
+   * construction. See `draft-target.ts`.
+   */
+  const draft = payload['draft'];
+  const draftText =
+    typeof draft === 'string' && draft.trim() ? draft.trim().slice(0, AI_CHAT_REPLY_MAX_CHARS) : undefined;
+
+  /*
+   * The reply is truncated rather than refused, and this is the one place that
+   * is right. An over-long reply is still a good reply that ran on; refusing it
+   * would throw away a whole useful answer over its last sentence, where
+   * refusing a malformed *suggestion* protects the writer from something
+   * unusable.
    */
   return {
     reply: reply.trim().slice(0, AI_CHAT_REPLY_MAX_CHARS),
     redirected: !onTopic,
+    ...(draftText === undefined ? {} : { draft: draftText }),
   };
 }
 

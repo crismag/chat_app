@@ -30,6 +30,8 @@ function Field({
   discussing,
   proposal,
   assist,
+  flashed,
+  onCaret,
   onChange,
   onSave,
   onDiscuss,
@@ -44,6 +46,8 @@ function Field({
   discussing: boolean
   proposal: Proposal | null
   assist: AssistState
+  flashed: boolean
+  onCaret: (at: number) => void
   onChange: (value: string, overflow: string) => void
   onSave: () => void
   onDiscuss: () => void
@@ -77,6 +81,11 @@ function Field({
     <article
       className={`${styles.field} ${styles[meta.type] ?? ''}`}
       data-discussing={discussing ? 'true' : 'false'}
+      /*
+       * Briefly marked after something lands here, so a write is seen to have
+       * arrived somewhere rather than reported to have happened.
+       */
+      data-flash={flashed ? 'true' : 'false'}
     >
       <div className={styles.fieldHead}>
         <span className={styles.marker} aria-hidden="true">
@@ -100,8 +109,12 @@ function Field({
 
       <textarea
         ref={areaRef}
+        /* Addressable, so "View" can bring the author to it. */
+        id={`chat-field-${meta.type}`}
         className={styles.fieldInput}
         value={value}
+        /* Where the caret is, so "insert at cursor" can mean what it says. */
+        onSelect={(event) => onCaret(event.currentTarget.selectionStart)}
         aria-label={`${meta.name} — ${meta.prompt}`}
         /* The question is already printed above the box; twice is clutter. */
         placeholder="Write here…"
@@ -227,6 +240,8 @@ export function ChatArtifact({
   proposal,
   overflow,
   assist,
+  flashed,
+  onCaret,
   onChange,
   onSave,
   onDiscuss,
@@ -242,6 +257,8 @@ export function ChatArtifact({
   proposal: Proposal | null
   overflow: { field: FieldType; text: string } | null
   assist: AssistState
+  flashed: FieldType | null
+  onCaret: (field: FieldType, at: number) => void
   onChange: (field: FieldType, value: string, overflow: string) => void
   onSave: (field: FieldType) => void
   onDiscuss: (field: FieldType) => void
@@ -292,6 +309,8 @@ export function ChatArtifact({
           discussing={discussing === meta.type}
           proposal={proposal && proposal.field === meta.type ? proposal : null}
           assist={assist}
+          flashed={flashed === meta.type}
+          onCaret={(at) => onCaret(meta.type, at)}
           onChange={(value, over) => onChange(meta.type, value, over)}
           onSave={() => onSave(meta.type)}
           onDiscuss={() => onDiscuss(meta.type)}

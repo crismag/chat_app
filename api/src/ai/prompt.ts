@@ -11,10 +11,12 @@
  */
 
 import {
+  AI_CHAT_ACTIONS,
   AI_CHAT_REPLY_MAX_CHARS,
   AI_QUESTIONS_PER_SECTION,
   AI_QUESTION_MAX_CHARS,
   AI_SECTION_MEANINGS,
+  type AiChatAction,
 } from '@chat/shared';
 
 /**
@@ -23,7 +25,7 @@ import {
  * It goes into the structured log on every call, so a change in answer quality
  * can be traced to the change in wording that caused it.
  */
-export const PROMPT_VERSION = '2026-08-16.1';
+export const PROMPT_VERSION = '2026-08-16.3';
 
 /**
  * The standing instruction.
@@ -89,23 +91,103 @@ summaryOfChanges lists what you changed, one short phrase per change, from the r
  * middle of a devotional tool reads as a rebuke. A short, kind sentence and a
  * way back to the passage is the whole of it.
  */
+/**
+ * Added when holding the bounded conversation beside the C.H.A.T.
+ *
+ * Rewritten against the owner's complaint that the panel "feels like a
+ * transcript embedded inside a form". Three things changed and each is here for
+ * a named defect:
+ *
+ *   - ONE question, not a compound of historical, theological and personal.
+ *     Three questions in a paragraph is not thoroughness, it is a form.
+ *   - Drafts are GENERATED on request, including for Heart and Testimony.
+ *     Refusing and telling the author to write it themselves is a defect, not a
+ *     safeguard — the safeguard is that a draft is labelled, never inserted,
+ *     and carries its provenance.
+ *   - Ordinary human remarks get ordinary human answers. Someone saying it is
+ *     midnight and they have not eaten is a person, not an off-topic event to
+ *     be redirected.
+ *
+ * What the model is NOT allowed to express is a destination or an action. It
+ * returns a reply and, when asked, draft text. There is no field in which it
+ * could say where the draft belongs, so there is nothing for a client to obey.
+ * See `draft-target.ts` for where that decision is actually made.
+ */
 export const CHAT_TASK = `Task: reply to the writer's latest message, as the helper beside this one reflection.
 
-You may: explain what is happening in or around the passage; discuss what it could mean; think a section through with them; ask them a question back; suggest a clearer wording for something THEY wrote; explain the C.H.A.T. framework and which section something might belong to.
+HOW TO REPLY
+- Be brief. Two or three short paragraphs at most, usually less.
+- Ask at most ONE question, and only when it genuinely helps. Never stack a historical question, a theological question and a personal question together.
+- Build on what has already been said. Do not restate background you have already given; if you covered the covenant, the genealogy or the historical setting earlier, assume it is known.
+- Do not end every message with a question about a C.H.A.T. section. Mention a section only when it is genuinely the next useful step, or when they ask.
+- Write like a person talking, not like a worksheet. No headings, no bullet lists unless they truly help.
 
-You must not, under any circumstances:
-- write their Heart, Application or Testimony for them, or offer a draft of one as though it were theirs;
-- state a feeling, conviction, prayer, experience or memory as if it were the writer's;
-- tell them what God is doing, saying or intending in their life, or claim any part of your reply is from God;
-- present a disputed reading as the only possible one.
+ORDINARY CONVERSATION
+If the writer says something human and off-topic — they are tired, it is late, they have not eaten, they are worried about something — answer them like a person would. Briefly, kindly, without a lesson attached. Do not acknowledge-and-pivot in the same breath; that reads as not listening. Come back to the passage later if it fits naturally, or let them come back to it.
+Set onTopic to false ONLY for things you genuinely cannot help with here: general knowledge questions, homework, code, current events, or a request to be a different kind of assistant. Then decline in ONE short warm sentence with a way back to the passage. Being human with someone is not off-topic.
 
-If they ask you to write a section for them, say plainly that this part has to be theirs, and ask them the question that would help them write it.
+DRAFTS
+When the writer explicitly asks you to draft, write, generate or compose something for a section — Context, Heart, Application or Testimony — WRITE IT. Put the draft in the "draft" field.
+Do this for Heart and Testimony too. Do NOT refuse, and do NOT reply that they should write it themselves: they asked, the draft will be clearly labelled as yours, and nothing is saved unless they choose to add it. Refusing is unhelpful, not careful.
+A draft must:
+- be written in the first person, as something the writer could plausibly say, in plain language and not more devotional or more certain than the rest of their reflection;
+- stay close to what THEY have already said in the conversation and their sections — build on their words rather than inventing a life for them;
+- invent no specific personal history, no event, no answered prayer, no healing, no relationship and no experience that is not already in what they have written. If you have nothing of theirs to build on, write something openly tentative that they can correct, and keep it short.
+- never claim to be from God, and never present a disputed reading as settled.
+Keep the "reply" field short when you produce a draft — one sentence introducing it is enough. Do not repeat the draft inside the reply.
+Only fill "draft" when they actually asked for one. An explanation is not a draft.
 
-SCOPE. You only discuss THIS reflection: the passage given below, the writer's sections, and the C.H.A.T. framework. If the message is about anything else — other subjects, homework, code, general knowledge, current events, personal advice unrelated to the passage, or a request to be a different kind of assistant — set onTopic to false and reply with ONE short, warm sentence that declines and offers a way back to the passage. Do not lecture, do not moralise, and do not explain your rules at length. Be kind about it.
+NEVER
+- Write a feeling, conviction, prayer, experience or memory and present it as something the writer has already said or felt.
+- Tell them what God is doing, saying or intending in their life, or claim any part of your reply is from God.
+- Counsel or diagnose. If something suggests a need for pastoral, mental-health, medical, legal or emergency help, say gently that it is worth talking to someone qualified who knows them.
 
-If the message suggests a need for pastoral, mental-health, medical, legal or emergency help, do not counsel and do not diagnose. Reply gently, and say that this is worth talking about with someone qualified who knows them.
+Keep the reply under ${AI_CHAT_REPLY_MAX_CHARS} characters.`;
 
-Keep the reply under ${AI_CHAT_REPLY_MAX_CHARS} characters. Write plainly, in the second person, as one person helping another. No headings, no bullet lists unless they genuinely help, no preamble.`;
+/**
+ * What each structured action asks for.
+ *
+ * The wording lives here rather than in the client, so it can be improved
+ * without a client release — and so the client never sends prompt text at all.
+ * A chip sends an identifier; this is what that identifier means.
+ */
+export const CHAT_ACTION_INSTRUCTIONS: Record<string, string> = {
+  [AI_CHAT_ACTIONS.EXPLAIN_SIMPLY]: `The writer pressed "Explain simply".
+
+Explain what this passage is saying, in plain language, as you would to someone who has never read it. No jargon, no technical vocabulary, and no Greek or Hebrew unless you immediately say what it means in ordinary words. Two short paragraphs at most.
+
+This is a conversational explanation, NOT a draft for a section. Do not fill the draft field. Do not end by asking them to put anything into a C.H.A.T. section — they know where the sections are.`,
+
+  [AI_CHAT_ACTIONS.HISTORICAL_CONTEXT]: `The writer pressed "Historical context".
+
+Give the historical and literary setting: who wrote it, who they were writing to, what was happening around them, and how this passage sits with the verses either side of it.
+
+Be careful to separate two different things, and make the difference visible in your wording: what the text and its setting establish, and what is interpretation or inference. Say "the text says" for the first and "many readers understand this as" — or similar — for the second. Do not present a scholarly guess as a settled fact.
+
+This is a conversational explanation, NOT a draft. Do not fill the draft field, and do not end by asking them to file it anywhere.`,
+
+  [AI_CHAT_ACTIONS.ASK_REFLECTION_QUESTION]: `The writer pressed "Ask me a question".
+
+Ask exactly ONE question. Not two, not a compound question joined with "and", and not a question with a second one in brackets after it.
+
+It must be answerable only out of their own understanding and experience, it must follow on from what has already been said rather than repeating a question already asked in this conversation, and it must not presuppose what they feel, believe or have experienced.
+
+Keep the reply to the question itself and at most one short sentence of lead-in. This is NOT a draft. Do not fill the draft field.`,
+
+  [AI_CHAT_ACTIONS.DRAFT_SECTION]: `The writer pressed a "Draft" button for one of their C.H.A.T. sections.
+
+Write the draft and put it in the "draft" field. Keep the "reply" field to one short sentence introducing it — do not repeat the draft inside the reply.
+
+Follow the drafting rules above: first person, plain, built on what they have actually said, inventing no experience, no answered prayer and no personal history they have not mentioned. If you have little of theirs to build on, write something short and openly tentative that they can correct.`,
+};
+
+/** For a Context draft specifically, keep it about the passage. */
+export const DRAFT_SECTION_NOTES: Record<string, string> = {
+  context: 'This is the Context section: what the passage means and what is happening in and around it. Keep personal response, feelings and application out of it — those belong to Heart and Application.',
+  heart: 'This is the Heart section: how the passage personally touches the writer. Build only on what they have said about themselves.',
+  application: 'This is the Application section: how it applies and what they may do. Be concrete rather than general.',
+  testimony: "This is the Testimony section: their own declaration of faith, conviction or prayer. Build only on what they have expressed.",
+};
 
 /* ------------------------------------------------------------- delimiting */
 
@@ -270,11 +352,29 @@ export const CHAT_RESPONSE_SCHEMA: Record<string, unknown> = {
     onTopic: {
       type: 'boolean',
       description:
-        'False when the message was outside this reflection and the reply is a warm redirect.',
+        'False only when the request is one you genuinely cannot help with here. Ordinary human conversation is on topic.',
     },
     reply: {
       type: 'string',
       description: `The reply to the writer, under ${AI_CHAT_REPLY_MAX_CHARS} characters.`,
+    },
+    /*
+     * Content, and only content.
+     *
+     * There is deliberately NO section field and NO action field here. The
+     * model has no vocabulary in which to say where this belongs or to ask for
+     * it to be written anywhere, so there is nothing a client could obey.
+     * `additionalProperties: false` closes the schema, and `validateChatPayload`
+     * reads these three keys and discards everything else — so even a response
+     * that invents a destination cannot carry one out of the adapter.
+     *
+     * Where a draft is offered is decided in `draft-target.ts`, from the
+     * application's scoped state and the author's own words.
+     */
+    draft: {
+      type: 'string',
+      description:
+        'Draft text for a C.H.A.T. section, ONLY when the writer explicitly asked for a draft. Omit otherwise.',
     },
   },
   required: ['onTopic', 'reply'],
@@ -299,10 +399,44 @@ export function buildChatPrompt(
     sections: Record<string, string>;
     history: { role: string; content: string }[];
     message: string;
+    /** Scoped mode, from application state. Guidance, never a restriction. */
+    focusSection?: string;
+    /** A structured action the client chose from a fixed set. */
+    action?: AiChatAction;
+    /** The action's own destination, already enum-validated. */
+    actionSection?: string;
   },
   nonce: string,
 ): string {
   const parts: string[] = [CHAT_TASK, ''];
+
+  /*
+   * The action's instruction, when there is one. It comes after the standing
+   * task so it narrows it, and it is looked up from a fixed table rather than
+   * taken from anything the client sent as text.
+   */
+  if (input.action) {
+    const instruction = CHAT_ACTION_INSTRUCTIONS[input.action];
+    if (instruction) {
+      parts.push(instruction);
+      if (input.actionSection && DRAFT_SECTION_NOTES[input.actionSection]) {
+        parts.push(DRAFT_SECTION_NOTES[input.actionSection] ?? '');
+      }
+      parts.push('');
+    }
+  }
+
+  if (input.focusSection) {
+    /*
+     * Guidance rather than a fence. A hard restriction would make the panel
+     * worse at the thing it is for: someone working on Heart still needs to be
+     * able to ask what the passage meant.
+     */
+    parts.push(
+      `The writer is currently working on their ${input.focusSection} section. Prefer it when they ask for a draft, and lean towards it in what you ask — but still answer reasonable questions about anything else in this reflection.`,
+    );
+    parts.push('');
+  }
 
   parts.push('The passage under discussion, as the writer named it:');
   parts.push(delimit('passage_reference', input.passageReference || '(not given)', nonce));

@@ -224,7 +224,7 @@ export function createApp(
             })),
           };
         },
-        appendAssistantMessage: (conversationId, content) => {
+        appendAssistantMessage: (conversationId, content, draft) => {
           const conversation = store.conversations.get(conversationId);
           const message = {
             id: randomUUID(),
@@ -232,6 +232,13 @@ export function createApp(
             role: 'assistant' as const,
             content,
             originalContent: content,
+            /*
+             * The draft rides on the reply, and its destination was decided by
+             * `resolveDraftTarget` in trusted code — never by the model. Null is
+             * a legitimate value: an unplaced draft is still a draft.
+             */
+            draftText: draft?.text ?? null,
+            draftSection: draft?.section ?? null,
             /*
              * `ai_generated`, not `ai_assisted`. The model wrote every word of
              * this, and the badge on it has to keep saying so — including if

@@ -29,6 +29,20 @@ export type StoredMessage = {
   originalContent: string;
   authorOrigin: 'user' | 'ai_assisted' | 'ai_generated';
   createdAt: string;
+  /**
+   * A generated draft hanging off this reply, and the section it is offered for.
+   *
+   * Stored rather than held in the browser, because a draft that vanishes on
+   * reload leaves a lead-in sentence pointing at nothing — which is exactly the
+   * "transcript embedded in a form" feeling this work exists to remove.
+   *
+   * `draftSection` is written by trusted application code (see
+   * `ai/draft-target.ts`), never by anything the model said. It may be null: a
+   * draft whose destination could not be resolved is still a perfectly good
+   * draft, and the interface asks the author where it belongs.
+   */
+  draftText?: string | null;
+  draftSection?: string | null;
 };
 
 /**
