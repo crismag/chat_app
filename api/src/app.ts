@@ -33,6 +33,9 @@ import {
 } from './ai.ts';
 import { createAiRoutes } from './ai/routes.ts';
 import { AiService, type AiServiceOptions } from './ai/service.ts';
+import { createBibleRoutes } from './bible/routes.ts';
+import { createPassageStore } from './bible/passage-store.ts';
+import { BibleService } from './bible/service.ts';
 import { SqliteStore } from './db.ts';
 import { MemoryStore, type StoredConversation } from './store.ts';
 
@@ -110,6 +113,8 @@ export function createApp(
 ) {
   const app = new Hono();
   const aiService = new AiService(ai);
+  const bibleService = new BibleService();
+  const biblePassages = createPassageStore(store);
 
   /**
    * The draft as its format's validator expects to see it.
@@ -291,6 +296,26 @@ export function createApp(
             : { reason: heuristic.reason }),
         };
       },
+    }),
+  );
+
+  /*
+   * Bible passage lookup, mounted and nothing more.
+   *
+   * The connector owns its own configuration, its own caches, its own storage
+   * and its own migration, so mounting it is the whole of its footprint in this
+   * file. `ownsConversation` is passed in rather than reached for, because the
+   * connector must never learn what a store is — and because who owns a
+   * reflection is this file's fact to state, not a connector's.
+   */
+  app.route(
+    '/api/bible',
+    createBibleRoutes({
+      service: bibleService,
+      currentUser: (c) => currentUser(c),
+      ownsConversation: (userId, conversationId) =>
+        store.conversations.get(conversationId)?.userId === userId,
+      passages: biblePassages,
     }),
   );
 

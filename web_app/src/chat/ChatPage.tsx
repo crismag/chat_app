@@ -23,6 +23,7 @@ import {
   type ChatFormat,
   type ValidationResult,
 } from '@chat/shared'
+import { ScripturePassage } from '../bible/ScripturePassage.tsx'
 import { ApiError, api } from '../shared/api/client.ts'
 import {
   BookIcon,
@@ -1494,6 +1495,20 @@ export function ChatPage() {
             {error}
           </p>
         ) : null}
+
+        {/*
+          The passage, above the writing.
+
+          It sits between the reflection's title and its four sections because
+          that is the order of the act: you read the passage, then you write
+          about it. The component owns everything else — its own loading, its
+          own storage, its own recovery — so this page hands it a reflection id
+          and nothing more.
+        */}
+        <ScripturePassage
+          conversationId={activeId}
+          initialReference={referenceDraft ?? detail?.scriptureReference ?? ''}
+        />
 
         <div className={styles.artifactBody}>
           <ChatArtifact

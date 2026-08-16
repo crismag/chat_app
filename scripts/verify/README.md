@@ -86,3 +86,43 @@ It sends synthetic, impersonal content — never anyone's actual reflection — 
 reports only latency, counts, token usage and an outcome code. It never prints
 the key, the prompt or the response, because this output is the sort of thing
 that gets pasted into an issue. Do not run it in CI.
+
+## `bible.mjs` — the passage card on Reflect
+
+Drives the card above the four sections: loads the catalog, checks the selected
+translation, looks a passage up, changes translation on the same reference, and
+forces a failure to prove the previous passage and the draft survive it.
+
+Needs the API started with a real `YVP_APP_KEY`, because there is no
+deterministic stand-in for a Bible:
+
+```bash
+set -a; . ~/.config/chat_app/youversion.env; set +a
+npm run dev
+node scripts/verify/bible.mjs
+```
+
+With no key it takes its other branch and checks the card says "Bible passage
+lookup is not configured" without revealing *why* it is not configured — which
+is the path that must never leak.
+
+## `bible-live-smoke.mjs` — one real conversation with YouVersion
+
+The only thing in this repository that talks to a Bible provider. Opt-in
+**twice**: it runs when `YVP_APP_KEY` is present *and* `BIBLE_LIVE_TEST=1` is
+set. Two switches rather than one, because a key exported for ordinary
+development should not be enough on its own to start spending against it.
+
+```bash
+set -a; . ~/.config/chat_app/youversion.env; set +a
+BIBLE_LIVE_TEST=1 node scripts/verify/bible-live-smoke.mjs
+```
+
+It never prints the key, a prefix of it, its length, or the URL it was sent to,
+and it fetches its sample verses from a **public-domain** translation (the World
+English Bible, id 206) so the text it prints is nobody's licensed property. It
+re-establishes the four facts the connector depends on: `page_size` tops out at
+99, NIV is id 111 with abbreviation `NIV11`, attribution comes from
+`GET /bibles/{id}` and not from the list, and passage content is plain text.
+
+Do not run either of these in CI.
