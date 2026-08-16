@@ -18,7 +18,7 @@ import type { AiUsage } from './types.ts';
 
 export interface AiLogEvent {
   requestId: string;
-  operation: 'reflection_guidance' | 'improve_writing';
+  operation: 'reflection_guidance' | 'improve_writing' | 'reflection_chat';
   provider: string;
   /** The configured model name. A configuration value, not a credential. */
   model: string;

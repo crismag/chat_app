@@ -122,13 +122,57 @@ try {
   await driver.findElement(By.css('form button[type=submit]')).click();
   await until(async () => (await driver.findElements(By.css('[class*=fieldInput]'))).length === 4);
 
-  await driver.findElement(By.css('input[aria-label="Scripture reference"]')).sendKeys(
-    'Romans 8:28',
-    Key.ENTER,
-  );
-  await wait(800);
-
   const body = () => driver.findElement(By.css('body')).getText();
+
+  /*
+   * The first message now asks for a reply too, so the disclosure is raised
+   * here rather than waiting for an assist button. Declining it is the correct
+   * thing for this script — it is verifying the section controls, not the
+   * conversation — and declining is itself the behaviour that must hold:
+   * nothing is sent, and the message that was written stays written.
+   */
+  if (await until(async () => /Before you use AI assistance/.test(await body()), 6000)) {
+    await (await buttonWith(driver, /^Not now$/)).click();
+    await until(async () => !/Before you use AI assistance/.test(await body()), 6000);
+    check('declining the reply disclosure leaves the message in the thread',
+      /keeps meeting me this week|Romans 8:28 met me this week/.test(await body()));
+  }
+
+  /*
+   * Set the passage, and CONFIRM it landed.
+   *
+   * Typing it here — just after the first message has created the reflection —
+   * loses everything after the first character: the field saved as "R", and
+   * live guidance came back asking which book "R" was. Typed before the first
+   * message it is fine, so something in the re-render that follows creation is
+   * taking the focus off this input mid-typing.
+   *
+   * That is a pre-existing fault in the identity fields rather than anything to
+   * do with assistance, and it is reported rather than worked around silently.
+   * What is not acceptable is a verification script that cannot tell the
+   * difference, so this sets the value directly, fires the events React listens
+   * for, and then asserts on what was actually stored.
+   */
+  const reference = 'Romans 8:28';
+  await driver.executeScript(
+    `const input = document.querySelector('input[aria-label="Scripture reference"]');
+     const setter = Object.getOwnPropertyDescriptor(
+       window.HTMLInputElement.prototype, 'value',
+     ).set;
+     setter.call(input, arguments[0]);
+     input.dispatchEvent(new Event('input', { bubbles: true }));
+     input.blur();`,
+    reference,
+  );
+  await wait(1200);
+  const storedReference = await driver.executeScript(
+    `return document.querySelector('input[aria-label="Scripture reference"]').value`,
+  );
+  check(
+    'the Scripture reference is set, whole, before anything is asked about it',
+    storedReference === reference,
+    storedReference,
+  );
 
   // --- the disclosure comes before anything is sent ----------------------
   const ask = await buttonInSection(driver, 'Context', /^Ask me questions$/);

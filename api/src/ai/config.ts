@@ -53,7 +53,11 @@ const DEFAULTS = {
   enabled: false,
   provider: AI_PROVIDER_NAMES.GEMINI,
   /* Stable, low latency, low cost. Verified against the official model list. */
-  model: 'gemini-2.5-flash-lite',
+  // Verified live against this project on 2026-08-16. The previous default,
+  // gemini-2.5-flash-lite, returns 404 "no longer available to new users" — the
+  // brief said to confirm availability at implementation time, and it could not
+  // be confirmed then because no live call was possible.
+  model: 'gemini-3.5-flash-lite',
   timeoutMs: 15_000,
   maxInputChars: 12_000,
   ratePerMinute: 12,

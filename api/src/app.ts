@@ -196,6 +196,59 @@ export function createApp(
     createAiRoutes({
       service: aiService,
       currentUser: (c) => currentUser(c),
+      /*
+       * The server builds the chat's context; the client never describes it.
+       *
+       * A request carries a conversation id and a message, and everything else
+       * — the passage, the sections, the thread — is loaded here from a
+       * reflection this user is proved to own. A client that could describe its
+       * own context could describe somebody else's.
+       */
+      conversation: {
+        load: (userId, conversationId) => {
+          const conversation = store.conversations.get(conversationId);
+          if (!conversation || conversation.userId !== userId) return null;
+
+          const stored = sectionsFromStore(store.sections.get(conversationId));
+          const sections: Record<string, string> = {};
+          for (const [type, section] of Object.entries(stored)) {
+            if (section.content.trim()) sections[type] = section.content;
+          }
+
+          return {
+            passageReference: conversation.scriptureReference ?? '',
+            sections,
+            history: (store.messages.get(conversationId) ?? []).map((message) => ({
+              role: message.role,
+              content: message.content,
+            })),
+          };
+        },
+        appendAssistantMessage: (conversationId, content) => {
+          const conversation = store.conversations.get(conversationId);
+          const message = {
+            id: randomUUID(),
+            conversationId,
+            role: 'assistant' as const,
+            content,
+            originalContent: content,
+            /*
+             * `ai_generated`, not `ai_assisted`. The model wrote every word of
+             * this, and the badge on it has to keep saying so — including if
+             * the author later carries it into a section, where the provenance
+             * travels with the text rather than being reset by the move.
+             */
+            authorOrigin: AUTHOR_ORIGINS.AI_GENERATED,
+            createdAt: nowIso(),
+          };
+          store.messages.append(conversationId, message);
+          if (conversation) {
+            conversation.updatedAt = message.createdAt;
+            store.conversations.set(conversationId, conversation);
+          }
+          return message;
+        },
+      },
       status: () => {
         /*
          * Two independent facts, reported as one answer.
@@ -215,6 +268,13 @@ export function createApp(
             suggestTitle: heuristic.enabled,
             reflectionGuidance: heuristic.enabled && model.available,
             improveWriting: heuristic.enabled && model.available,
+            /*
+             * False does not mean the composer stops working. It means it
+             * stops expecting a reply — messages are still written down, and
+             * the interface says they are notes to self rather than pretending
+             * an answer is on its way.
+             */
+            reflectionChat: heuristic.enabled && model.available,
           },
           ...(heuristic.enabled
             ? model.available

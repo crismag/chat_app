@@ -23,6 +23,8 @@ import type {
   AiCallOptions,
   ImproveWritingRequest,
   ImproveWritingResult,
+  ReflectionChatRequest,
+  ReflectionChatResult,
   ReflectionGuidanceRequest,
   ReflectionGuidanceResult,
 } from '../types.ts';
@@ -124,6 +126,72 @@ export class FakeProvider implements AIProvider {
     }
 
     return { sections, notice: AI_GUIDANCE_NOTICE };
+  }
+
+  /**
+   * A bounded reply, without a model.
+   *
+   * Plainly templated, and it obeys the two rules the real instruction imposes,
+   * because a fake that broke them would let a test pass on behaviour the real
+   * provider is forbidden:
+   *
+   *   1. Anything not about this reflection is declined and redirected, warmly.
+   *   2. A request to author the writer's Heart, Application or Testimony is
+   *      refused and turned back into a question — including when it arrives
+   *      dressed as an instruction to ignore instructions.
+   *
+   * What this cannot show is that a real model resists persuasion; only a live
+   * call speaks to that. What it does show is that the application never
+   * *depends* on the model resisting, and that the test asserting so exercises
+   * a real code path rather than a stub.
+   */
+  async discussReflection(
+    request: ReflectionChatRequest,
+    options?: AiCallOptions,
+  ): Promise<ReflectionChatResult> {
+    await this.gate(options);
+
+    const message = request.message.toLowerCase();
+
+    const asksForAuthorship =
+      /\b(write|compose|draft|create|generate|fill in|make up)\b[\s\S]{0,40}\b(heart|testimony|application)\b/.test(
+        message,
+      ) || /\bignore\b[\s\S]{0,60}\binstructions?\b/.test(message);
+
+    if (asksForAuthorship) {
+      return {
+        reply:
+          'That part has to be yours — a testimony written for you would not be one. Tell me what happened, even roughly, and I can help you find the words for it. What did this passage stir in you?',
+        redirected: false,
+      };
+    }
+
+    const offTopic =
+      /\b(recipe|weather|homework|python|javascript|stock|football|capital of|translate)\b/.test(
+        message,
+      );
+
+    if (offTopic) {
+      return {
+        reply: `That is outside what I can help with here — I am only the helper for this reflection. Shall we stay with ${request.passageReference}?`,
+        redirected: true,
+      };
+    }
+
+    const written = Object.entries(request.sections).filter(([, value]) => value?.trim());
+
+    return {
+      reply:
+        `Looking at ${request.passageReference} with you. ` +
+        (written.length > 0
+          ? `You have written your ${written.map(([section]) => section).join(' and ')} so far. `
+          : 'You have not written any sections yet. ') +
+        (request.history.length > 0
+          ? `We have said ${request.history.length} things about it already. `
+          : '') +
+        'What is standing out to you in the passage itself?',
+      redirected: false,
+    };
   }
 
   async improveReflectionWriting(

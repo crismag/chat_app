@@ -12,7 +12,12 @@
  * the reason the browser can never reach a model directly.
  */
 
-import { AI_OUTCOMES, type AiGuidanceSection, type AiOutcome } from '@chat/shared';
+import {
+  AI_OUTCOMES,
+  type AiGuidanceSection,
+  type AiOutcome,
+  type ReflectionChatTurn,
+} from '@chat/shared';
 
 /* ------------------------------------------------------------- the asking */
 
@@ -33,6 +38,30 @@ export interface ReflectionGuidanceRequest {
   written: Partial<Record<AiGuidanceSection, string>>;
 }
 
+/**
+ * One turn of the bounded conversation beside the C.H.A.T.
+ *
+ * Everything here is scoped to a single reflection: its passage, its four
+ * sections, and the recent turns of its own thread. No other reflection, no
+ * profile, no identifiers, no message from anywhere else.
+ *
+ * That narrowness is not only a privacy measure. It is what makes the
+ * conversation *bounded* rather than general — a model cannot wander into
+ * material it was never handed, so the boundary is enforced by what is sent as
+ * well as by what the instruction says.
+ */
+export interface ReflectionChatRequest {
+  passageReference: string;
+  /** Passage text the writer supplied. Never fetched by us. */
+  passageText?: string;
+  /** The reflection's current sections, so a reply can build on what is there. */
+  sections: Partial<Record<AiGuidanceSection, string>>;
+  /** Recent turns of THIS conversation, oldest first and bounded in length. */
+  history: ReflectionChatTurn[];
+  /** The message just sent. Untrusted data, exactly like everything else. */
+  message: string;
+}
+
 export interface ImproveWritingRequest {
   /** Which section the text belongs to, so tone and purpose are understood. */
   section: AiGuidanceSection;
@@ -51,6 +80,19 @@ export interface ReflectionGuidanceResult {
   sections: Partial<Record<AiGuidanceSection, GuidanceSectionResult>>;
   notice: string;
   /** Safe counts only. Never content. */
+  usage?: AiUsage;
+}
+
+export interface ReflectionChatResult {
+  reply: string;
+  /**
+   * True when the request fell outside the boundary and the reply is a redirect.
+   *
+   * Carried out of the provider rather than guessed at from the wording, so the
+   * server can count how often the fence is being tested without ever reading a
+   * message to find out.
+   */
+  redirected: boolean;
   usage?: AiUsage;
 }
 
@@ -92,11 +134,13 @@ export interface AiCallOptions {
 }
 
 /**
- * The contract. Two operations, both explicitly triggered by a person.
+ * The contract. Three operations, each explicitly triggered by a person.
  *
- * There is no `chat`, no `complete`, no escape hatch that takes a free-form
- * prompt. The surface is narrow on purpose: a provider interface that can be
- * asked anything eventually is.
+ * None of them takes a free-form prompt. Even the conversational one is given a
+ * passage, a set of sections and a thread rather than an instruction — so there
+ * is no escape hatch through which this interface could be asked to do
+ * something outside the reflection it belongs to. The surface is narrow on
+ * purpose: a provider interface that can be asked anything eventually is.
  */
 export interface AIProvider {
   readonly name: string;
@@ -108,6 +152,19 @@ export interface AIProvider {
     request: ImproveWritingRequest,
     options?: AiCallOptions,
   ): Promise<ImproveWritingResult>;
+  /**
+   * Reply within the boundary, or decline and redirect to the reflection.
+   *
+   * Still not a general `chat(prompt)`. It takes a reflection's passage, its
+   * sections and its own recent turns, and it returns one reply — there is no
+   * parameter through which a caller could hand this provider an arbitrary
+   * instruction, which is the property that keeps "bounded" true at the seam
+   * rather than only inside a prompt string.
+   */
+  discussReflection(
+    request: ReflectionChatRequest,
+    options?: AiCallOptions,
+  ): Promise<ReflectionChatResult>;
 }
 
 /* ------------------------------------------------------------- the errors */

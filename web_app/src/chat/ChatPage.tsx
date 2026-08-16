@@ -9,6 +9,7 @@ import {
 import { useNavigate, useSearchParams } from 'react-router'
 import {
   AI_ACTIONS,
+  AI_CHAT_NOTICE,
   AI_DISCLOSURE,
   AI_OUTCOMES,
   AI_UNAVAILABLE_MESSAGE,
@@ -155,6 +156,18 @@ export function ChatPage() {
   const [pendingAssist, setPendingAssist] = useState<
     { field: AiGuidanceSection; kind: Exclude<AssistBusy, null> } | null
   >(null)
+
+  /*
+   * The bounded conversation.
+   *
+   * `replying` is separate from `sending` on purpose. Sending is over in
+   * milliseconds and must never be held up by a provider; waiting for a reply
+   * is a different, slower thing, and the composer stays usable throughout it.
+   */
+  const [replying, setReplying] = useState(false)
+  const [chatError, setChatError] = useState<string | null>(null)
+  /* A message whose reply is waiting behind the disclosure. */
+  const [pendingChat, setPendingChat] = useState<{ id: string; message: string } | null>(null)
 
   const [shareOpen, setShareOpen] = useState(false)
   const [formatOpen, setFormatOpen] = useState(false)
@@ -435,6 +448,34 @@ export function ChatPage() {
     window.setTimeout(() => composerRef.current?.focus(), 0)
   }
 
+  /**
+   * Ask for a reply to a message that is already stored.
+   *
+   * A second call rather than part of sending, and the id is passed in rather
+   * than read from state — the first message of a new reflection creates the
+   * conversation, and `activeId` has not caught up by the time this runs.
+   */
+  async function requestReply(conversationId: string, message: string) {
+    setReplying(true)
+    setChatError(null)
+    try {
+      await api('/ai/reflection-chat', {
+        method: 'POST',
+        body: JSON.stringify({ conversationId, message }),
+      })
+      /* The reply was stored server-side; re-reading is what puts it on screen. */
+      await openConversation(conversationId)
+    } catch (caught: unknown) {
+      /*
+       * A failed reply is not a failed message. What they wrote is already
+       * saved, so this reports beside the thread and leaves it alone.
+       */
+      setChatError(assistMessage(caught))
+    } finally {
+      setReplying(false)
+    }
+  }
+
   async function sendMessage(event: FormEvent) {
     event.preventDefault()
     const content = draft.trim()
@@ -462,6 +503,20 @@ export function ChatPage() {
       setDraft('')
       await openConversation(id)
       await refreshList()
+
+      /*
+       * Then, separately, ask for a reply. With no provider this is skipped
+       * entirely and the thread is simply a place to think out loud — which is
+       * why the composer needs no special case for AI being off.
+       */
+      if (ai.capabilities?.reflectionChat) {
+        if (window.localStorage.getItem(DISCLOSURE_KEY) === 'accepted') {
+          void requestReply(id, content)
+        } else {
+          /* Their message is saved either way; only the reply waits. */
+          setPendingChat({ id, message: content })
+        }
+      }
     } catch (caught: unknown) {
       setError(caught instanceof Error ? caught.message : 'Unable to send that message')
     } finally {
@@ -984,6 +1039,11 @@ export function ChatPage() {
       onStopDiscussing={() => setDiscussing(null)}
       onDismissProposal={() => setProposal(null)}
       composerRef={composerRef}
+      replying={replying}
+      chatError={chatError}
+      chatAvailable={ai.capabilities?.reflectionChat === true}
+      chatNotice={AI_CHAT_NOTICE}
+      onDismissChatError={() => setChatError(null)}
     />
   )
 
@@ -1367,20 +1427,31 @@ export function ChatPage() {
         />
       ) : null}
 
-      {pendingAssist ? (
+      {pendingAssist || pendingChat ? (
         <AiDisclosureSheet
           disclosure={AI_DISCLOSURE}
           onAccept={() => {
-            const pending = pendingAssist
+            const assist = pendingAssist
+            const chat = pendingChat
             window.localStorage.setItem(DISCLOSURE_KEY, 'accepted')
             setPendingAssist(null)
+            setPendingChat(null)
             /* Held rather than dropped: agreeing does not cost a second click. */
-            void (pending.kind === 'questions'
-              ? askForQuestions(pending.field)
-              : askForImprovement(pending.field))
+            if (assist) {
+              void (assist.kind === 'questions'
+                ? askForQuestions(assist.field)
+                : askForImprovement(assist.field))
+            }
+            if (chat) void requestReply(chat.id, chat.message)
           }}
-          /* Declining sends nothing and changes nothing. */
-          onClose={() => setPendingAssist(null)}
+          /*
+           * Declining sends nothing. A message already written stays written —
+           * it simply goes unanswered, which is the note-to-self behaviour.
+           */
+          onClose={() => {
+            setPendingAssist(null)
+            setPendingChat(null)
+          }}
         />
       ) : null}
 

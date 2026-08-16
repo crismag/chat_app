@@ -55,6 +55,17 @@ export const AI_OUTCOMES = {
   CONTENT_NOT_SUPPORTED: 'content_not_supported',
   NEEDS_USER_CLARIFICATION: 'needs_user_clarification',
   /*
+   * The provider refused the request WE built — a rejected config field, an
+   * unsupported schema keyword, a payload it would not take.
+   *
+   * Separate from `provider_unavailable` because the two want opposite
+   * reactions. An outage belongs to someone else, may pass on its own and is
+   * worth one retry; a malformed request is ours, will be refused identically
+   * forever, and needs a code change. Conflating them sends whoever is looking
+   * to go and check a network that is perfectly fine.
+   */
+  PROVIDER_REQUEST_INVALID: 'provider_request_invalid',
+  /*
    * The caller's own fault rather than the provider's. Separate from the eight
    * above because it never reaches a provider at all — it is refused at the
    * door, and conflating it with `content_not_supported` would tell someone the
@@ -100,6 +111,8 @@ export const AI_OUTCOME_MESSAGES: Record<AiOutcome, string> = {
   [AI_OUTCOMES.TIMEOUT]: AI_UNAVAILABLE_MESSAGE,
   [AI_OUTCOMES.PROVIDER_UNAVAILABLE]: AI_UNAVAILABLE_MESSAGE,
   [AI_OUTCOMES.INVALID_PROVIDER_RESPONSE]: AI_UNAVAILABLE_MESSAGE,
+  /* Our bug, so the person is told nothing more useful than "not right now". */
+  [AI_OUTCOMES.PROVIDER_REQUEST_INVALID]: AI_UNAVAILABLE_MESSAGE,
   [AI_OUTCOMES.CONTENT_NOT_SUPPORTED]:
     'That request could not be assisted with. You can continue writing normally.',
   [AI_OUTCOMES.NEEDS_USER_CLARIFICATION]:
@@ -107,6 +120,65 @@ export const AI_OUTCOME_MESSAGES: Record<AiOutcome, string> = {
   [AI_OUTCOMES.INVALID_REQUEST]: 'That request was not understood.',
   [AI_OUTCOMES.INPUT_TOO_LONG]:
     'There is more text here than can be sent for assistance. Shorten it, or ask about one section at a time.',
+};
+
+/* ------------------------------------------- the bounded reflection chat */
+
+/*
+ * The conversation beside the C.H.A.T. is a *bounded* one, and the boundary is
+ * the whole point of it.
+ *
+ * It is not an open-ended assistant that happens to be pointed at Scripture.
+ * Three things fence it in, and all three are enforced rather than hoped for:
+ * a fixed system instruction it cannot be talked out of, the C.H.A.T.
+ * framework, and the passage and sections of THIS reflection. Nothing else is
+ * in scope, and nothing else is sent.
+ *
+ * Its job is to be the side helper for discussing, expanding and editing the
+ * C.H.A.T. items: what the passage means, thinking a section aloud, asking for
+ * a rewording, being asked a question back. Not homework, not search, not
+ * counselling.
+ */
+
+/** How many past turns of THIS conversation may be sent. */
+export const AI_CHAT_HISTORY_TURNS = 10;
+
+/** A single reply's ceiling. Long enough to explain, short enough to read. */
+export const AI_CHAT_REPLY_MAX_CHARS = 1200;
+
+/** What the composer says when there is no provider to answer. */
+export const AI_CHAT_NOTE_ONLY_MESSAGE =
+  'Your messages are saved as private notes to yourself. Replies are unavailable right now.';
+
+/**
+ * The standing caveat under a reply.
+ *
+ * Deliberately not the same sentence as the guidance notice. That one governs a
+ * suggestion offered for a section; this governs a conversational answer about
+ * a passage, where the risk is a different one — that an explanation is taken
+ * for settled theological authority rather than mistaken for the writer's own
+ * words.
+ */
+export const AI_CHAT_NOTICE =
+  'This is assistance for your thinking, not a verdict on the passage. Weigh it, and keep only what you believe to be true.';
+
+export type ReflectionChatTurn = {
+  role: 'user' | 'assistant';
+  content: string;
+};
+
+export type ReflectionChatResponse = {
+  /** The assistant's reply, already stored as a message on the conversation. */
+  message: {
+    id: string;
+    role: 'assistant';
+    content: string;
+    authorOrigin: string;
+    createdAt: string;
+  };
+  /** True when the request was off-topic and the reply is a kind redirect. */
+  redirected: boolean;
+  notice: string;
 };
 
 /** How many guiding questions a section may come back with. */
@@ -153,6 +225,12 @@ export type AiCapabilities = {
   suggestTitle: boolean;
   reflectionGuidance: boolean;
   improveWriting: boolean;
+  /*
+   * Whether the conversation beside the C.H.A.T. gets replies. When false the
+   * composer still works — messages are stored as private notes — so the
+   * interface can say which of the two it is rather than appearing broken.
+   */
+  reflectionChat: boolean;
 };
 
 export type AiStatusResponse = {

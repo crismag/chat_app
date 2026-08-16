@@ -24,14 +24,20 @@
 import { ApiError, FinishReason, GoogleGenAI } from '@google/genai';
 import { AI_GUIDANCE_NOTICE, AI_OUTCOMES } from '@chat/shared';
 import {
+  CHAT_RESPONSE_SCHEMA,
   IMPROVE_RESPONSE_SCHEMA,
   PROMPT_VERSION,
   SYSTEM_INSTRUCTION,
+  buildChatPrompt,
   buildGuidancePrompt,
   buildImprovePrompt,
   guidanceResponseSchema,
 } from '../prompt.ts';
-import { validateGuidancePayload, validateImprovePayload } from '../validation.ts';
+import {
+  validateChatPayload,
+  validateGuidancePayload,
+  validateImprovePayload,
+} from '../validation.ts';
 import { AiFailure } from '../types.ts';
 import type {
   AIProvider,
@@ -39,6 +45,8 @@ import type {
   AiUsage,
   ImproveWritingRequest,
   ImproveWritingResult,
+  ReflectionChatRequest,
+  ReflectionChatResult,
   ReflectionGuidanceRequest,
   ReflectionGuidanceResult,
 } from '../types.ts';
@@ -47,15 +55,26 @@ import { randomUUID } from 'node:crypto';
 /**
  * Bounded output.
  *
- * Three short questions, or one reworded paragraph and a few notes. Neither is
- * large, and an unbounded ceiling on a low-cost model is how a malformed prompt
- * turns into a bill. Thinking is switched off for the same reason: these are
- * shaping tasks, not reasoning ones.
+ * Three short questions, one reworded paragraph, or one conversational reply.
+ * None of them is large, and an unbounded ceiling on a low-cost model is how a
+ * malformed prompt turns into a bill. Chat gets the most room of the three
+ * because explaining a passage takes more words than asking about one — but it
+ * is still a ceiling, and the reply length is capped again on the way back.
  */
-const MAX_OUTPUT_TOKENS = { guidance: 700, improve: 900 } as const;
+const MAX_OUTPUT_TOKENS = { guidance: 700, improve: 900, chat: 1000 } as const;
 
 /** Low, but not zero. Identical phrasing every time reads as a form, not help. */
 const TEMPERATURE = 0.4;
+
+/**
+ * A fresh fence tag per request.
+ *
+ * It must be per request rather than per process: a nonce that outlives one
+ * call is one an author could learn from a previous reply and then close.
+ */
+function newNonce(): string {
+  return randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase();
+}
 
 export interface GeminiProviderOptions {
   model: string;
@@ -89,7 +108,7 @@ export class GeminiProvider implements AIProvider {
     request: ReflectionGuidanceRequest,
     options?: AiCallOptions,
   ): Promise<ReflectionGuidanceResult> {
-    const nonce = randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase();
+    const nonce = newNonce();
     const written: Record<string, string> = {};
     for (const [section, value] of Object.entries(request.written)) {
       if (value) written[section] = value;
@@ -114,11 +133,41 @@ export class GeminiProvider implements AIProvider {
     return usage ? { ...result, usage } : result;
   }
 
+  async discussReflection(
+    request: ReflectionChatRequest,
+    options?: AiCallOptions,
+  ): Promise<ReflectionChatResult> {
+    const nonce = newNonce();
+    const sections: Record<string, string> = {};
+    for (const [section, value] of Object.entries(request.sections)) {
+      if (value) sections[section] = value;
+    }
+
+    const { payload, usage } = await this.call({
+      prompt: buildChatPrompt(
+        {
+          passageReference: request.passageReference,
+          ...(request.passageText === undefined ? {} : { passageText: request.passageText }),
+          sections,
+          history: request.history,
+          message: request.message,
+        },
+        nonce,
+      ),
+      schema: CHAT_RESPONSE_SCHEMA,
+      maxOutputTokens: MAX_OUTPUT_TOKENS.chat,
+      options,
+    });
+
+    const result = validateChatPayload(payload);
+    return usage ? { ...result, usage } : result;
+  }
+
   async improveReflectionWriting(
     request: ImproveWritingRequest,
     options?: AiCallOptions,
   ): Promise<ImproveWritingResult> {
-    const nonce = randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase();
+    const nonce = newNonce();
 
     const { payload, usage } = await this.call({
       prompt: buildImprovePrompt(
@@ -172,8 +221,14 @@ export class GeminiProvider implements AIProvider {
           temperature: TEMPERATURE,
           candidateCount: 1,
           abortSignal: controller.signal,
-          /* Not a reasoning task. Thinking here buys latency and tokens only. */
-          thinkingConfig: { thinkingBudget: 0 },
+          /*
+           * No thinkingConfig. Disabling thinking with `thinkingBudget: 0` was a
+           * latency optimisation on 2.x, and the 3.x models reject it outright —
+           * 400 INVALID_ARGUMENT, which this adapter reported to callers as the
+           * far less useful `provider_unavailable`. Left off rather than made
+           * conditional on the model name: the saving was small and a per-model
+           * exception here would have to be maintained against a moving list.
+           */
         },
       });
     } catch (caught: unknown) {
@@ -342,13 +397,41 @@ export function mapGeminiError(caught: unknown, callerCancelled: boolean): AiFai
         cause: caught,
       });
     }
-    if (status === 400 || status === 404) {
+    /*
+     * A model the provider does not know is a configuration fault, and saying
+     * so saves an afternoon. This is precisely what happened when the default
+     * model was withdrawn: the provider answered 404, this adapter called it an
+     * outage, and the hunt went to the network and the credential rather than
+     * to the one variable that was actually wrong.
+     */
+    if (status === 404) {
       return new AiFailure(
-        AI_OUTCOMES.PROVIDER_UNAVAILABLE,
-        'provider rejected the request or the configured model',
+        AI_OUTCOMES.AI_NOT_CONFIGURED,
+        'provider does not know the configured model',
         { retryable: false, cause: caught },
       );
     }
+
+    /*
+     * Any other 4xx means the request WE built was refused — a rejected config
+     * field, an unsupported schema keyword, an over-long payload. That is a bug
+     * in this adapter, not an unavailable provider.
+     *
+     * It earns its own outcome because the two want opposite reactions. An
+     * outage belongs to someone else, may pass on its own, and is worth one
+     * retry. A malformed request will be refused identically forever, no retry
+     * can help, and somebody has to change code. Reporting the second as the
+     * first sends whoever is looking at a network that is perfectly fine —
+     * which is exactly the wasted hunt that `thinkingConfig` caused.
+     */
+    if (status >= 400 && status < 500) {
+      return new AiFailure(
+        AI_OUTCOMES.PROVIDER_REQUEST_INVALID,
+        `provider rejected our request (status ${status})`,
+        { retryable: false, cause: caught },
+      );
+    }
+
     return new AiFailure(AI_OUTCOMES.PROVIDER_UNAVAILABLE, `provider error (status ${status})`, {
       retryable: status >= 500,
       cause: caught,

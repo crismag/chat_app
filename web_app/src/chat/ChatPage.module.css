@@ -910,6 +910,48 @@
  * is an offer next to the work, not a second assistant competing with the
  * conversation for the middle of the screen.
  */
+/* --- The bounded conversation's own states ---------------------------- */
+
+/*
+ * Said plainly, in the panel head, when no provider can answer. A composer that
+ * takes messages and never replies looks broken; one that says it is a notebook
+ * is a notebook, and the reflection carries on being written either way.
+ */
+.helperNoteOnly {
+  margin-block-start: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-body);
+}
+
+.messagePending {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-style: italic;
+}
+
+.chatNotice {
+  padding: 0 var(--space-3) var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-body);
+}
+
+.chatError {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 var(--space-3) var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--text-xs);
+}
+
 .assistActions {
   display: inline-flex;
   align-items: center;

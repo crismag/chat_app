@@ -33,6 +33,27 @@ node scripts/verify/ai-assist.mjs
 
 It never uses a real credential.
 
+## `ai-conversation.mjs` — the bounded conversation
+
+Drives a real conversation: sends a message, waits for a reply, checks the reply
+is visibly the assistant's, throws a prompt injection at it, asks it something
+off-topic, and carries a reply into a section.
+
+It asserts on **shape and provenance, never on wording**, so it passes against
+the deterministic provider and against the real one. Point it at either:
+
+```bash
+# deterministic, free
+AI_ENABLED=true AI_PROVIDER=fake npm run dev
+node scripts/verify/ai-conversation.mjs
+
+# the real thing
+node scripts/verify/ai-conversation.mjs
+```
+
+With AI switched off it takes its other branch and checks the composer still
+stores messages as notes to self — which is the path that must never break.
+
 ## `ai-live-smoke.mjs` — one real Gemini call
 
 The only thing in this repository that talks to Gemini. It is opt-in **twice**:

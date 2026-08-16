@@ -12,16 +12,24 @@
  * which spends someone's quota to arrive at the same refusal.
  */
 
-import { AI_GUIDANCE_NOTICE, AI_OUTCOMES, type AiOutcome } from '@chat/shared';
+import {
+  AI_CHAT_HISTORY_TURNS,
+  AI_GUIDANCE_NOTICE,
+  AI_OUTCOMES,
+  type AiOutcome,
+} from '@chat/shared';
 import { AI_PROVIDER_NAMES, readAiConfig, type AiConfig } from './config.ts';
 import { consoleAiLogger, type AiLogger } from './logging.ts';
 import { PROMPT_VERSION } from './prompt.ts';
 import { AiRateLimiter } from './rate-limit.ts';
 import { AiFailure, isAiFailure } from './types.ts';
+import { boundHistory, chatInputSize } from './validation.ts';
 import type {
   AIProvider,
   ImproveWritingRequest,
   ImproveWritingResult,
+  ReflectionChatRequest,
+  ReflectionChatResult,
   ReflectionGuidanceRequest,
   ReflectionGuidanceResult,
 } from './types.ts';
@@ -135,6 +143,54 @@ export class AiService {
     );
   }
 
+  /**
+   * A reply in the bounded conversation.
+   *
+   * History is trimmed here, above the seam, rather than inside an adapter.
+   * "How much of this thread may leave the building" is an application rule,
+   * and every future provider should inherit it rather than re-implement it.
+   *
+   * The whole request is measured after trimming, because the ceiling exists to
+   * bound what is actually *sent*: a two-word message on a reflection with four
+   * long sections and ten long turns behind it is not a small request.
+   */
+  async discussReflection(
+    request: ReflectionChatRequest,
+    caller: AiCaller,
+  ): Promise<AiServiceResult<ReflectionChatResult>> {
+    const config = this.readConfig();
+
+    const bounded: ReflectionChatRequest = {
+      ...request,
+      history: boundHistory(request.history, {
+        maxTurns: AI_CHAT_HISTORY_TURNS,
+        /*
+         * History gets at most half the budget. The passage, the sections and
+         * the message just typed are what a reply is actually about; an old
+         * thread must never crowd them out of their own request.
+         */
+        maxChars: Math.floor(config.maxInputChars / 2),
+      }),
+    };
+
+    if (chatInputSize(bounded) > config.maxInputChars) {
+      this.logger({
+        requestId: caller.requestId,
+        operation: 'reflection_chat',
+        provider: config.provider,
+        model: config.model,
+        promptVersion: PROMPT_VERSION,
+        latencyMs: 0,
+        outcome: AI_OUTCOMES.INPUT_TOO_LONG,
+      });
+      return { ok: false, outcome: AI_OUTCOMES.INPUT_TOO_LONG };
+    }
+
+    return this.run('reflection_chat', caller, (provider, signal) =>
+      provider.discussReflection(bounded, { signal, requestId: caller.requestId }),
+    );
+  }
+
   async improveWriting(
     request: ImproveWritingRequest,
     caller: AiCaller,
@@ -147,7 +203,7 @@ export class AiService {
   /* --------------------------------------------------------------- guts */
 
   private async run<T>(
-    operation: 'reflection_guidance' | 'improve_writing',
+    operation: 'reflection_guidance' | 'improve_writing' | 'reflection_chat',
     caller: AiCaller,
     call: (provider: AIProvider, signal: AbortSignal) => Promise<T>,
   ): Promise<AiServiceResult<T>> {

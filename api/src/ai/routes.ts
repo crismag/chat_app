@@ -1,8 +1,9 @@
 /*
- * The three endpoints.
+ * The four endpoints.
  *
  *   POST /api/ai/reflection-guidance
  *   POST /api/ai/improve-writing
+ *   POST /api/ai/reflection-chat
  *   GET  /api/ai/status
  *
  * Handlers do four things and nothing else: authenticate, parse, hand to the
@@ -16,6 +17,7 @@ import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import {
+  AI_CHAT_NOTICE,
   AI_OUTCOMES,
   AI_OUTCOME_MESSAGES,
   AI_UNAVAILABLE_MESSAGE,
@@ -24,7 +26,12 @@ import {
   type AiStatusResponse,
 } from '@chat/shared';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
-import { AiRequestError, parseGuidanceRequest, parseImproveRequest } from './validation.ts';
+import {
+  AiRequestError,
+  parseChatRequest,
+  parseGuidanceRequest,
+  parseImproveRequest,
+} from './validation.ts';
 import type { AiService } from './service.ts';
 
 /** What a failure means in HTTP terms. */
@@ -37,6 +44,12 @@ const STATUS: Record<AiOutcome, ContentfulStatusCode> = {
   [AI_OUTCOMES.TIMEOUT]: 504,
   [AI_OUTCOMES.PROVIDER_UNAVAILABLE]: 502,
   [AI_OUTCOMES.INVALID_PROVIDER_RESPONSE]: 502,
+  /*
+   * 500, not 502. The provider refused a request we built wrong, so the fault
+   * is ours — and a 5xx of our own is what puts it in front of the people who
+   * can fix it, instead of filing it under "the upstream is flaky again".
+   */
+  [AI_OUTCOMES.PROVIDER_REQUEST_INVALID]: 500,
   [AI_OUTCOMES.CONTENT_NOT_SUPPORTED]: 422,
   /* 200: an answer, not a failure. The provider did its job by asking. */
   [AI_OUTCOMES.NEEDS_USER_CLARIFICATION]: 200,
@@ -77,6 +90,29 @@ export interface AiRouteDeps {
    * it above this file is what stops one half silently switching off the other.
    */
   status: () => AiStatusResponse;
+  /**
+   * Read and write one reflection's conversation.
+   *
+   * Passed in rather than reached for, so this file never learns what a store
+   * is. It also means the *server* decides what a chat request contains — the
+   * passage, the sections and the thread are loaded here from the reflection
+   * the caller owns, never taken from the request body. A client that could
+   * describe its own context could describe someone else's.
+   */
+  conversation: {
+    load(
+      userId: string,
+      conversationId: string,
+    ): {
+      passageReference: string;
+      sections: Record<string, string>;
+      history: { role: 'user' | 'assistant'; content: string }[];
+    } | null;
+    appendAssistantMessage(
+      conversationId: string,
+      content: string,
+    ): { id: string; role: 'assistant'; content: string; authorOrigin: string; createdAt: string };
+  };
 }
 
 export function createAiRoutes(deps: AiRouteDeps) {
@@ -180,6 +216,84 @@ export function createAiRoutes(deps: AiRouteDeps) {
       summaryOfChanges: result.value.summaryOfChanges,
       meaningChanged: result.value.meaningChanged,
     });
+  });
+
+  /*
+   * A reply in the bounded conversation.
+   *
+   * Deliberately a SEPARATE call from `POST /conversations/:id/messages` rather
+   * than part of it. Three reasons, in order of how much they matter:
+   *
+   *   1. Sending must never feel broken. A message is stored and acknowledged
+   *      in milliseconds; the reply takes as long as a provider takes. Bolting
+   *      the second onto the first would make every send wait on the slowest
+   *      thing in the system, and a failed provider would look like a failed
+   *      send — losing what the person typed, or appearing to.
+   *   2. With AI off, `/messages` needs no branch at all. It stores the message
+   *      and returns, exactly as it did before any of this existed, and the
+   *      conversation becomes a private notebook rather than a broken chat.
+   *   3. The reply gets the whole typed-outcome apparatus for free: rate
+   *      limits, timeout, single retry, safe copy. None of that belongs on the
+   *      path that writes down what someone said.
+   *
+   * The client sends the message, sees it immediately, and then asks for the
+   * reply. No streaming, no polling loop, no second socket.
+   */
+  routes.post('/reflection-chat', async (c) => {
+    const user = deps.currentUser(c);
+    if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
+
+    let parsed;
+    try {
+      parsed = parseChatRequest(await c.req.json().catch(() => null), deps.service.limits());
+    } catch (caught: unknown) {
+      if (caught instanceof AiRequestError) {
+        return c.json({ error: caught.message, outcome: caught.outcome }, STATUS[caught.outcome]);
+      }
+      return fail(c, AI_OUTCOMES.INVALID_REQUEST);
+    }
+
+    /*
+     * Ownership is checked by loading. A reflection that is not this user's
+     * does not load, and the answer is the same 404 an absent one gets — so the
+     * endpoint cannot be used to discover which conversation ids exist.
+     */
+    const context = deps.conversation.load(user.id, parsed.conversationId);
+    if (!context) {
+      return c.json({ error: 'Conversation not found.' }, 404);
+    }
+
+    const result = await deps.service.discussReflection(
+      {
+        passageReference: context.passageReference,
+        sections: context.sections,
+        history: context.history,
+        message: parsed.message,
+      },
+      { userId: user.id, address: addressOf(c), requestId: randomUUID() },
+    );
+
+    if (!result.ok) {
+      return fail(
+        c,
+        result.outcome,
+        result.retryAfterSeconds === undefined
+          ? {}
+          : { retryAfterSeconds: result.retryAfterSeconds },
+      );
+    }
+
+    /*
+     * Stored before it is returned, so a reply the person can see is a reply
+     * that survives a reload. The thread is the record of the conversation; a
+     * message that existed only in one browser tab would not be.
+     */
+    const message = deps.conversation.appendAssistantMessage(
+      parsed.conversationId,
+      result.value.reply,
+    );
+
+    return c.json({ message, redirected: result.value.redirected, notice: AI_CHAT_NOTICE });
   });
 
   return routes;

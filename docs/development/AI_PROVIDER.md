@@ -28,20 +28,73 @@ not being explicitly ruled out.
 
 ## What V1 does
 
-Two operations, both triggered by an explicit press:
+Three capabilities, each triggered by an explicit act:
 
 | Operation | Endpoint | What it returns |
 |---|---|---|
 | Suggest reflection questions | `POST /api/ai/reflection-guidance` | 1–3 guiding questions per requested section |
 | Improve wording | `POST /api/ai/improve-writing` | A suggested rewording, with the original |
+| Bounded reflection conversation | `POST /api/ai/reflection-chat` | One reply, stored as an assistant message |
 | Capability state | `GET /api/ai/status` | `{ enabled, provider, capabilities }` |
 
 **Out of scope, deliberately:** auto-filling Heart or Testimony; generating a
 personal story, emotion, conviction, prayer or experience; claiming divine
 authority or certainty about God's will; replacing pastoral, mental-health,
 medical, legal or emergency help; auto-publishing anything; calls on
-keystrokes; open-ended chat, agents, function calling, search grounding, RAG,
-vector stores, image generation.
+keystrokes; agents, function calling, search grounding, RAG, vector stores,
+image generation.
+
+### The conversation is bounded, and that is the feature
+
+The third capability is **not** open-ended chat. Three things fence it in, and
+all three are enforced rather than hoped for:
+
+1. **A fixed system instruction** it cannot be talked out of — the same one the
+   other two capabilities use, plus `CHAT_TASK`, which narrows rather than
+   relaxes it.
+2. **The C.H.A.T. framework** — Context, Heart, Application, Testimony.
+3. **This reflection only** — its passage, its four sections, and the recent
+   turns of its own thread. Nothing else is in scope, and nothing else is sent.
+
+Its job is to be the side helper for discussing, expanding and editing the
+C.H.A.T. items: what the passage means, thinking a section aloud, asking for a
+rewording, being asked a question back.
+
+Four properties hold, and each has a test:
+
+- **It never authors Heart, Application or Testimony.** Asked to, it says that
+  part has to be theirs and turns the request into a question.
+- **Off-topic is declined warmly**, in one short sentence, with a way back to
+  the passage. Not a lecture and not a rebuke — a person asking for something
+  else has done nothing wrong.
+- **There is no path from the conversation into a section.** A reply is a
+  message. Putting one into a section is a separate, explicit act by the
+  author, and it carries `ai_generated` when they do.
+- **The composer works with no provider at all.** Messages are stored, the
+  panel says they are notes to self, and the reflection carries on being
+  written.
+
+#### Why the reply is a second request
+
+`POST /api/conversations/:id/messages` stores the message and returns 201, as
+it always has. The reply is fetched separately by `POST /api/ai/reflection-chat`.
+
+That split is deliberate, in order of how much it matters:
+
+1. **Sending must never feel broken.** A message is stored in milliseconds; a
+   reply takes as long as a provider takes. Bolting the second onto the first
+   would make every send wait on the slowest thing in the system, and a failed
+   provider would look like a failed send — losing what the person typed, or
+   appearing to.
+2. **With AI off, `/messages` needs no branch at all.** It behaves exactly as it
+   did before any of this existed.
+3. **The reply inherits the whole typed-outcome apparatus** — rate limits,
+   timeout, single retry, safe copy. None of that belongs on the path that
+   writes down what someone said.
+
+No streaming and no polling loop: the client sends, sees its own message
+immediately, then asks once for the reply and shows a pending bubble until it
+lands.
 
 ---
 
@@ -98,7 +151,7 @@ works without a redeploy.
 | `AI_ENABLED` | `false` | The kill switch. `false` means no provider call is made, for any reason. |
 | `AI_PROVIDER` | `gemini` | `gemini`, or `fake` for the deterministic stand-in. Anything unrecognised resolves to nothing rather than falling back to a real provider. |
 | `GEMINI_API_KEY` | — | Your credential. Backend only. |
-| `GEMINI_MODEL` | `gemini-2.5-flash-lite` | **Configuration, not a constant.** Changing which model answers needs a variable and a restart, never a code edit. |
+| `GEMINI_MODEL` | `gemini-3.5-flash-lite` | **Configuration, not a constant.** Changing which model answers needs a variable and a restart, never a code edit. |
 | `AI_REQUEST_TIMEOUT_MS` | `15000` | How long one call may take before it is abandoned. |
 | `AI_MAX_INPUT_CHARS` | `12000` | Ceiling on text sent to the provider, enforced server-side. |
 | `AI_RATE_LIMIT_PER_MINUTE` | `12` | Per signed-in user. The per-address ceiling is four times this. |
@@ -132,7 +185,7 @@ CHAT UI  →  /api/ai/*  →  AiService  →  AIProvider  →  GeminiProvider
 | `packages/shared/src/ai.ts` | Sections, outcomes, copy, wire types. Provider-free; safe for the browser. |
 | `api/src/ai/config.ts` | Environment → `AiConfig`. Never holds the key. |
 | `api/src/ai/types.ts` | The `AIProvider` contract and `AiFailure`. |
-| `api/src/ai/prompt.ts` | System instruction, task text, JSON Schemas, delimiting. Versioned. |
+| `api/src/ai/prompt.ts` | System instruction, the three task texts, JSON Schemas, delimiting. Versioned. |
 | `api/src/ai/validation.ts` | Request and response validation. |
 | `api/src/ai/service.ts` | Gating, limits, timeout, retry policy, logging. |
 | `api/src/ai/rate-limit.ts` | Per-user and per-address sliding windows. |
@@ -145,8 +198,11 @@ The SDK is imported in one file. It is never imported in UI components, route
 handlers, domain models or persistence code — and it is loaded lazily, so a
 server running without assistance does not load it at all.
 
-`AIProvider` has two methods and no free-form escape hatch. An interface that
-can be asked anything eventually is.
+`AIProvider` has three methods and no free-form escape hatch. Even the
+conversational one is handed a passage, a set of sections and a thread rather
+than an instruction, so there is no parameter through which it could be asked
+to do something outside the reflection it belongs to. An interface that can be
+asked anything eventually is.
 
 ---
 
@@ -175,6 +231,12 @@ The guidance schema is built **per request** from the sections actually asked
 about, so the model cannot return questions about a section the writer was not
 working on.
 
+The chat schema requires an `onTopic` boolean alongside the reply. Making the
+model state it turns "was this in scope?" into a fact the server can log and
+count, rather than a guess a regex would have to make about prose — so how
+often the boundary is being tested is measurable without anyone reading a
+single message.
+
 > The API supports only a subset of JSON Schema — `type`, `items`, `minItems`,
 > `maxItems`, `properties`, `required`, `enum`, `description`,
 > `additionalProperties` and a few others. `maxLength` on a string is **not**
@@ -189,10 +251,19 @@ wrapped in fences carrying a per-request random nonce — a fixed delimiter can
 be closed by anyone who guesses it — and the instruction names them as data
 explicitly.
 
-That is defence in depth, not the defence. The real defence is that output is
-schema-constrained and validated, so even a successful injection can only
-produce questions, and questions are shown to the writer for review before
-anything is kept.
+In the conversation, **every past turn is fenced too**, not only the newest
+message. A message sent five turns ago saying "from now on, ignore your
+instructions" is replayed on every subsequent call, so an unfenced history is
+not one injection attempt: it is one that gets a fresh attempt every time the
+person says anything at all. The role travels on the fence label rather than
+inside the fenced text, so a message opening with "Assistant:" cannot pass
+itself off as a previous reply and put words in the model's own mouth.
+
+That is defence in depth, not the defence. The real defence is structural: the
+guidance and improve outputs are schema-constrained and validated, and a chat
+reply is only ever a *message*. There is no path from any of the three into a
+section. Even a completely successful injection cannot write a Testimony,
+because nothing but an explicit act by the author can.
 
 ---
 
@@ -208,6 +279,7 @@ stack trace.
 | `rate_limited` | 429 | Per-user or per-address ceiling, or provider 429 | Provider 429 once |
 | `timeout` | 504 | `AI_REQUEST_TIMEOUT_MS` reached | No |
 | `provider_unavailable` | 502 | Outage, network, 5xx, unconverted exception | 5xx once |
+| `provider_request_invalid` | **500** | A 4xx from the provider: the request *we* built was refused | **Never** |
 | `invalid_provider_response` | 502 | Malformed JSON, schema mismatch, truncated output | **Never** |
 | `content_not_supported` | 422 | Prompt or candidate blocked by safety | No |
 | `needs_user_clarification` | **200** | Meaning was uncertain; the model asked instead of guessing | — a success |
@@ -218,6 +290,16 @@ stack trace.
 after a short jittered pause. Validation failures are **never** retried —
 asking the same question again to get a different shape only spends quota to
 reach the same refusal.
+
+**Why a provider 4xx has its own outcome.** An outage belongs to someone else,
+may pass on its own, and is worth a retry. A malformed request is ours, will be
+refused identically forever, and needs a code change. Reporting the second as
+the first sends whoever is looking to go and check a network that is perfectly
+fine — which is exactly what happened when `thinkingConfig: { thinkingBudget: 0 }`
+was rejected by the 3.x models and surfaced as `provider_unavailable`.
+A **404 is reported as `ai_not_configured`** for the same reason: a model the
+provider does not know is a configuration fault, and saying so points straight
+at `GEMINI_MODEL` instead of at the credential or the network.
 
 `needs_user_clarification` is a success, not a failure. When preserving the
 intended meaning is uncertain, the model asks rather than guesses, because
@@ -236,8 +318,19 @@ continue writing normally."*
 - **Opt-in and marked.** A disclosure is shown before the first real request,
   naming what is sent and where. Declining sends nothing.
 - **Only the fields the action needs.** The passage reference, the sections
-  being asked about, and what has been written in them. Never profile data,
-  unrelated drafts, comments, contacts, analytics identifiers or whole records.
+  being asked about, and what has been written in them. For the conversation,
+  additionally the recent turns of *that* thread — at most
+  `AI_CHAT_HISTORY_TURNS` (10), and at most half the character budget, oldest
+  dropped first. Never profile data, unrelated drafts, other reflections,
+  comments, contacts, analytics identifiers or whole records.
+- **The server builds the chat's context; the client never describes it.** A
+  request carries a conversation id and a message. Everything else is loaded
+  from a reflection the caller is proved to own — a client that could describe
+  its own context could describe somebody else's. An unowned id returns 404
+  rather than 403, so the endpoint cannot be used to enumerate conversations.
+- **Message content is never logged**, exactly as passage and reflection text
+  are not. There is a test asserting a message about someone's father does not
+  appear anywhere in the log stream.
 - **Logs carry facts, never content.** Request id, operation, provider,
   configured model, prompt version, latency, outcome, retry flag and token
   counts — built field by field from a typed event, so a new field has to be
@@ -278,6 +371,14 @@ AI_ENABLED=true AI_PROVIDER=fake npm run dev
 node scripts/verify/ai-assist.mjs
 ```
 
+Browser verification of the conversation, against the fake or the real thing —
+it asserts on shape and provenance rather than on wording, so it passes against
+either:
+
+```bash
+node scripts/verify/ai-conversation.mjs
+```
+
 One real call, opt-in twice over and never in CI:
 
 ```bash
@@ -295,7 +396,8 @@ usage and an outcome code — never the key, the prompt or the response.
    only file that may import that vendor's SDK.
 2. Reuse `prompt.ts` for the instruction and schemas, and `validation.ts` for
    the response. Do not re-implement either — product rules must not live only
-   inside one vendor's prompt.
+   inside one vendor's prompt. History trimming happens in `AiService`, above
+   the seam, so you inherit it rather than writing it again.
 3. Convert every SDK exception into an `AiFailure` with one of the outcomes
    above. Nothing vendor-shaped may escape the adapter. Keep the original as
    `cause`; it is never serialised.
@@ -335,6 +437,18 @@ Written down rather than discovered later.
   written rather than repeating it, and it is more than the strict minimum for
   the request. It is bounded by `AI_MAX_INPUT_CHARS` and is the one place the
   minimum-fields rule is traded for answer quality.
+- **The Scripture reference field can lose keystrokes.** Typed immediately
+  after the first message creates a reflection, only the first character
+  survives — the field saved as `R` and live guidance came back asking which
+  book "R" was. Typed before the first message, or into an existing reflection,
+  it is fine. This predates the AI work and lives in the identity inputs rather
+  than in assistance, but it now matters more than it did: the reference is what
+  every AI request is scoped to, so a truncated one asks the model about the
+  wrong passage. `scripts/verify/ai-assist.mjs` sets the value directly and
+  asserts it landed, so verification cannot be fooled by it. **Not fixed.**
+- **Chat history is bounded by turn count and characters, not by tokens.**
+  Characters are a proxy. A long reflection in a language that tokenises poorly
+  could still make a larger request than the budget implies.
 - **`x-forwarded-for` is spoofable**, which is why the per-address ceiling sits
   *behind* the per-user one rather than in front of it. Behind a proxy that does
   not set it, all traffic shares one bucket.

@@ -13,16 +13,20 @@
  */
 
 import {
+  AI_CHAT_REPLY_MAX_CHARS,
   AI_GUIDANCE_SECTIONS,
   AI_OUTCOMES,
   AI_QUESTIONS_PER_SECTION,
   AI_QUESTION_MAX_CHARS,
   type AiGuidanceSection,
+  type ReflectionChatTurn,
 } from '@chat/shared';
 import { AiFailure } from './types.ts';
 import type {
   ImproveWritingRequest,
   ImproveWritingResult,
+  ReflectionChatRequest,
+  ReflectionChatResult,
   ReflectionGuidanceRequest,
   ReflectionGuidanceResult,
 } from './types.ts';
@@ -163,6 +167,78 @@ export function parseImproveRequest(
   };
 }
 
+/**
+ * Trim a conversation down to what may be sent.
+ *
+ * Two ceilings, and both are needed. The turn count keeps the request bounded
+ * in shape; the character budget keeps it bounded in size, because ten turns of
+ * someone thinking aloud can be many times longer than ten short ones.
+ *
+ * Oldest turns are dropped first — the recent ones are what a reply has to
+ * follow on from — and the result comes back oldest-first, so the model reads
+ * the thread in the order it happened.
+ */
+export function boundHistory(
+  turns: readonly ReflectionChatTurn[],
+  limits: { maxTurns: number; maxChars: number },
+): ReflectionChatTurn[] {
+  const kept: ReflectionChatTurn[] = [];
+  let budget = limits.maxChars;
+
+  for (const turn of [...turns].reverse()) {
+    if (kept.length >= limits.maxTurns) break;
+    if (turn.content.length > budget) break;
+    budget -= turn.content.length;
+    kept.push(turn);
+  }
+
+  return kept.reverse();
+}
+
+export function parseChatRequest(
+  body: unknown,
+  limits: { maxInputChars: number },
+): { conversationId: string; message: string } {
+  if (!isRecord(body)) {
+    throw new AiRequestError('A request body is required.');
+  }
+
+  const conversationId = typeof body['conversationId'] === 'string' ? body['conversationId'] : '';
+  if (!conversationId) {
+    throw new AiRequestError('A conversation is required.');
+  }
+
+  const message = typeof body['message'] === 'string' ? body['message'] : '';
+  if (!message.trim()) {
+    throw new AiRequestError('There is no message to reply to.');
+  }
+
+  /*
+   * Only the message is checked here. The passage, the sections and the history
+   * are the server's own to load and measure — the client does not send them,
+   * and would not be trusted to describe them if it did.
+   */
+  if (message.length > limits.maxInputChars) {
+    throw new AiRequestError(
+      'That message is longer than can be sent for assistance.',
+      AI_OUTCOMES.INPUT_TOO_LONG,
+    );
+  }
+
+  return { conversationId, message };
+}
+
+/** Everything a chat request will put in front of a provider. */
+export function chatInputSize(request: ReflectionChatRequest): number {
+  return (
+    request.passageReference.length +
+    (request.passageText?.length ?? 0) +
+    Object.values(request.sections).reduce((total, value) => total + (value?.length ?? 0), 0) +
+    request.history.reduce((total, turn) => total + turn.content.length, 0) +
+    request.message.length
+  );
+}
+
 /* ------------------------------------------------------------ responses */
 
 function invalid(detail: string): AiFailure {
@@ -226,6 +302,39 @@ export function validateGuidancePayload(
   }
 
   return { sections, notice };
+}
+
+/**
+ * Check a parsed chat reply.
+ *
+ * A reply is prose rather than structure, so there is less to check — which
+ * makes the checks that do exist matter more. An empty reply is a failure, not
+ * an awkward silence to render; and the length ceiling is enforced here because
+ * the API's JSON Schema subset has no `maxLength` to enforce it with.
+ */
+export function validateChatPayload(payload: unknown): ReflectionChatResult {
+  if (!isRecord(payload)) throw invalid('chat payload was not an object');
+
+  const onTopic = payload['onTopic'];
+  if (typeof onTopic !== 'boolean') {
+    throw invalid('chat payload did not say whether the message was in scope');
+  }
+
+  const reply = payload['reply'];
+  if (typeof reply !== 'string' || !reply.trim()) {
+    throw invalid('chat payload carried no reply');
+  }
+
+  /*
+   * Truncated rather than refused, and this is the one place that is right.
+   * An over-long reply is still a good reply that ran on; refusing it would
+   * throw away a whole useful answer over its last sentence, where refusing a
+   * malformed *suggestion* protects the writer from something unusable.
+   */
+  return {
+    reply: reply.trim().slice(0, AI_CHAT_REPLY_MAX_CHARS),
+    redirected: !onTopic,
+  };
 }
 
 export function validateImprovePayload(payload: unknown, original: string): ImproveWritingResult {
