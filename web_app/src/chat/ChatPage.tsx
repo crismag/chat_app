@@ -360,13 +360,53 @@ export function ChatPage() {
       })
   }, [searchParams, refreshList, openConversation])
 
+  /**
+   * Whether `?new=1` has already been acted on.
+   *
+   * A ref rather than state, because the point of it is to be true before the
+   * next render rather than after one.
+   */
+  const startedNewFor = useRef(false)
+
+  /*
+   * "Start a blank reflection", asked for in the URL — and asked for ONCE.
+   *
+   * This is where the rest of the reference bug lived, and it was a loop.
+   *
+   * The flag used to be cleared with a NON-functional `setSearchParams(next)`
+   * built from a captured snapshot, while `startNew` cleared `c` from whatever
+   * `current` happened to be, and `openConversation` set `c` back. Those three
+   * updates raced, and each one replayed a URL another had just corrected —
+   * `?new=1&c=…` → `?c=…` → `?new=1` → `?new=1&c=…`, indefinitely. Every lap
+   * satisfied this condition again, so `startNew()` ran again: it cleared the
+   * reference draft the author was in the middle of typing and pulled focus
+   * into the composer, over and over, a second or so apart. That is why the
+   * saved reference came back as "Psalm", "salm", "23" or "Psalm23" — a
+   * character lost from the middle is two resets, not one.
+   *
+   * Three things stop it, and the belt-and-braces is deliberate because the
+   * failure is a race and races do not stay fixed by accident: the flag is
+   * dropped with a FUNCTIONAL update so nothing stale can restore it, it is
+   * dropped BEFORE the async work rather than after, and `startNew` drops it
+   * again on its own way past.
+   */
   useEffect(() => {
-    if (searchParams.get('new') === '1') {
-      void startNew()
-      const next = new URLSearchParams(searchParams)
-      next.delete('new')
-      setSearchParams(next, { replace: true })
+    if (searchParams.get('new') !== '1') {
+      startedNewFor.current = false
+      return
     }
+    if (startedNewFor.current) return
+    startedNewFor.current = true
+
+    setSearchParams(
+      (current) => {
+        const params = new URLSearchParams(current)
+        params.delete('new')
+        return params
+      },
+      { replace: true },
+    )
+    void startNew()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
@@ -508,6 +548,13 @@ export function ChatPage() {
       (current) => {
         const params = new URLSearchParams(current)
         params.delete('c')
+        /*
+         * And `new`, which this call is the answer to. Leaving it meant this
+         * update handed back a URL that asked for the thing it had just done,
+         * which is how starting one blank reflection turned into starting one
+         * every second.
+         */
+        params.delete('new')
         return params
       },
       { replace: true },
@@ -549,8 +596,19 @@ export function ChatPage() {
             : {}),
         }),
       })
-      /* The reply was stored server-side; re-reading is what puts it on screen. */
-      await openConversation(conversationId)
+      /*
+       * The reply was stored server-side; re-reading is what puts it on screen.
+       *
+       * Only if the author is still here, though. A reply takes seconds, and in
+       * those seconds they may have started a new reflection — at which point
+       * re-opening the old one drags them back to a reflection they left AND
+       * runs the switch reset over whatever they have begun typing in the new
+       * one. Nothing is lost by skipping it: the reply is stored, and it is
+       * there when they come back.
+       */
+      if (openedRef.current === conversationId) {
+        await openConversation(conversationId)
+      }
     } catch (caught: unknown) {
       /*
        * A failed reply is not a failed message. What they wrote is already

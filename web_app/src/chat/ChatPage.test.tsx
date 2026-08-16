@@ -196,3 +196,37 @@ test('opening a different reflection still discards the drafts of the one left b
     expect((screen.getByLabelText('Scripture reference') as HTMLInputElement).value).toBe(''),
   )
 })
+
+/*
+ * The other half of the same bug, and the half the first fix missed.
+ *
+ * `?new=1` asks for a blank reflection. Clearing that flag used to race two
+ * other URL updates — `startNew` removing `c`, and `openConversation` adding it
+ * — and one of the three wrote back a captured snapshot, so the flag kept
+ * reappearing: `?new=1&c=…` → `?c=…` → `?new=1` → round again. Every lap
+ * re-ran `startNew`, which clears the Scripture reference draft and pulls focus
+ * into the composer. That is why the loss was not one wipe but a stutter, and
+ * why a reference came back as "Psalm23" with a character gone from the middle.
+ *
+ * Nine trials in a browser lost characters nine times; `reference-race.mjs`
+ * covers it there. This pins the invariant that made it possible.
+ */
+test('?new=1 is acted on once and does not come back', async () => {
+  render(
+    <MemoryRouter initialEntries={['/?new=1']}>
+      <ChatPage />
+    </MemoryRouter>,
+  )
+
+  const reference = await screen.findByLabelText('Scripture reference')
+  type(reference, 'Psalm 23:1')
+
+  /*
+   * Long enough for a second lap to have happened. A loop cleared the field
+   * roughly once a second; this asserts nothing clears it at all.
+   */
+  await new Promise((resolve) => setTimeout(resolve, 250))
+  expect((screen.getByLabelText('Scripture reference') as HTMLInputElement).value).toBe(
+    'Psalm 23:1',
+  )
+})
