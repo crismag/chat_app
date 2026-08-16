@@ -13,9 +13,13 @@
   ],
   "scripts": {
     "dev": "concurrently -k -n web,api -c cyan,magenta \"npm run dev -w web_app\" \"npm run dev -w api\"",
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present && npm run notices:artifact",
     "test": "npm run test --workspaces --if-present",
-    "lint": "npm run lint --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present && npm run notices:check && npm run check:create-studio-package",
+    "notices:generate": "node scripts/notices.mjs",
+    "notices:check": "node scripts/notices.mjs --check",
+    "notices:artifact": "node scripts/check-notice-artifact.mjs",
+    "check:create-studio-package": "node scripts/check-create-studio-package.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {

@@ -1,0 +1,9 @@
+{
+  "package": "@crismag/create-studio",
+  "version": "0.1.0",
+  "sourceRepository": "https://github.com/crismag/create_studio",
+  "sourceCommit": "59c4a92383887174e829eeaca041b0bc353fdccc",
+  "artifact": "crismag-create-studio-0.1.0.tgz",
+  "sha256": "1cdfd4ca14c22e06fc5c07869499d9fcfbf4cbbe6c0d32c73b48a9f0c47e9718",
+  "publishingStatus": "private-unpublished"
+}
