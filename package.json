@@ -2,7 +2,7 @@
   "name": "chat-app",
   "private": true,
   "version": "0.1.0",
-  "description": "C.H.A.T. — Context, Heart, Application, Testimony",
+  "description": "C.H.A.T. — Content, Heart, Application, Testimony",
   "engines": {
     "node": ">=22"
   },
@@ -19,6 +19,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "selenium-webdriver": "^4.47.0"
   }
 }

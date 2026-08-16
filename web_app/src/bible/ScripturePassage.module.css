@@ -1,0 +1,415 @@
+/*
+ * The passage card.
+ *
+ * Two visual jobs, and they are the reason it does not simply look like the
+ * sections below it.
+ *
+ *   1. **This is not the writer's voice.** The card is sunk rather than raised,
+ *      the passage is set in the serif at a generous measure, and it carries a
+ *      rule down its leading edge — the typographic vocabulary of a quotation.
+ *      Someone glancing at the page should never have to work out which words
+ *      are theirs.
+ *   2. **It must not move.** The progress line occupies a reserved row whether
+ *      or not it says anything, so a lookup starting and finishing does not
+ *      shove Content, Heart, Application and Testimony up and down the page
+ *      under a cursor already travelling toward them.
+ *
+ * Every value resolves to a token. Nothing here invents a colour.
+ */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-sunk);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.heading {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-md);
+  line-height: var(--leading-snug);
+  color: var(--ink);
+}
+
+/* The translation, always beside the reference and never on its own. */
+.badge {
+  padding: 0.1rem var(--space-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+/*
+ * The reserved row. `min-block-size` rather than a fixed height, so a long
+ * message wraps instead of being clipped — but an empty one still holds its
+ * place.
+ */
+.progress {
+  margin: 0;
+  min-block-size: 1.25rem;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.passage {
+  margin: 0;
+  padding-inline-start: var(--space-4);
+  border-inline-start: 3px solid var(--accent);
+  max-inline-size: var(--measure);
+  font-family: var(--font-serif);
+  font-size: var(--text-md);
+  line-height: var(--leading-loose);
+  color: var(--ink);
+  /* Provider text. Selectable and readable; never a field. */
+  white-space: pre-wrap;
+}
+
+/*
+ * The attribution, stacked rather than strung along one line.
+ *
+ * A row put the reference on the left and shoved the publisher link to the far
+ * right of the card, with the copyright's three lines stretched between them —
+ * which read as three unrelated fragments rather than as one notice. Stacked,
+ * it reads as what it is: this passage, from this Bible, on these terms.
+ */
+.attribution {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-inline-size: var(--measure);
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+  color: var(--faint);
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.reference {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/*
+ * The publisher's notice, in full.
+ *
+ * `white-space: pre-line` because a copyright notice arrives with its own line
+ * breaks and they are part of how the publisher requires it to be presented.
+ * It is small, and it is never truncated with an ellipsis — a clipped
+ * attribution is not an attribution.
+ */
+.copyright {
+  white-space: pre-line;
+  max-inline-size: var(--measure);
+}
+
+.link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.empty {
+  margin: 0;
+  max-inline-size: var(--measure);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+
+/*
+ * Putting the passage into Content.
+ *
+ * It wraps rather than shrinking, so at 390 the hint sits under the button
+ * instead of squeezing it below a comfortable target.
+ */
+.useRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-block-start: var(--space-3);
+}
+
+.useHint {
+  flex: 1 1 12rem;
+  color: var(--faint);
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+}
+
+.notice {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+
+.failure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+}
+
+.failureText {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+
+.failureActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chooser {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--line);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.input {
+  inline-size: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-base);
+}
+
+.input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+
+.hint {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+/*
+ * The catalog, scrollable rather than paged.
+ *
+ * Twenty entries is too many to show at once above someone's writing and too
+ * few to be worth a dialog. A bounded scroll keeps the card's height stable
+ * whether the search matches one translation or all of them.
+ */
+.options {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-block-size: 15rem;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/*
+ * The group headings above Current / Recent / Recommended.
+ *
+ * Sticky, so scrolling a long list never leaves somebody looking at rows with
+ * no idea which group they are in.
+ */
+.groupHeading {
+  position: sticky;
+  inset-block-start: 0;
+  display: block;
+  padding: var(--space-2) var(--space-3) var(--space-1);
+  background: var(--surface);
+  color: var(--faint);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+
+/* A reserved row for the result count, so announcing it moves nothing. */
+.searchStatus {
+  margin: 0;
+  min-block-size: 1rem;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.optionWrap {
+  display: block;
+}
+
+/*
+ * A row.
+ *
+ * The active marker is driven by `data-active`, which BOTH the arrow keys and
+ * the pointer set. That is deliberate: a picker whose marker exists only on
+ * hover cannot be driven from a keyboard and does not exist at all on a touch
+ * screen, and one that relies on focus would drag the caret out of the search
+ * box on every arrow press.
+ */
+.option {
+  display: grid;
+  grid-template-columns: 5rem 1fr auto;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
+  inline-size: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: start;
+  cursor: pointer;
+}
+
+.option[data-active='true'] {
+  background: var(--surface-2);
+}
+
+.option[data-selected='true'] {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+/* Selected AND active are different states and must look different. */
+.option[data-selected='true'][data-active='true'] {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.optionAbbreviation {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.optionName {
+  color: var(--muted);
+}
+
+/*
+ * The language, on every row without exception.
+ *
+ * `NVI` is Spanish in one row and Portuguese in another; `CCB` is Chinese while
+ * the Cebuano Bible is `APD`. Without this column those rows are
+ * indistinguishable, and choosing wrong means reading a Bible in a language you
+ * may not speak.
+ */
+.optionLanguage {
+  justify-self: end;
+  padding: 0.05rem var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--faint);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.option[data-selected='true'] .optionName,
+.option[data-selected='true'] .optionLanguage {
+  color: var(--accent-ink);
+}
+
+.showAll {
+  align-self: start;
+  padding: var(--space-1) 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  cursor: pointer;
+}
+
+.showAll:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+
+.optionEmpty {
+  padding: var(--space-2) var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.chooserActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/*
+ * Narrow screens.
+ *
+ * The head stacks rather than compressing, because the reference and the
+ * translation belong together on one line and a squeezed badge reading "NI…"
+ * is worse than a second row.
+ */
+@media (max-width: 640px) {
+  .card {
+    padding: var(--space-3);
+  }
+
+  .options {
+    max-block-size: 11rem;
+  }
+
+  .chooserActions button,
+  .failureActions button {
+    flex: 1 1 auto;
+  }
+}

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, expect, test, vi } from 'vitest'
 import { App } from './App.tsx'
@@ -35,7 +35,12 @@ function mockAuthenticatedFetch() {
         json: async () => ({ id: 'u1', email: 'ada@example.com' }),
       })
     }
-    if (url.includes('/conversations') || url.includes('/community') || url.includes('/library')) {
+    if (
+      url.includes('/conversations') ||
+      url.includes('/community') ||
+      url.includes('/reflections') ||
+      url.includes('/library')
+    ) {
       return Promise.resolve({
         ok: true,
         json: async () => [],
@@ -48,7 +53,13 @@ function mockAuthenticatedFetch() {
   })
 }
 
+/*
+ * Vitest runs without `globals`, so Testing Library never registers its own
+ * automatic cleanup — one render leaks into the next test and duplicate matches
+ * look like application bugs. Unmounting explicitly keeps each test honest.
+ */
 afterEach(() => {
+  cleanup()
   vi.unstubAllGlobals()
 })
 
@@ -67,21 +78,63 @@ test('unauthenticated visitors are asked to sign in', async () => {
   expect(screen.getByText(/private unless you explicitly publish/i)).toBeInTheDocument()
 })
 
-test('signed-in users land on a private conversation workspace with C.H.A.T. sections', async () => {
+test('Reflect opens on a question, and can be written in immediately', async () => {
   vi.stubGlobal('fetch', mockAuthenticatedFetch())
   renderAt('/')
-  expect(await screen.findByRole('heading', { name: 'Conversation' })).toBeInTheDocument()
-  expect(screen.getByText('Context · Heart · Application · Testimony')).toBeInTheDocument()
-  expect(screen.getByRole('heading', { name: 'C.H.A.T.' })).toBeInTheDocument()
-  expect(screen.getAllByPlaceholderText('Leave empty unless you have expressed this')).toHaveLength(2)
+  expect(
+    await screen.findByText('What passage are you reflecting on today?'),
+  ).toBeInTheDocument()
+  expect(screen.getByText('Content · Heart · Application · Testimony')).toBeInTheDocument()
+  // No title form stands between someone and their first sentence.
+  expect(screen.getByLabelText('Write your reflection')).toBeInTheDocument()
+  /*
+   * The passage is a field that is always there rather than a button pressed
+   * once at the start: it can be filled in now, or long after the reflection
+   * has been written.
+   */
+  expect(screen.getByLabelText('Scripture reference')).toBeEnabled()
+  expect(screen.getByLabelText('Reflection title')).toBeInTheDocument()
 })
 
-test('library search is scoped to the owner', async () => {
+/*
+ * The rule the redesign exists to enforce. Four empty section cards beside an
+ * empty conversation is the form we removed, so its absence is a test rather
+ * than a convention.
+ */
+test('the four sections do not appear before anything has been written', async () => {
+  vi.stubGlobal('fetch', mockAuthenticatedFetch())
+  renderAt('/')
+  expect(
+    await screen.findByText('What passage are you reflecting on today?'),
+  ).toBeInTheDocument()
+  expect(screen.getByText(/C.H.A.T. takes shape as you write/i)).toBeInTheDocument()
+  for (const name of ['Content', 'Heart', 'Application', 'Testimony']) {
+    expect(screen.queryByRole('button', { name: new RegExp(`^${name} `) })).toBeNull()
+  }
+})
+
+test('the header carries one account menu, not an email and a status line', async () => {
+  vi.stubGlobal('fetch', mockAuthenticatedFetch())
+  renderAt('/')
+  const trigger = await screen.findByRole('button', {
+    name: /Account menu for ada@example.com/i,
+  })
+  expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  expect(screen.queryByText('API connected')).toBeNull()
+  // The sidebar offers one too, so this asks specifically for the shell's.
+  expect(
+    within(screen.getByRole('banner')).getByRole('button', { name: 'New reflection' }),
+  ).toBeInTheDocument()
+})
+
+/*
+ * Route wiring only. What the Reflections page says about itself is that page's
+ * own test to make; this one fails if the route stops resolving.
+ */
+test('the Reflections route replaces Library, and /library still resolves', async () => {
   vi.stubGlobal('fetch', mockAuthenticatedFetch())
   renderAt('/library')
-  expect(
-    await screen.findByText(/Search only your private conversations and Scripture references/i),
-  ).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: 'Reflections' })).toBeInTheDocument()
 })
 
 test('community only describes explicitly published C.H.A.T.s', async () => {

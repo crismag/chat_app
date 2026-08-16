@@ -2,7 +2,7 @@
 
 ## Product statement
 
-C.H.A.T. is a private-first conversational Scripture reflection application that helps users preserve meaningful conversations, organize them into **Context, Heart, Application, Testimony**, improve or explain content with optional AI assistance, find previous reflections, and create beautifully designed shareable visual content.
+C.H.A.T. is a private-first conversational Scripture reflection application that helps users preserve meaningful conversations, organize them into **Content, Heart, Application, Testimony**, improve or explain content with optional AI assistance, find previous reflections, and create beautifully designed shareable visual content.
 
 ## Core user problem
 
@@ -22,8 +22,17 @@ The application should make that loop feel simple enough for everyday use.
 
 ## C.H.A.T. framework
 
-### C — Context
-The person explains the context of the passage. This can include what is happening, who is involved, the surrounding circumstances, relevant verses, and what the person understands the passage to mean. AI may assist with historical, literary, biblical, or textual context, but the entry represents the person's understanding.
+### C — Content
+Content holds **the passage itself** — the verse text, usually with its reference and its translation named. An explanation may follow it, but often nothing does.
+
+This is not an inference. Roughly thirty real C.H.A.T. reflections are transcribed in [`docs/examples/REAL_CHAT_SAMPLES.md`](../examples/REAL_CHAT_SAMPLES.md), and in every one of them the C section carries Scripture. Many carry the verse and nothing else; where an explanation appears at all, it more often appears under Heart.
+
+Two rules follow, and both are behavioural rather than editorial:
+
+- **A Content section that is only the passage is complete.** Nothing may report it as missing, partial, unfinished, or awaiting commentary.
+- **Arrangement belongs to the author.** Reference before the quote, after it, or with a bible.com link beside it — all of these occur in the samples. The field is free text and the application does not impose a shape on it.
+
+AI may assist with historical, literary, biblical or textual background, but that is conversation; the entry represents the person's own reflection, and a drafting request for this section produces the passage as an author would write it rather than an essay about it.
 
 ### H — Heart
 The person shares their heart and how the passage touches them. This includes what spoke to, affected, convicted, encouraged, challenged, or caused them to reflect. Heart is personal reflection and must not be silently manufactured by AI.
@@ -129,9 +138,15 @@ Particular care is required for Heart and Testimony:
 - AI-generated testimony-like text must not be represented as something the user actually experienced or believes.
 - A user should be able to keep the original wording at any point.
 
-## Library
+## Reflections
 
-The personal Library should eventually support retrieval by:
+The area is called **Reflections**. It was called Library, and the rename is
+not cosmetic: "library" describes a shelf of other people's books, and this is
+the person's own writing. `GET /api/library` remains only as an alias of
+`GET /api/reflections`, and `/library` in the web app redirects.
+
+Retrieval by text, filter and sort is built. It should eventually also support
+retrieval by:
 
 - full text;
 - Scripture reference;
@@ -205,6 +220,48 @@ AI image generation may produce a background inspired by:
 The image model should generally be asked for imagery with appropriate negative space and no rendered text.
 
 Final Scripture, quotation, testimony, typography, spacing, attribution, and branding should be rendered by the application's deterministic layout engine.
+
+## Length limits
+
+Two ceilings per field, and the numbers are a product decision rather than an
+implementation detail. They live in `packages/shared/src/formats.ts` and are
+enforced on both sides of the wire.
+
+**Full C.H.A.T.**
+
+| Field | Recommended | Hard |
+| --- | --- | --- |
+| Title | 60 | 100 |
+| Scripture reference | 60 | 100 |
+| Content | 700 | 1000 |
+| Heart | 700 | 1000 |
+| Application | 700 | 1000 |
+| Testimony | 700 | 1000 |
+| **Combined** (all four sections) | **2000** | **3200** |
+
+**Condensed C.H.A.T.**
+
+| Field | Recommended | Hard |
+| --- | --- | --- |
+| Title | 50 | 80 |
+| Scripture reference | 40 | 80 |
+| Verse | 280 | 350 |
+| Reflection | 400 | 550 |
+| **Combined** (verse + reflection) | **600** | **800** |
+
+Recommended is advice and never blocks anything; a Full C.H.A.T. over it is
+*Extended* and may be laid out across two pages, which the author is asked to
+allow. Hard is a refusal, and it blocks completion and publication.
+
+The section numbers were raised from 400/700 for Content and 300/600 for the
+other three, with a combined 1200/2400. Those were written before anyone looked
+at real reflections, and they lost to Scripture: Content holds the passage, and
+a quoted passage in a fuller translation — or in a language that needs more
+characters to say the same thing — passes 400 without trying. Habakkuk
+3:17-19 NLT is 428 characters and was being reported as over-long for being an
+ordinary verse. The combined ceiling had to rise with them, because it
+overrides the per-field ones: four sections at 700 is 2,800, and the old 2,400
+would have refused a reflection in which every section was individually fine.
 
 ## Long-content behavior
 

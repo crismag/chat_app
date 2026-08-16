@@ -3,17 +3,27 @@ import { Navigate } from 'react-router'
 import { useAuth } from './useAuth.ts'
 import styles from './AuthPage.module.css'
 
+/*
+ * The four letters, as the first thing anyone reads about this.
+ *
+ * C's blurb used to say "what the passage is saying, and what is happening
+ * around it" — the commentary framing the section was renamed away from. In
+ * roughly thirty real reflections the C section is the verse, usually with its
+ * reference and translation, and frequently nothing else; see
+ * `docs/examples/REAL_CHAT_SAMPLES.md`. Explanation, where it appears at all,
+ * appears under Heart, which is where H's blurb now admits it.
+ */
 const LETTERS = [
   {
     letter: 'C',
-    word: 'Context',
-    blurb: 'What the passage is saying, and what is happening around it.',
-    tone: 'context',
+    word: 'Content',
+    blurb: 'The passage itself — the verse, its reference and its translation.',
+    tone: 'content',
   },
   {
     letter: 'H',
     word: 'Heart',
-    blurb: 'How it touched, convicted or encouraged you. Yours, never invented.',
+    blurb: 'What it means to you, and how it touched, convicted or encouraged you.',
     tone: 'heart',
   },
   {
@@ -64,7 +74,7 @@ export function AuthPage() {
       */}
       <aside className={styles.aside}>
         <p className={styles.wordmark}>
-          <span className={styles.context}>C.</span>
+          <span className={styles.content}>C.</span>
           <span className={styles.heart}>H.</span>
           <span className={styles.application}>A.</span>
           <span className={styles.testimony}>T.</span>

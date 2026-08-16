@@ -1,0 +1,291 @@
+/*
+ * The public profile.
+ *
+ * Substack-inspired in the one way that matters: the person comes first at a
+ * comfortable reading width, then their work — and the page is not a bordered
+ * container holding another bordered container. The header has no card around
+ * it at all; a hairline separates it from the gallery, and that is the whole
+ * chrome.
+ *
+ * Every value is a token. The grid is a `@container` query, like Reflections,
+ * because the shell can change this page's width without the window moving.
+ */
+
+.page {
+  container-type: inline-size;
+  container-name: profile;
+
+  display: grid;
+  gap: var(--space-5);
+  align-content: start;
+  width: 100%;
+  max-width: var(--shell-max);
+  margin-inline: auto;
+}
+
+/* --- Header ------------------------------------------------------------ */
+
+.header {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--line);
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-family: var(--font-serif);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.names {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.displayName {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-xl);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-tight);
+  overflow-wrap: anywhere;
+}
+
+.handle {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-base);
+  overflow-wrap: anywhere;
+}
+
+.tagline {
+  margin: 0;
+  max-width: var(--measure);
+  color: var(--ink-soft);
+  font-family: var(--font-serif);
+  font-size: var(--text-md);
+  line-height: var(--leading-body);
+}
+
+/* --- Favourite Scripture ----------------------------------------------- */
+
+.favourites {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.verseList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/*
+ * A reference is a pill, not a badge: it is content the person chose, so it
+ * keeps sentence case and the Scripture colour the rest of the app uses for
+ * references, rather than being shouted in uppercase like metadata.
+ */
+.verse {
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--accent-ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.count {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+/* --- Shares ------------------------------------------------------------ */
+
+.shares {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.sectionTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+@container profile (min-width: 560px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container profile (min-width: 900px) {
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* --- Editor and report panels ------------------------------------------ */
+
+.editor {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 34rem;
+  padding: var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.editorTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.fieldset {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.verseFields {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.verseField {
+  display: grid;
+}
+
+.handleField {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.handlePrefix {
+  color: var(--muted);
+  font-size: var(--text-md);
+}
+
+.handleInput {
+  flex: 1 1 auto;
+}
+
+.reasons {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.reason {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.25rem;
+  color: var(--ink-soft);
+  font-size: var(--text-base);
+}
+
+.editorActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* --- States ------------------------------------------------------------ */
+
+.formError {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.loading {
+  margin: var(--space-6) 0;
+  color: var(--muted);
+}
+
+.empty {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+  max-width: var(--measure);
+  padding: var(--space-5) 0;
+}
+
+.emptyTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.emptyBody {
+  margin: 0;
+  color: var(--muted);
+  line-height: var(--leading-body);
+}
+
+/* --- Narrow ------------------------------------------------------------ */
+
+@container profile (max-width: 480px) {
+  .avatar {
+    width: 3.5rem;
+    height: 3.5rem;
+    font-size: var(--text-lg);
+  }
+
+  /* Buttons carry a global class, so the child selector is what reaches them. */
+  .actions > *,
+  .editorActions > * {
+    flex: 1 1 auto;
+  }
+}

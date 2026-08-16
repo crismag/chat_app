@@ -9,8 +9,23 @@ import {
   type ChatSection,
   type ChatSectionType,
 } from '@chat/shared'
+import { FIELD_NAMES } from '../chat/sections.ts'
 import { api } from '../shared/api/client.ts'
 import styles from './CreatePage.module.css'
+
+/*
+ * A section's name as a reader should see it.
+ *
+ * Both the exported image and the preview used to print `section.type` — the
+ * raw lowercase enum. That is a machine identifier on a card someone shares
+ * publicly, and it is also the one place where a row that had escaped the
+ * Context-to-Content migration would have painted the retired name onto a
+ * picture. The fallback is the type itself, because a card missing a label is
+ * worse than a card with an ugly one.
+ */
+function nameOf(type: string): string {
+  return FIELD_NAMES[type] ?? type
+}
 
 type Creation = {
   title: string
@@ -84,7 +99,7 @@ export function CreatePage() {
       if (!section.content) {
         continue
       }
-      context.fillText(`${section.type}: ${section.content.slice(0, 80)}`, 80, y)
+      context.fillText(`${nameOf(section.type)}: ${section.content.slice(0, 80)}`, 80, y)
       y += 90
     }
     const link = document.createElement('a')
@@ -137,7 +152,7 @@ export function CreatePage() {
           {Object.values(creation.sections).map((section) =>
             section.content ? (
               <p key={section.type}>
-                <strong>{section.type}:</strong> {section.content}
+                <strong>{nameOf(section.type)}:</strong> {section.content}
               </p>
             ) : null,
           )}

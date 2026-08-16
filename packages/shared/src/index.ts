@@ -7,7 +7,7 @@ export type PublicationState =
   (typeof PUBLICATION_STATES)[keyof typeof PUBLICATION_STATES];
 
 export const CHAT_SECTION_TYPES = {
-  CONTEXT: 'context',
+  CONTENT: 'content',
   HEART: 'heart',
   APPLICATION: 'application',
   TESTIMONY: 'testimony',
@@ -15,6 +15,26 @@ export const CHAT_SECTION_TYPES = {
 
 export type ChatSectionType =
   (typeof CHAT_SECTION_TYPES)[keyof typeof CHAT_SECTION_TYPES];
+
+/*
+ * Condensed C.H.A.T. carries its own two fields, and they are stored beside the
+ * four rather than on top of them. That is what makes conversion safe in both
+ * directions: changing format proposes and preserves, and never overwrites the
+ * draft the author already has in the other form.
+ */
+export const CONDENSED_SECTION_TYPES = {
+  VERSE: 'verse',
+  REFLECTION: 'reflection',
+} as const;
+
+export type CondensedSectionType =
+  (typeof CONDENSED_SECTION_TYPES)[keyof typeof CONDENSED_SECTION_TYPES];
+
+export type CondensedSection = {
+  type: CondensedSectionType;
+  content: string;
+  authorOrigin: AuthorOrigin;
+};
 
 export const AUTHOR_ORIGINS = {
   USER: 'user',
@@ -31,6 +51,16 @@ export const AI_ACTIONS = {
   SHORTEN: 'shorten',
   SUMMARIZE: 'summarize',
   EXTRACT_CHAT: 'extract_chat',
+  /*
+   * A title is a label, not a confession.
+   *
+   * The format rules forbid the model inventing Heart, Application or
+   * Testimony because those carry the author's own conviction, and writing
+   * them would be putting words in someone's mouth. A title makes no such
+   * claim — it is the handle a reflection is filed under — so suggesting one
+   * is legitimate where suggesting a testimony is not. It stays a suggestion.
+   */
+  SUGGEST_TITLE: 'suggest_title',
 } as const;
 
 export type AiAction = (typeof AI_ACTIONS)[keyof typeof AI_ACTIONS];
@@ -80,8 +110,8 @@ export function isCommunityVisible(state: PublicationState): boolean {
 
 export function emptyChatSections(): Record<ChatSectionType, ChatSection> {
   return {
-    context: {
-      type: 'context',
+    content: {
+      type: 'content',
       content: '',
       authorOrigin: AUTHOR_ORIGINS.USER,
     },
@@ -102,3 +132,7 @@ export function emptyChatSections(): Record<ChatSectionType, ChatSection> {
     },
   };
 }
+
+export * from './formats.ts';
+export * from './ai.ts';
+export * from './bible.ts';

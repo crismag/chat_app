@@ -58,6 +58,8 @@ When a particular Bible translation is displayed or quoted, translation/source h
 
 Do not silently rewrite a verse and present the paraphrase as verbatim Scripture.
 
+This is enforced rather than intended. Passage text comes from the YouVersion connector, is stored against the reflection with its translation, copyright line and publisher link, and is never reconstructed from a model's memory — the server-side note behind "Draft Content" forbids exactly that, because a verse recalled by a model and labelled NIV is a false attribution to a named translation. Passage **text** is withheld from AI prompts entirely unless `BIBLE_SCRIPTURE_IN_PROMPTS` says otherwise, and it does not by default; the reference is always sent. That default is a licensing decision, not an engineering one.
+
 ## 4. Theological assistance
 
 AI explanations should be framed as assistance rather than as infallible theological authority.
@@ -70,7 +72,7 @@ Future product settings may allow users or communities to select preferred trans
 
 When extracting a structured C.H.A.T. from conversation:
 
-- Context may summarize relevant explanatory conversation and the person's understanding of the passage.
+- Content carries the passage itself, with an optional explanation after it. Verse text must come from Scripture the application actually retrieved — never reconstructed from a model's memory, which would be a false attribution to a named translation. Where no passage text is available, ask for the reference and translation rather than supplying words.
 - Heart may organize what the user expressed about how the passage touched, convicted, encouraged, challenged, or affected them. It must not be silently manufactured by AI.
 - Application may summarize how the user said the passage applies to them and how they intend to respond.
 - Testimony may organize a user-authored testimony, declaration of faith or conviction, commitment, prayer, or statement of belief. It must rely on the user's expressed substance.

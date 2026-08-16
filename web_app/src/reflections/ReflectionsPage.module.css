@@ -1,0 +1,409 @@
+/*
+ * Reflections.
+ *
+ * The one rule that governs this file: the page is a *container*, and every
+ * decision about how many columns to show is a `@container` query against it.
+ * There is not a single `@media (width…)` here, on purpose. The shell's sidebar
+ * can collapse and give this page 400 more pixels without the window changing
+ * at all, and a viewport query would answer that question wrongly.
+ */
+
+.page {
+  container-type: inline-size;
+  container-name: reflections;
+
+  display: grid;
+  gap: var(--space-5);
+  align-content: start;
+  width: 100%;
+  max-width: var(--shell-max);
+  margin-inline: auto;
+}
+
+/* --- Header ------------------------------------------------------------ */
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.title {
+  margin: var(--space-1) 0 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-xl);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-tight);
+}
+
+.description {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-base);
+}
+
+/* --- Sticky search and controls ---------------------------------------- */
+
+/*
+ * Sticky under the shell's own sticky header rather than at the top of the
+ * viewport, where it would slide behind it. The shell does not publish its
+ * height, so the fallback is its measured height and the variable is honoured
+ * the moment it does.
+ */
+.controls {
+  position: sticky;
+  top: var(--header-height, 4.5rem);
+  z-index: 3;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
+
+.searchRow {
+  display: block;
+}
+
+.search {
+  max-width: 34rem;
+}
+
+.controlRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chip {
+  padding: 0.3rem 0.85rem;
+  min-height: 2.125rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--fast) var(--ease),
+    color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease);
+}
+
+.chip:hover {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+/* Selection is a fill *and* a border change, never colour alone. */
+.chip[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.rightControls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.select {
+  min-height: 2.125rem;
+  padding: 0.25rem 0.5rem;
+  font-size: var(--text-sm);
+  width: auto;
+}
+
+.segmented {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+}
+
+.segment {
+  padding: 0.3rem 0.8rem;
+  min-height: 1.875rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.segment[aria-pressed='true'] {
+  background: var(--surface);
+  border-color: var(--line-strong);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+
+/* --- Sections ---------------------------------------------------------- */
+
+.sections {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.section {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.sectionTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+/* --- The grids, and the whole point of the page ------------------------ */
+
+.grid,
+.featuredGrid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Medium: two columns of tiles. */
+@container reflections (min-width: 560px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Expanded: three. */
+@container reflections (min-width: 900px) {
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .featuredGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* --- Cards ------------------------------------------------------------- */
+
+/*
+ * The tile itself lives in `shared/ui/ReflectionCard.module.css`, because the
+ * public profile shows the same card. What stays here is what belongs to this
+ * page: how many columns, and the list rows.
+ *
+ * `.reference` and `.date` are repeated in both files rather than shared
+ * through a global class. They are two declarations each, and both files
+ * resolve to the same tokens, so the alternative — a utility in `ui.css` used
+ * by exactly two callers — buys nothing and adds a third place to look.
+ */
+
+.reference {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--accent-ink);
+}
+
+.date {
+  color: var(--faint);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+/* --- Overflow menu ----------------------------------------------------- */
+
+.overflow {
+  position: relative;
+  z-index: 1; /* above the tile's full-card link */
+}
+
+.menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--space-1));
+  z-index: 4;
+  display: grid;
+  min-width: 11rem;
+  padding: var(--space-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+
+.menuItem {
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  text-decoration: none;
+}
+
+.menuItem:hover {
+  background: var(--surface-2);
+}
+
+/* --- List -------------------------------------------------------------- */
+
+.list {
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  transition: border-color var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+
+.row:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+}
+
+.rowBody {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.rowHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.rowTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.rowTitle a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.rowTitle a:hover {
+  text-decoration: underline;
+}
+
+.rowTitle a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.rowExcerpt {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* On a narrow container a row stacks rather than squeezing. */
+@container reflections (max-width: 700px) {
+  .row {
+    flex-wrap: wrap;
+  }
+
+  .rowMeta {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+}
+
+/* --- Empty, error and loading ------------------------------------------ */
+
+/*
+ * Deliberately small. An empty Reflections page should invite writing, not
+ * present an enormous search container with nothing behind it.
+ */
+.empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  max-width: 32rem;
+  margin: var(--space-6) auto;
+  padding: var(--space-6) var(--space-5);
+  text-align: center;
+}
+
+.emptyTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.emptyBody {
+  margin: 0;
+  max-width: 26rem;
+  color: var(--muted);
+  line-height: var(--leading-body);
+}
+
+.noResults {
+  margin: var(--space-5) 0;
+  color: var(--muted);
+}
+
+.error {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row,
+  .chip,
+  .segment {
+    transition: none;
+  }
+}

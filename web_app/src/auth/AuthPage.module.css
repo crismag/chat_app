@@ -32,8 +32,8 @@
   line-height: 1;
 }
 
-.context {
-  color: var(--context);
+.content {
+  color: var(--content);
 }
 .heart {
   color: var(--heart);
@@ -79,9 +79,9 @@
  * Each letter sits on its own tinted chip. The same four colours run through
  * the rest of the app, so this doubles as the legend for them.
  */
-.letterMark.context {
-  background: var(--context-soft);
-  color: var(--context);
+.letterMark.content {
+  background: var(--content-soft);
+  color: var(--content);
 }
 .letterMark.heart {
   background: var(--heart-soft);

@@ -15,6 +15,13 @@ coverage/
 .env
 .env.*
 !.env.example
+# Provider key files. Named explicitly because a key that is merely outside the
+# repo today is one careless copy away from being inside it tomorrow.
+*.api_keys
+*.apikey
+*.pem
+*.key
+!lib/**/*.key
 
 # Logs
 *.log
@@ -76,3 +83,13 @@ playwright-report/
 *.sqlite
 *.sqlite3
 local-data/
+
+# Local SQLite database
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# Local verification artifacts. Browser-driver scripts live in scripts/verify/
+# and are committed; what they produce is local noise and is not.
+scripts/verify/out/
+*.local.mjs

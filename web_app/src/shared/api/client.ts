@@ -1,5 +1,25 @@
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
+/**
+ * A failed request, carrying what the server actually said.
+ *
+ * The publication gate answers 422 with a structured report — which field, how
+ * long it is, both limits, how many pages it renders to — and an interface that
+ * can only say "invalid" has thrown all of that away before it reaches the
+ * person who has to act on it. So the body travels with the error.
+ */
+export class ApiError extends Error {
+  readonly status: number
+  readonly body: unknown
+
+  constructor(message: string, status: number, body: unknown) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.body = body
+  }
+}
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBase}${path}`, {
     ...init,
@@ -12,7 +32,11 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: response.statusText }))
-    throw new Error((body as { error?: string }).error ?? `Request failed (${response.status})`)
+    throw new ApiError(
+      (body as { error?: string }).error ?? `Request failed (${response.status})`,
+      response.status,
+      body,
+    )
   }
 
   return (await response.json()) as T

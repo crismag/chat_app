@@ -19,7 +19,7 @@ describe('C.H.A.T. sections', () => {
   test('H is Heart, not a highlight field', () => {
     expect(CHAT_SECTION_TYPES.HEART).toBe('heart');
     expect(Object.values(CHAT_SECTION_TYPES)).toEqual([
-      'context',
+      'content',
       'heart',
       'application',
       'testimony',
