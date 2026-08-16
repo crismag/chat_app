@@ -64,14 +64,24 @@ export const FORMAT_LIMITS: Record<ChatFormat, FormatLimits> = {
     fields: {
       title: { recommended: 60, hard: 100 },
       scriptureReference: { recommended: 60, hard: 100 },
-      content: { recommended: 400, hard: 700 },
-      heart: { recommended: 300, hard: 600 },
-      application: { recommended: 300, hard: 600 },
-      testimony: { recommended: 300, hard: 600 },
+      // Raised from 400/700 and 300/600. The old numbers were written before
+      // anyone looked at real reflections, and they lose to Scripture: Content
+      // holds the passage, and a quoted passage in a fuller translation — or in
+      // a language that simply needs more characters to say the same thing —
+      // runs past 400 without trying. Habakkuk 3:17-19 NLT is 428, and was
+      // reported as over-long for being an ordinary verse.
+      content: { recommended: 700, hard: 1000 },
+      heart: { recommended: 700, hard: 1000 },
+      application: { recommended: 700, hard: 1000 },
+      testimony: { recommended: 700, hard: 1000 },
     },
     combined: {
-      recommended: 1200,
-      hard: 2400,
+      // The combined limit overrides the per-field ones, so raising the fields
+      // without raising this would have changed nothing: four sections at 700
+      // is 2,800, and the old 2,400 ceiling would have refused a reflection in
+      // which every section was individually acceptable.
+      recommended: 2000,
+      hard: 3200,
       of: ['content', 'heart', 'application', 'testimony'],
     },
     maxPages: 2,

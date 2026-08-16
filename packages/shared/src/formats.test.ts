@@ -65,15 +65,15 @@ describe('Full C.H.A.T.', () => {
 
   it('is invalid past the combined hard maximum, with no way to acknowledge it', () => {
     const draft = fullDraft({
-      content: fill(700),
-      heart: fill(600),
-      application: fill(600),
-      testimony: fill(600),
+      content: fill(1000),
+      heart: fill(1000),
+      application: fill(1000),
+      testimony: fill(1000),
     });
     const result = validateChat(CHAT_FORMATS.FULL, draft, {
       extensionAcknowledged: true,
     });
-    expect(result.combined.length).toBe(2500);
+    expect(result.combined.length).toBe(4000);
     expect(result.status).toBe(LENGTH_STATUS.INVALID);
     expect(result.publishable).toBe(false);
   });
@@ -165,8 +165,13 @@ describe('Condensed C.H.A.T.', () => {
 describe('input handling', () => {
   /* Nothing the author wrote may be discarded silently. */
   it('returns the overflow rather than dropping it', () => {
-    const { kept, overflow } = splitAtLimit(CHAT_FORMATS.FULL, 'heart', fill(700));
-    expect(kept).toHaveLength(600);
+    const heartLimit = FORMAT_LIMITS.full.fields.heart!.hard;
+    const { kept, overflow } = splitAtLimit(
+      CHAT_FORMATS.FULL,
+      'heart',
+      fill(heartLimit + 100),
+    );
+    expect(kept).toHaveLength(heartLimit);
     expect(overflow).toHaveLength(100);
   });
 

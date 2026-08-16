@@ -346,8 +346,17 @@ export function FormatSheet({
           </h3>
           <p className={styles.formatShape}>Content · Heart · Application · Testimony</p>
           <p className={styles.formatDetail}>
-            All four sections, up to 1,200 characters together as a rule and 2,400 at most.
-            One page, or two if you allow it.
+            {/*
+              Read from the limits rather than written out. The Condensed card
+              beside this one already did, so when the budgets were raised this
+              card quietly kept quoting the old numbers — a sentence that looks
+              like documentation and is actually a stale copy.
+            */}
+            All four sections, up to{' '}
+            {FORMAT_LIMITS.full.combined.recommended.toLocaleString()} characters
+            together as a rule and{' '}
+            {FORMAT_LIMITS.full.combined.hard.toLocaleString()} at most. One
+            page, or two if you allow it.
           </p>
         </div>
 
