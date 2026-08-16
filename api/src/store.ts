@@ -12,6 +12,8 @@ export type StoredSession = {
 export type StoredConversation = {
   id: string;
   userId: string;
+  /** Which content format's rules this reflection is validated against. */
+  format: 'full' | 'condensed';
   title: string;
   scriptureReference: string | null;
   publicationState: 'private' | 'published';

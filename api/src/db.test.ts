@@ -25,6 +25,28 @@ async function register(app: ReturnType<typeof createApp>, email: string) {
   return cookie.split(';')[0] ?? '';
 }
 
+/**
+ * Fill the four sections so a reflection is publishable.
+ *
+ * Publication now enforces the content-format rules, so a conversation with
+ * empty sections is a draft by definition. Tests that want to publish have to
+ * write a reflection first — which is the behaviour, not an obstacle to it.
+ */
+async function completeChat(
+  app: ReturnType<typeof createApp>,
+  id: string,
+  cookie: string,
+) {
+  for (const type of ['context', 'heart', 'application', 'testimony'] as const) {
+    const response = await app.request(`/api/conversations/${id}/sections`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ type, content: `A short ${type} written by the author.` }),
+    });
+    if (response.status >= 400) throw new Error(`${type}: ${response.status}`);
+  }
+}
+
 describe('SQLite store', () => {
   it('serves the same flows the in-memory store did', async () => {
     const app = createApp(new SqliteStore());
@@ -99,10 +121,15 @@ describe('SQLite store', () => {
     const app = createApp(first);
     const cookie = await register(app, 'publish@example.com');
     const created = await app.request('/api/conversations', {
-      ...json({ title: 'Trusting when I cannot see' }),
+      ...json({
+        title: 'Trusting when I cannot see',
+        scriptureReference: 'Romans 8:28',
+      }),
       headers: { 'content-type': 'application/json', cookie },
     });
     const conversation = (await created.json()) as { id: string };
+
+    await completeChat(app, conversation.id, cookie);
 
     const published = await app.request(
       `/api/conversations/${conversation.id}/publish`,

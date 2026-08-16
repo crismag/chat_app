@@ -115,7 +115,10 @@ describe('publication and community', () => {
     const created = await app.request('/api/conversations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Cookie: owner.cookie },
-      body: JSON.stringify({ title: 'To share later' }),
+      body: JSON.stringify({
+        title: 'To share later',
+        scriptureReference: 'Psalm 46:10',
+      }),
     });
     const conversation = await json<{ id: string }>(created);
 
@@ -123,6 +126,19 @@ describe('publication and community', () => {
       headers: { Cookie: neighbor.cookie },
     });
     expect(await json<unknown[]>(before)).toEqual([]);
+
+    /*
+     * Publication enforces the content-format rules, so the reflection has to
+     * be a complete one before it can be shared. An empty C.H.A.T. is a draft
+     * by definition.
+     */
+    for (const type of ['context', 'heart', 'application', 'testimony'] as const) {
+      await app.request(`/api/conversations/${conversation.id}/sections`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Cookie: owner.cookie },
+        body: JSON.stringify({ type, content: `A short ${type} from the author.` }),
+      });
+    }
 
     const published = await app.request(
       `/api/conversations/${conversation.id}/publish`,

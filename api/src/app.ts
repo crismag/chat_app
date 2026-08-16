@@ -5,6 +5,9 @@ import { cors } from 'hono/cors';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { SESSION_TTL_MS } from './db.ts';
 import {
+  CHAT_FORMATS,
+  validateChat,
+  type ChatFormat,
   AI_ACTIONS,
   CREATE_LAYOUTS,
   CREATE_STYLES,
@@ -42,6 +45,7 @@ function nowIso(): string {
 function summaryOf(conversation: StoredConversation) {
   return {
     id: conversation.id,
+    format: conversation.format,
     title: conversation.title,
     scriptureReference: conversation.scriptureReference,
     publicationState: conversation.publicationState,
@@ -169,13 +173,25 @@ export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) 
     if (!user) {
       return c.json({ error: 'Unauthenticated.' }, 401);
     }
-    const body = await c.req.json<{ title?: string; scriptureReference?: string }>();
+    /*
+     * A title is not required to begin. Someone with a passage on their mind
+     * should be able to start writing, not fill in a form first — so an untitled
+     * conversation is created with a temporary name derived from whatever it is
+     * about, and renamed later.
+     */
+    const body = await c.req
+      .json<{ title?: string; scriptureReference?: string; format?: ChatFormat }>()
+      .catch(() => ({}) as { title?: string; scriptureReference?: string; format?: ChatFormat });
     const timestamp = nowIso();
+    const reference = body.scriptureReference?.trim() || null;
+    const format: ChatFormat =
+      body.format === CHAT_FORMATS.CONDENSED ? CHAT_FORMATS.CONDENSED : CHAT_FORMATS.FULL;
     const conversation: StoredConversation = {
       id: randomUUID(),
       userId: user.id,
-      title: body.title?.trim() || 'Untitled conversation',
-      scriptureReference: body.scriptureReference?.trim() || null,
+      format,
+      title: body.title?.trim() || reference || 'New reflection',
+      scriptureReference: reference,
       publicationState: PUBLICATION_STATES.PRIVATE,
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -262,6 +278,31 @@ export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) 
     if (!conversation) {
       return c.json({ error: 'Conversation not found.' }, 404);
     }
+    /*
+     * The format rules are enforced here rather than only in the editor. A
+     * client is a convenience; this is the boundary that decides whether an
+     * incomplete or over-long reflection can become a publication, and it
+     * answers with the structured report so the interface can say exactly which
+     * field is at fault and by how much.
+     */
+    const sections = sectionsFromStore(store.sections.get(conversation.id));
+    const validation = validateChat(
+      conversation.format,
+      {
+        title: conversation.title,
+        scriptureReference: conversation.scriptureReference ?? '',
+        context: sections.context.content,
+        heart: sections.heart.content,
+        application: sections.application.content,
+        testimony: sections.testimony.content,
+      },
+      { extensionAcknowledged: c.req.query('acknowledgeExtension') === 'true' },
+    );
+
+    if (!validation.publishable) {
+      return c.json({ error: 'This reflection is not ready to publish.', validation }, 422);
+    }
+
     conversation.publicationState = PUBLICATION_STATES.PUBLISHED;
     conversation.updatedAt = nowIso();
     store.conversations.set(conversation.id, conversation);
@@ -373,31 +414,83 @@ export function createApp(store: MemoryStore | SqliteStore = new SqliteStore()) 
     });
   });
 
-  app.get('/api/library', (c) => {
+  /*
+   * Reflections — the user's own work, searched and filtered.
+   *
+   * Kept at /api/library as well, because the web app has not been renamed yet
+   * and a rename that breaks the running client for one commit is a rename done
+   * badly. The old path is an alias and goes when the page moves.
+   */
+  const reflections = (c: Context) => {
     const user = requireUser(c);
     if (!user) {
       return c.json({ error: 'Unauthenticated.' }, 401);
     }
+
     const query = (c.req.query('q') ?? '').trim().toLowerCase();
-    const items = [...store.conversations.values()].filter((conversation) => {
-      if (conversation.userId !== user.id) {
-        return false;
+    const filter = c.req.query('filter') ?? 'all';
+    const sort = c.req.query('sort') ?? 'recent';
+
+    const mine = [...store.conversations.values()].filter(
+      (conversation) => conversation.userId === user.id,
+    );
+
+    const items = mine.filter((conversation) => {
+      /*
+       * "Completed" means the format's own rules are satisfied — the same
+       * validator that gates publication — rather than a flag someone
+       * remembered to set.
+       */
+      if (filter !== 'all') {
+        const sections = sectionsFromStore(store.sections.get(conversation.id));
+        const complete = validateChat(conversation.format, {
+          title: conversation.title,
+          scriptureReference: conversation.scriptureReference ?? '',
+          context: sections.context.content,
+          heart: sections.heart.content,
+          application: sections.application.content,
+          testimony: sections.testimony.content,
+        }).missing.length === 0;
+
+        if (filter === 'drafts' && complete) return false;
+        if (filter === 'completed' && !complete) return false;
+        if (
+          filter === 'published' &&
+          conversation.publicationState !== PUBLICATION_STATES.PUBLISHED
+        ) {
+          return false;
+        }
       }
-      if (!query) {
-        return true;
-      }
+
+      if (!query) return true;
+
+      // Search what the person actually wrote, not only what they titled it.
+      const sections = Object.values(
+        sectionsFromStore(store.sections.get(conversation.id)),
+      ).map((section) => section.content);
       const messages = store.messages.get(conversation.id) ?? [];
-      const haystack = [
+      return [
         conversation.title,
         conversation.scriptureReference ?? '',
         ...messages.map((message) => message.content),
+        ...sections,
       ]
         .join('\n')
-        .toLowerCase();
-      return haystack.includes(query);
+        .toLowerCase()
+        .includes(query);
     });
+
+    items.sort((a, b) =>
+      sort === 'title'
+        ? a.title.localeCompare(b.title)
+        : b.updatedAt.localeCompare(a.updatedAt),
+    );
+
     return c.json(items.map(summaryOf));
-  });
+  };
+
+  app.get('/api/reflections', reflections);
+  app.get('/api/library', reflections);
 
   app.get('/api/community', (c) => {
     const user = requireUser(c);

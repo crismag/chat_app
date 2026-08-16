@@ -48,6 +48,7 @@ function migrate(db: DatabaseSync): void {
     CREATE TABLE IF NOT EXISTS conversations (
       id TEXT PRIMARY KEY,
       userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      format TEXT NOT NULL DEFAULT 'full',
       title TEXT NOT NULL,
       scriptureReference TEXT,
       publicationState TEXT NOT NULL,
@@ -193,9 +194,10 @@ class ConversationTable {
     this.db
       .prepare(
         `INSERT INTO conversations
-           (id, userId, title, scriptureReference, publicationState, createdAt, updatedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
+           (id, userId, format, title, scriptureReference, publicationState, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
+           format = excluded.format,
            title = excluded.title,
            scriptureReference = excluded.scriptureReference,
            publicationState = excluded.publicationState,
@@ -204,6 +206,7 @@ class ConversationTable {
       .run(
         id,
         conversation.userId,
+        conversation.format,
         conversation.title,
         conversation.scriptureReference,
         conversation.publicationState,
