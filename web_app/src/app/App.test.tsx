@@ -19,6 +19,11 @@ function mockUnauthenticatedFetch() {
         json: async () => ({ error: 'Unauthenticated.' }),
       })
     }
+    /*
+     * Community answers with an object carrying the feed, the tag chips and
+     * the report reasons — the shape that lets the page render chips it did
+     * not invent. The reflection endpoints still answer with a list.
+     */
     return Promise.resolve({
       ok: true,
       json: async () => healthPayload,
@@ -33,6 +38,24 @@ function mockAuthenticatedFetch() {
       return Promise.resolve({
         ok: true,
         json: async () => ({ id: 'u1', email: 'ada@example.com' }),
+      })
+    }
+    /*
+     * Community answers with an object carrying the feed, its tag chips and
+     * the report reasons — the shape that lets the page render chips it did
+     * not invent. Both are matched before the looser `/community` test below,
+     * which would otherwise swallow `/communities` and hand it a bare list.
+     */
+    if (url.includes('/publications')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ scope: 'shared', items: [], hashtags: [], reportReasons: [] }),
+      })
+    }
+    if (url.includes('/communities')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ communities: [], invitations: [] }),
       })
     }
     if (
@@ -137,12 +160,48 @@ test('the Reflections route replaces Library, and /library still resolves', asyn
   expect(await screen.findByRole('heading', { name: 'Reflections' })).toBeInTheDocument()
 })
 
-test('community only describes explicitly published C.H.A.T.s', async () => {
+/*
+ * The destinations are named honestly — Shared and Public describe the content,
+ * where "For You" would claim a personalisation that does not exist. There is
+ * no fourth tab, and none of the three is a disabled placeholder.
+ */
+test('community offers Shared, Public and Communities, and nothing it cannot do', async () => {
   vi.stubGlobal('fetch', mockAuthenticatedFetch())
   renderAt('/community')
+
+  const tabs = await screen.findAllByRole('tab')
+  expect(tabs.map((tab) => tab.textContent)).toEqual(['Shared', 'Public', 'Communities'])
+  expect(screen.queryByText(/for you/i)).not.toBeInTheDocument()
+  expect(tabs.every((tab) => !tab.hasAttribute('disabled'))).toBe(true)
+})
+
+/*
+ * An empty feed says what the space is for. "No posts." is what this replaced.
+ */
+test('an empty Community is written, not blank', async () => {
+  vi.stubGlobal('fetch', mockAuthenticatedFetch())
+  renderAt('/community')
+
   expect(
-    await screen.findByText(/Only C.H.A.T.s that someone explicitly published appear here/i),
+    await screen.findByRole('heading', { name: /nothing has been shared with you yet/i }),
   ).toBeInTheDocument()
+  expect(screen.queryByText(/^no posts\.?$/i)).not.toBeInTheDocument()
+})
+
+/*
+ * An unknown URL used to render a blank white document — no header, no
+ * navigation, no message, no way back.
+ */
+test('an unknown URL renders a way back rather than a blank page', async () => {
+  vi.stubGlobal('fetch', mockAuthenticatedFetch())
+  renderAt('/nope')
+
+  expect(
+    await screen.findByRole('heading', { name: /this page does not exist/i }),
+  ).toBeInTheDocument()
+  /* The shell survives the mistake, so the navigation is still there. */
+  expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0)
+  expect(screen.getByRole('link', { name: /go to reflect/i })).toBeInTheDocument()
 })
 
 test('create engine keeps text in the app', async () => {

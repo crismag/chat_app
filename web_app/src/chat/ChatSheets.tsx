@@ -78,27 +78,39 @@ export type ShareAudience = 'only-me' | 'public' | 'community'
 /**
  * Where this goes — the question Publish never asked.
  *
- * Exactly one audience per publication, named in words before it is chosen.
- * Communities exist in the rules and not yet in the software, so that
- * destination is shown as unavailable rather than faked: a person can see that
- * it is coming without being able to believe they have used it.
+ * Exactly one audience per publication, named in words before it is chosen. The
+ * community destination is live now, and offers only communities this person is
+ * actually an active member of — the server checks that again on the way in,
+ * because a picker is a convenience and not an authority.
+ *
+ * The one thing this sheet must never do is widen the audience on the author's
+ * behalf. Choosing a community shares with that community; wanting a second one
+ * means a second publication, which the copy says out loud rather than offering
+ * a checkbox that quietly turns into "public".
  */
 export function ShareSheet({
   currentlyPublished,
   validation,
   format,
+  communities,
   onClose,
   onShare,
 }: {
   currentlyPublished: boolean
   validation: ValidationResult | null
   format: ChatFormat
+  communities: { id: string; name: string }[]
   onClose: () => void
-  onShare: (audience: ShareAudience, acknowledgeExtension: boolean) => Promise<void>
+  onShare: (
+    audience: ShareAudience,
+    acknowledgeExtension: boolean,
+    communityId: string | null,
+  ) => Promise<void>
 }) {
   const [audience, setAudience] = useState<ShareAudience>(
     currentlyPublished ? 'public' : 'only-me',
   )
+  const [communityId, setCommunityId] = useState<string | null>(communities[0]?.id ?? null)
   const [acknowledged, setAcknowledged] = useState(false)
   const [busy, setBusy] = useState(false)
 
@@ -122,8 +134,11 @@ export function ShareSheet({
       id: 'community' as const,
       icon: <CommunityIcon className={styles.smallIcon} />,
       name: 'A community',
-      detail: 'Members of one community only. Communities are not built yet, so this cannot be chosen.',
-      available: false,
+      detail:
+        communities.length > 0
+          ? 'Members of one community only. Never public, never in public search, and only while someone is still a member.'
+          : 'Members of one community only. You are not in a community yet — you can start one from Community.',
+      available: communities.length > 0,
     },
   ]
 
@@ -142,10 +157,20 @@ export function ShareSheet({
             disabled={busy}
             onClick={() => {
               setBusy(true)
-              void onShare(audience, acknowledged).finally(() => setBusy(false))
+              void onShare(
+                audience,
+                acknowledged,
+                audience === 'community' ? communityId : null,
+              ).finally(() => setBusy(false))
             }}
           >
-            {busy ? 'Sharing…' : audience === 'only-me' ? 'Keep it private' : 'Share publicly'}
+            {busy
+              ? 'Sharing…'
+              : audience === 'only-me'
+                ? 'Keep it private'
+                : audience === 'community'
+                  ? 'Share with this community'
+                  : 'Share publicly'}
           </button>
         </>
       }
@@ -178,12 +203,41 @@ export function ShareSheet({
                 <span className={styles.destinationName}>
                   {destination.name}
                   {!destination.available ? (
-                    <span className={styles.unavailableTag}>Not available yet</span>
+                    <span className={styles.unavailableTag}>No community yet</span>
                   ) : null}
                 </span>
                 <span className={styles.destinationDetail}>{destination.detail}</span>
               </span>
             </label>
+
+            {/*
+              Which community, chosen only once Community is the destination —
+              a list of radio buttons rather than a select, so the names are
+              readable without opening anything. One is chosen, never several:
+              reaching two communities means two publications.
+            */}
+            {destination.id === 'community' && audience === 'community' ? (
+              <fieldset className={styles.communityChoice}>
+                <legend className="sr-only">Choose one community</legend>
+                {communities.map((community) => (
+                  <label key={community.id} className={styles.communityOption}>
+                    <input
+                      type="radio"
+                      name="community"
+                      value={community.id}
+                      checked={communityId === community.id}
+                      onChange={() => setCommunityId(community.id)}
+                    />
+                    {community.name}
+                  </label>
+                ))}
+                <p className={styles.communityHint}>
+                  To reach a second community, share again afterwards. Each stays its own
+                  publication, with its own reactions — sharing privately never turns into
+                  sharing publicly.
+                </p>
+              </fieldset>
+            ) : null}
           </li>
         ))}
       </ul>

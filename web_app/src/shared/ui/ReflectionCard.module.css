@@ -20,10 +20,20 @@
  * is the same shape — a fixed set of rows, with the excerpt clamped rather
  * than allowed to push the card taller.
  */
+/*
+ * A column rather than a fixed set of grid rows.
+ *
+ * The card grew two optional regions — an identity line above the reference,
+ * and an action row under the foot — for Community publications, which
+ * Reflections does not render. A `grid-template-rows` list has to name every
+ * row it might have, so it would have needed to describe both shapes at once.
+ * A flex column describes neither and holds both: the excerpt takes the slack,
+ * the foot is pinned to the bottom, and every tile still ends the same height.
+ */
 .tile {
   position: relative;
-  display: grid;
-  grid-template-rows: auto auto auto 1fr auto;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-2);
   min-height: 13.5rem;
   padding: var(--space-4);
@@ -95,6 +105,7 @@
 }
 
 .excerpt {
+  flex: 1 1 auto;
   margin: 0;
   color: var(--muted);
   font-size: var(--text-sm);
@@ -106,13 +117,41 @@
   overflow: hidden;
 }
 
+/*
+ * A Community card carries several short section excerpts rather than one
+ * paragraph, so the three-line clamp belongs on each of them and not on the
+ * region holding them all.
+ */
+.tile[data-has-footer='true'] .excerpt {
+  display: block;
+  overflow: visible;
+}
+
 .tileFoot {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+  margin-top: auto;
   padding-top: var(--space-2);
   border-top: 1px solid var(--line);
+}
+
+/* The identity line: author, audience, time. Secondary to the reflection. */
+.meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+/* Hashtags and the action row, under the foot rule. */
+.tileExtra {
+  display: grid;
+  gap: var(--space-2);
 }
 
 .date {

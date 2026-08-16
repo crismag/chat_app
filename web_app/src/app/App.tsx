@@ -5,9 +5,11 @@ import { AppShell } from '../shared/layout/AppShell.tsx'
 import { ChatPage } from '../chat/ChatPage.tsx'
 import { ReflectionsPage } from '../reflections/ReflectionsPage.tsx'
 import { CommunityPage } from '../community/CommunityPage.tsx'
+import { PublicationPage } from '../community/PublicationPage.tsx'
 import { CreatePage } from '../create/CreatePage.tsx'
 import { ProfilePage } from '../profile/ProfilePage.tsx'
 import { OpenSourceLicencesPage } from '../licenses/OpenSourceLicencesPage.tsx'
+import { NotFoundPage } from '../shared/ui/NotFoundPage.tsx'
 
 export function App() {
   return (
@@ -25,6 +27,13 @@ export function App() {
           */}
           <Route path="/library" element={<Navigate to="/reflections" replace />} />
           <Route path="/community" element={<CommunityPage />} />
+          {/*
+            A publication has its own address, and possessing it grants nothing.
+            The page asks the server on every visit, so a member reads it and
+            someone who has left the community is told it is unavailable — same
+            URL, different answer, decided server-side each time.
+          */}
+          <Route path="/community/publications/:id" element={<PublicationPage />} />
           <Route path="/create" element={<CreatePage />} />
           {/*
             Two paths, one page. `/profile` is "mine" and resolves to the
@@ -34,6 +43,12 @@ export function App() {
           */}
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/profile/:handle" element={<ProfilePage />} />
+          {/*
+            An unknown URL used to render a blank white document — no header, no
+            navigation, no message, no way back. It is inside the shell so the
+            navigation survives the mistake.
+          */}
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>
     </AuthProvider>
