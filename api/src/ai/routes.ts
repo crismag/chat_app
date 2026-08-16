@@ -25,7 +25,6 @@ import {
 } from '@chat/shared';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { AiRequestError, parseGuidanceRequest, parseImproveRequest } from './validation.ts';
-import { readAiConfig } from './config.ts';
 import type { AiService } from './service.ts';
 
 /** What a failure means in HTTP terms. */
@@ -97,10 +96,9 @@ export function createAiRoutes(deps: AiRouteDeps) {
     const user = deps.currentUser(c);
     if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
 
-    const config = readAiConfig();
     let request;
     try {
-      request = parseGuidanceRequest(await c.req.json().catch(() => null), config);
+      request = parseGuidanceRequest(await c.req.json().catch(() => null), deps.service.limits());
     } catch (caught: unknown) {
       if (caught instanceof AiRequestError) {
         return c.json({ error: caught.message, outcome: caught.outcome }, STATUS[caught.outcome]);
@@ -136,10 +134,9 @@ export function createAiRoutes(deps: AiRouteDeps) {
     const user = deps.currentUser(c);
     if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
 
-    const config = readAiConfig();
     let request;
     try {
-      request = parseImproveRequest(await c.req.json().catch(() => null), config);
+      request = parseImproveRequest(await c.req.json().catch(() => null), deps.service.limits());
     } catch (caught: unknown) {
       if (caught instanceof AiRequestError) {
         return c.json({ error: caught.message, outcome: caught.outcome }, STATUS[caught.outcome]);

@@ -186,154 +186,179 @@ export class GeminiProvider implements AIProvider {
     return { payload: this.readPayload(response), ...this.readUsage(response) };
   }
 
-  /**
-   * Turn a response into parsed JSON, or into a typed refusal.
-   *
-   * The order matters. A blocked prompt and a truncated answer both arrive as
-   * a response with no usable text, and reporting either as "malformed JSON"
-   * would tell the writer their reflection broke the parser when in fact it was
-   * declined, or simply ran long.
-   */
-  private readPayload(response: {
-    text?: string | undefined;
-    promptFeedback?: { blockReason?: string | undefined } | undefined;
-    candidates?: { finishReason?: string | undefined }[] | undefined;
-  }): unknown {
-    const blockReason = response.promptFeedback?.blockReason;
-    if (blockReason) {
-      throw new AiFailure(
-        AI_OUTCOMES.CONTENT_NOT_SUPPORTED,
-        `prompt blocked (${blockReason})`,
-        { retryable: false },
-      );
-    }
-
-    const finishReason = response.candidates?.[0]?.finishReason;
-    if (
-      finishReason === FinishReason.SAFETY ||
-      finishReason === FinishReason.PROHIBITED_CONTENT ||
-      finishReason === FinishReason.BLOCKLIST ||
-      finishReason === FinishReason.SPII ||
-      finishReason === FinishReason.RECITATION
-    ) {
-      throw new AiFailure(
-        AI_OUTCOMES.CONTENT_NOT_SUPPORTED,
-        `candidate blocked (${finishReason})`,
-        { retryable: false },
-      );
-    }
-
-    if (finishReason === FinishReason.MAX_TOKENS) {
-      /*
-       * Truncated JSON. Not retried: a second call with the same bounds gives
-       * the same truncation, and retrying a validation-class failure is exactly
-       * what the rules forbid.
-       */
-      throw new AiFailure(
-        AI_OUTCOMES.INVALID_PROVIDER_RESPONSE,
-        'response hit the output ceiling and was truncated',
-        { retryable: false },
-      );
-    }
-
-    const text = response.text;
-    if (typeof text !== 'string' || text.trim() === '') {
-      throw new AiFailure(AI_OUTCOMES.INVALID_PROVIDER_RESPONSE, 'response carried no text', {
-        retryable: false,
-      });
-    }
-
-    try {
-      return JSON.parse(text) as unknown;
-    } catch {
-      /* The text itself is never included — it is model output about the
-       * writer's reflection, and a log line is not the place for it. */
-      throw new AiFailure(AI_OUTCOMES.INVALID_PROVIDER_RESPONSE, 'response was not valid JSON', {
-        retryable: false,
-      });
-    }
+  private readPayload(response: GeminiShapedResponse): unknown {
+    return readGeminiPayload(response);
   }
 
-  private readUsage(response: {
-    usageMetadata?:
-      | { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number }
-      | undefined;
-  }): { usage?: AiUsage } {
-    const meta = response.usageMetadata;
-    if (!meta) return {};
-    return {
-      usage: {
-        ...(meta.promptTokenCount === undefined ? {} : { inputTokens: meta.promptTokenCount }),
-        ...(meta.candidatesTokenCount === undefined
-          ? {}
-          : { outputTokens: meta.candidatesTokenCount }),
-        ...(meta.totalTokenCount === undefined ? {} : { totalTokens: meta.totalTokenCount }),
-      },
-    };
+  private readUsage(response: GeminiShapedResponse): { usage?: AiUsage } {
+    return readGeminiUsage(response);
   }
 
-  /**
-   * Every SDK exception becomes one of ours.
-   *
-   * The original is kept as `cause` for the server's own diagnosis and is never
-   * serialised towards a client. The messages below are ours; the vendor's are
-   * discarded at this line and go no further.
-   */
   private toFailure(caught: unknown, callerCancelled: boolean): AiFailure {
-    if (caught instanceof AiFailure) return caught;
+    return mapGeminiError(caught, callerCancelled);
+  }
+}
 
-    const aborted =
-      caught instanceof Error && (caught.name === 'AbortError' || /abort/i.test(caught.message));
-    if (aborted) {
-      return callerCancelled
-        ? new AiFailure(AI_OUTCOMES.PROVIDER_UNAVAILABLE, 'request cancelled', {
-            retryable: false,
-            cause: caught,
-          })
-        : new AiFailure(AI_OUTCOMES.TIMEOUT, 'request exceeded its deadline', {
-            retryable: false,
-            cause: caught,
-          });
-    }
+/* ------------------------------------------------------- mapping, exposed */
 
-    if (caught instanceof ApiError) {
-      const status = caught.status;
-      if (status === 429) {
-        return new AiFailure(AI_OUTCOMES.RATE_LIMITED, 'provider rate limit', {
-          retryable: true,
+/*
+ * The three translation steps are module functions rather than private
+ * methods, and that is a testing decision with a safety purpose.
+ *
+ * Blocked content, a truncated answer, a rejected credential, a 429 and a
+ * 500 are the paths a person will actually meet, and they are exactly the
+ * paths hardest to reach through a live client. Kept private they would be
+ * tested by hoping; exposed they are tested by calling, with no network, no
+ * key and no quota spent.
+ */
+
+/** Only the parts of a response this adapter reads. */
+export interface GeminiShapedResponse {
+  text?: string | undefined;
+  promptFeedback?: { blockReason?: string | undefined } | undefined;
+  candidates?: { finishReason?: string | undefined }[] | undefined;
+  usageMetadata?:
+    | { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number }
+    | undefined;
+}
+
+/**
+ * Turn a response into parsed JSON, or into a typed refusal.
+ *
+ * The order matters. A blocked prompt and a truncated answer both arrive as a
+ * response with no usable text, and reporting either as "malformed JSON" would
+ * tell the writer their reflection broke the parser when in fact it was
+ * declined, or simply ran long.
+ */
+export function readGeminiPayload(response: GeminiShapedResponse): unknown {
+  const blockReason = response.promptFeedback?.blockReason;
+  if (blockReason) {
+    throw new AiFailure(AI_OUTCOMES.CONTENT_NOT_SUPPORTED, `prompt blocked (${blockReason})`, {
+      retryable: false,
+    });
+  }
+
+  const finishReason = response.candidates?.[0]?.finishReason;
+  if (
+    finishReason === FinishReason.SAFETY ||
+    finishReason === FinishReason.PROHIBITED_CONTENT ||
+    finishReason === FinishReason.BLOCKLIST ||
+    finishReason === FinishReason.SPII ||
+    finishReason === FinishReason.RECITATION
+  ) {
+    throw new AiFailure(AI_OUTCOMES.CONTENT_NOT_SUPPORTED, `candidate blocked (${finishReason})`, {
+      retryable: false,
+    });
+  }
+
+  if (finishReason === FinishReason.MAX_TOKENS) {
+    /*
+     * Truncated JSON. Not retried: a second call with the same bounds gives the
+     * same truncation, and retrying a validation-class failure is exactly what
+     * the rules forbid.
+     */
+    throw new AiFailure(
+      AI_OUTCOMES.INVALID_PROVIDER_RESPONSE,
+      'response hit the output ceiling and was truncated',
+      { retryable: false },
+    );
+  }
+
+  const text = response.text;
+  if (typeof text !== 'string' || text.trim() === '') {
+    throw new AiFailure(AI_OUTCOMES.INVALID_PROVIDER_RESPONSE, 'response carried no text', {
+      retryable: false,
+    });
+  }
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    /*
+     * The text itself is never included. It is model output about the writer's
+     * reflection, and a log line is not the place for that.
+     */
+    throw new AiFailure(AI_OUTCOMES.INVALID_PROVIDER_RESPONSE, 'response was not valid JSON', {
+      retryable: false,
+    });
+  }
+}
+
+export function readGeminiUsage(response: GeminiShapedResponse): { usage?: AiUsage } {
+  const meta = response.usageMetadata;
+  if (!meta) return {};
+  return {
+    usage: {
+      ...(meta.promptTokenCount === undefined ? {} : { inputTokens: meta.promptTokenCount }),
+      ...(meta.candidatesTokenCount === undefined
+        ? {}
+        : { outputTokens: meta.candidatesTokenCount }),
+      ...(meta.totalTokenCount === undefined ? {} : { totalTokens: meta.totalTokenCount }),
+    },
+  };
+}
+
+/**
+ * Every SDK exception becomes one of ours.
+ *
+ * The original is kept as `cause` for the server's own diagnosis and is never
+ * serialised towards a client. The messages below are ours; the vendor's are
+ * discarded at this line and go no further.
+ */
+export function mapGeminiError(caught: unknown, callerCancelled: boolean): AiFailure {
+  if (caught instanceof AiFailure) return caught;
+
+  const aborted =
+    caught instanceof Error && (caught.name === 'AbortError' || /abort/i.test(caught.message));
+  if (aborted) {
+    return callerCancelled
+      ? new AiFailure(AI_OUTCOMES.PROVIDER_UNAVAILABLE, 'request cancelled', {
+          retryable: false,
           cause: caught,
-        });
-      }
-      if (status === 401 || status === 403) {
-        /*
-         * A rejected credential is a configuration fault, not a transient one.
-         * Retrying it would burn a second call to be told the same thing, and
-         * the operator needs to see `ai_not_configured` in the log rather than
-         * an outage they will go looking for in the wrong place.
-         */
-        return new AiFailure(AI_OUTCOMES.AI_NOT_CONFIGURED, 'provider rejected the credential', {
+        })
+      : new AiFailure(AI_OUTCOMES.TIMEOUT, 'request exceeded its deadline', {
           retryable: false,
           cause: caught,
         });
-      }
-      if (status === 400 || status === 404) {
-        return new AiFailure(
-          AI_OUTCOMES.PROVIDER_UNAVAILABLE,
-          'provider rejected the request or the configured model',
-          { retryable: false, cause: caught },
-        );
-      }
-      return new AiFailure(AI_OUTCOMES.PROVIDER_UNAVAILABLE, `provider error (status ${status})`, {
-        retryable: status >= 500,
+  }
+
+  if (caught instanceof ApiError) {
+    const status = caught.status;
+    if (status === 429) {
+      return new AiFailure(AI_OUTCOMES.RATE_LIMITED, 'provider rate limit', {
+        retryable: true,
         cause: caught,
       });
     }
-
-    return new AiFailure(AI_OUTCOMES.PROVIDER_UNAVAILABLE, 'provider call failed', {
-      retryable: true,
+    if (status === 401 || status === 403) {
+      /*
+       * A rejected credential is a configuration fault, not a transient one.
+       * Retrying it would burn a second call to be told the same thing, and the
+       * operator needs to see `ai_not_configured` in the log rather than an
+       * outage they will go looking for in the wrong place.
+       */
+      return new AiFailure(AI_OUTCOMES.AI_NOT_CONFIGURED, 'provider rejected the credential', {
+        retryable: false,
+        cause: caught,
+      });
+    }
+    if (status === 400 || status === 404) {
+      return new AiFailure(
+        AI_OUTCOMES.PROVIDER_UNAVAILABLE,
+        'provider rejected the request or the configured model',
+        { retryable: false, cause: caught },
+      );
+    }
+    return new AiFailure(AI_OUTCOMES.PROVIDER_UNAVAILABLE, `provider error (status ${status})`, {
+      retryable: status >= 500,
       cause: caught,
     });
   }
+
+  return new AiFailure(AI_OUTCOMES.PROVIDER_UNAVAILABLE, 'provider call failed', {
+    retryable: true,
+    cause: caught,
+  });
 }
 
 /** Exposed so the developer docs and the smoke test agree on one version. */

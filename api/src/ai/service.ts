@@ -97,6 +97,18 @@ export class AiService {
    * one this comment refuses — it is a configuration value, it belongs in the
    * server's log, and a client that knows it gains nothing it can act on.
    */
+  /**
+   * The input ceiling, from the same configuration the call will use.
+   *
+   * Routes ask the service rather than re-reading the environment. Reading it
+   * twice is how a route ends up enforcing a different limit from the one the
+   * service was built with — which is exactly what happened here, and meant a
+   * request over the ceiling sailed through to the provider.
+   */
+  limits(): { maxInputChars: number } {
+    return { maxInputChars: this.readConfig().maxInputChars };
+  }
+
   modelStatus(): { available: boolean; provider: string; reason?: string } {
     const config = this.readConfig();
     const available = config.enabled && config.configured;

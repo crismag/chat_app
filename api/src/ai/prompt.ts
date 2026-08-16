@@ -140,7 +140,7 @@ export function guidanceResponseSchema(sections: readonly string[]): Record<stri
     properties: {
       sections: {
         type: 'object',
-        /* Heart. Not Highlight — the schema is one of the places it is spelled. */
+        /* Heart, and never Highlight — a schema is one of the places it is spelled. */
         properties: Object.fromEntries(
           sections.map((section) => [section, questionsProperty(section)]),
         ),
