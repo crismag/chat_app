@@ -1,0 +1,40 @@
+.page {
+  width: min(880px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 2rem 0 4rem;
+}
+
+.header {
+  margin-bottom: 2rem;
+}
+
+.header > a {
+  display: inline-block;
+  margin-bottom: 1.5rem;
+}
+
+.list {
+  display: grid;
+  gap: 1rem;
+}
+
+.notice {
+  padding: 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--surface, #fff);
+}
+
+.notice h2 {
+  margin-top: 0;
+}
+
+.notice pre {
+  margin: 1rem 0 0;
+  padding: 1rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  border-radius: 0.75rem;
+  background: #f6f4f0;
+  font: 0.78rem/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
