@@ -38,6 +38,8 @@ import { createPassageStore } from './bible/passage-store.ts';
 import { BibleService } from './bible/service.ts';
 import { createProfileRoutes } from './profile/routes.ts';
 import { createProfileStore } from './profile/store.ts';
+import { createStudioCreationStore } from './create/store.ts';
+import { readStudioCreation } from './create/validation.ts';
 import { SqliteStore } from './db.ts';
 import { MemoryStore, type StoredConversation } from './store.ts';
 
@@ -117,6 +119,7 @@ export function createApp(
   const aiService = new AiService(ai);
   const bibleService = new BibleService();
   const biblePassages = createPassageStore(store);
+  const studioCreations = createStudioCreationStore(store);
 
   /**
    * The draft as its format's validator expects to see it.
@@ -998,6 +1001,39 @@ export function createApp(
       .filter((conversation) => conversation.publicationState === PUBLICATION_STATES.PUBLISHED)
       .map(summaryOf);
     return c.json(items);
+  });
+
+  /*
+   * Create Studio remains a controlled component. These endpoints persist its
+   * canonical document and release metadata; they never render, interpret a
+   * reflection, or expose another user's creation.
+   */
+  app.get('/api/studio-creations/:conversationId', (c) => {
+    const { error, conversation } = ownedConversation(c, c.req.param('conversationId'));
+    if (error === 401) return c.json({ error: 'Unauthenticated.' }, 401);
+    if (!conversation) return c.json({ error: 'Conversation not found.' }, 404);
+    return c.json({ creation: studioCreations.get(conversation.id) });
+  });
+
+  app.put('/api/studio-creations/:conversationId', async (c) => {
+    const { error, conversation } = ownedConversation(c, c.req.param('conversationId'));
+    if (error === 401) return c.json({ error: 'Unauthenticated.' }, 401);
+    if (!conversation) return c.json({ error: 'Conversation not found.' }, 404);
+    const previous = studioCreations.get(conversation.id);
+    const creation = readStudioCreation(
+      await c.req.json().catch(() => null),
+      conversation.id,
+      previous,
+      nowIso(),
+    );
+    if (!creation) {
+      return c.json(
+        { error: 'The Studio document or its persistence metadata is invalid.' },
+        400,
+      );
+    }
+    studioCreations.set(creation);
+    return c.json({ creation });
   });
 
   app.post('/api/creations', async (c) => {

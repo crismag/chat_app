@@ -21,8 +21,7 @@ chat_app/
 ├── web_app/                  # React + TypeScript UI and product experience
 ├── api/                      # Backend API/domain services
 ├── packages/
-│   ├── shared/               # Shared types, schemas, constants
-│   └── create-engine/        # Reusable layout/style/rendering logic when extracted
+│   └── shared/               # Shared types, schemas, constants
 ├── android/                  # Capacitor-generated Android shell
 ├── ios/                      # Capacitor-generated iOS shell
 ├── scripts/verify/           # Browser-driven checks against a running dev server
@@ -330,7 +329,11 @@ read only inside the adapter.
 
 ## Create engine architecture
 
-The Create engine should be deterministic for text.
+Create Studio is a separate private package and is deterministic for text. The
+C.H.A.T. host adapter owns reflection semantics; the package owns neutral
+document editing, Fabric-backed preview, and export. Host persistence stores
+versioned Studio documents rather than raw Fabric JSON. See
+[`CREATE_STUDIO_INTEGRATION.md`](CREATE_STUDIO_INTEGRATION.md).
 
 Conceptual pipeline:
 
@@ -349,9 +352,9 @@ Optional background source
   ├── uploaded image
   └── AI-generated topical image
     ↓
-React/HTML/CSS composition
+Create Studio canonical document
     ↓
-Preview
+Fabric-backed preview
     ↓
 PNG/JPEG export
     ↓

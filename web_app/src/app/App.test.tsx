@@ -148,6 +148,13 @@ test('community only describes explicitly published C.H.A.T.s', async () => {
 test('create engine keeps text in the app', async () => {
   vi.stubGlobal('fetch', mockAuthenticatedFetch())
   renderAt('/create')
-  expect(await screen.findByRole('heading', { name: 'Create' })).toBeInTheDocument()
-  expect(screen.getByText(/Text is never sent to an image model/i)).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: 'Create an image' })).toBeInTheDocument()
+  expect(screen.getByText(/never sent to an image model/i)).toBeInTheDocument()
+})
+
+test('open-source licences remain directly reachable without signing in', async () => {
+  vi.stubGlobal('fetch', mockUnauthenticatedFetch())
+  renderAt('/open-source-licenses')
+  expect(await screen.findByRole('heading', { name: 'Open Source Licences' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Fabric.js' })).toBeInTheDocument()
 })

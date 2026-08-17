@@ -144,6 +144,18 @@ export function ProfileMenu({
             className={styles.item}
             onClick={() => {
               close(false)
+              void navigate('/open-source-licenses')
+            }}
+          >
+            <span className={styles.itemIcon} aria-hidden="true">§</span>
+            Open Source Licences
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={styles.item}
+            onClick={() => {
+              close(false)
               onSignOut()
             }}
           >

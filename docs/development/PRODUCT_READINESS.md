@@ -254,35 +254,19 @@ feature is done; the page is not.
 
 ## Create
 
-**Verdict: not shippable, and it is reachable from the profile menu and from a
-button on the reflection card. This is the page that would cause the most
-embarrassment, because a stranger can find it without being shown it.**
+**Verdict: the Phase 3 square-card path is functional; this is a working editor
+foundation, not the finished Create product.**
 
-- **Blocker — it looks like a form someone left half-built.** Three unstyled
-  native `<select>`s and two default browser buttons on an otherwise
-  carefully designed application. Nothing else in the product looks remotely
-  like this. Screenshot: `out/tour-create-1280.png`.
-- **Blocker — the options are raw enum values.** `quote-focus`,
-  `verse-reflection`, `chat-stacked`, `chat-two-column`, `cream-botanical`,
-  `modern-minimal`, `dark-worship`, `journal-paper`
-  (`web_app/src/create/CreatePage.tsx` L189, L196). These are identifiers from
-  `packages/shared/src/index.ts`, printed at the user. There is no preview of
-  any style, so the names are also the only information available.
-- **Blocker — "Create visual" hands off to the wrong reflection.**
-  `ChatPage.tsx` L1583 navigates to `/create?c={id}`; `CreatePage.tsx` L114
-  ignores the query parameter entirely and preselects `items[0]`. Press it on
-  any reflection but the most recent and you silently get a different one.
-- **Blocker — the three selects have no accessible name at all.**
-  `CreatePage.tsx` L182, L189, L196 — no `<label>`, no `aria-label`. Confirmed
-  by walking the page: one nameless control at 1280 with no reflections, three
-  once populated.
-- **Important — the layout and style names promise a system that does not
-  exist.** `ARCHITECTURE.md` describes layout × style as independent
-  dimensions with a deterministic renderer. What is implemented is a canvas
-  draw of the title and a "Text rendered by application" line. Choosing
-  `dark-worship` and choosing `cream-botanical` do not produce visibly
-  different work.
-- **Important — the error state is a bare `<p>`** (L210), with no role.
+- `Create visual` honors its `?c=` reflection ID and loads that exact record.
+- The host adapter carries the exact saved passage, reference, translation and
+  selected field provenance into neutral semantic slots.
+- The Fabric-backed editor can change layers, save the canonical document,
+  reopen it after reload, and export a deterministic 1080 × 1080 PNG.
+- Studio persistence is owner-scoped and separate from Community publication.
+- `/open-source-licenses` is independently reachable and bundles Create Studio
+  and application notices for offline use.
+- **Remaining:** visual-template breadth, overflow handling, multi-page work,
+  uploaded/generated assets, mobile packaging and full device-level UX review.
 
 ---
 

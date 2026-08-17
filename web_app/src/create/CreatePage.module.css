@@ -1,51 +1,82 @@
 .page {
   display: grid;
-  gap: 1rem;
+  gap: 1.25rem;
+  min-width: 0;
 }
 
-.controls {
+.header {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1.5rem;
 }
 
-.controls select,
-.controls button {
-  border: 1px solid var(--line);
-  border-radius: 0.6rem;
-  padding: 0.5rem 0.7rem;
-  background: #fff;
+.header h1,
+.header p {
+  margin-bottom: 0.35rem;
 }
 
-.card {
-  border-radius: 1.2rem;
-  padding: 1.6rem;
-  min-height: 18rem;
+.reflectionPicker,
+.sourceControls label {
   display: grid;
-  gap: 0.7rem;
-  background: #f3ead8;
-}
-
-.card[data-style='modern-minimal'] {
-  background: #fff;
-}
-
-.card[data-style='dark-worship'] {
-  background: #1b1a17;
-  color: #f6efe4;
-}
-
-.card[data-layout='chat-two-column'] {
-  grid-template-columns: 1fr 1fr;
-}
-
-.kicker {
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-size: 0.8rem;
-}
-
-.note {
-  color: var(--muted);
+  gap: 0.35rem;
   font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.reflectionPicker select,
+.sourceControls select {
+  min-width: 15rem;
+  border: 1px solid var(--line);
+  border-radius: 0.65rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--surface, #fff);
+  color: inherit;
+}
+
+.sourceControls {
+  display: flex;
+  align-items: end;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: var(--surface, #fff);
+}
+
+.status,
+.error {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.75rem;
+}
+
+.status {
+  background: #eef7ef;
+  color: #28552d;
+}
+
+.error {
+  background: #fff0ef;
+  color: #812f29;
+}
+
+.studio {
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 1rem;
+}
+
+@media (max-width: 760px) {
+  .header,
+  .sourceControls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .reflectionPicker select,
+  .sourceControls select {
+    min-width: 0;
+    width: 100%;
+  }
 }

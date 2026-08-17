@@ -128,12 +128,11 @@ A user with enough saved content to make browsing inconvenient can reliably reco
 
 ## Phase 5 — Create engine V1
 
-Status: **not started.** `web_app/src/create/CreatePage.tsx` exists and
-exports a PNG, but it is a developer stub: three unlabelled `<select>`s whose
-options are raw enum values, no styling, no live preview worth the name, and no
-layout or style system behind the names. Nothing in the deliverables below is
-built. It is reachable at `/create` and from the profile menu, which is more
-exposure than it has earned.
+Status: **in progress.** The separate Create Studio package now supplies a
+Fabric-backed live editor, deterministic square PNG export, and host-controlled
+save/reopen. The selected reflection and exact saved passage are mapped through
+semantic slots. This proves the first verse-plus-reflection format; the broader
+layout/style, overflow, portrait and multi-page deliverables below remain.
 
 Deliverables:
 
