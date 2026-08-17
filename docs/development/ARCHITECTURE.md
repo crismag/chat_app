@@ -386,9 +386,18 @@ Readability is more important than forcing everything onto one image.
 
 ## Storage
 
-Generated images should not automatically become permanent server assets unless required.
+Generated Studio images are registered as permanent host assets when a user
+applies them to a saved composition. The canonical document stores a stable
+`studio-asset.*` identifier; authenticated C.H.A.T. storage owns the encoded
+bytes and provenance. Provider URLs and temporary signed URLs never become
+document state.
 
-Early options:
+The provider remains replaceable behind a server-only interface. The browser
+and Create Studio never receive provider credentials, vendor SDK types, billing
+logic, or raw provider URLs. The current deterministic fixture is a development
+proof, not an AI provider.
+
+Future storage-policy options still include:
 
 - browser-side generation and immediate export;
 - temporary object storage for AI-generated backgrounds;

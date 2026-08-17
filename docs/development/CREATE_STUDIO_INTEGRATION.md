@@ -7,10 +7,12 @@ Phase 3 replaces the primitive Create canvas with the private
 domain decision, saved document, asset identifier, and exported-file action.
 Create Studio receives only its neutral `StudioDocument` contract.
 
-The initial production proof is deliberately bounded: one 1080 × 1080 page,
-the exact saved passage and translation, one selected reflection field, editing,
-save/reopen, and deterministic PNG export. Multi-page layouts, image upload,
-generated backgrounds, crop and image adjustments remain later work.
+The current integration adds the Phase 5 generated-asset boundary. The browser
+may request an ordinary background through Create Studio's neutral callback,
+but the C.H.A.T. backend selects the provider, owns credentials and billing,
+registers the result under a stable asset ID, and permanently stores the bytes
+and safe provenance. Scripture and user text remain deterministic foreground
+elements and are not sent by this adapter.
 
 ## Source mapping
 
@@ -40,6 +42,29 @@ Save is explicit. Export uses Create Studio's deterministic renderer, downloads
 a PNG in the browser, then saves the document and the export timestamp,
 dimensions and media type. Export does not publish to Community.
 
+Generated assets are served from authenticated
+`/api/studio-assets/:assetId` routes and remain owner-scoped. Studio documents
+store only stable `studio-asset.*` references and provenance, never provider
+URLs, signed URLs, credentials, or encoded image bytes. The host asset resolver
+turns those IDs into session-local object URLs for preview and export and
+revokes them when the route unmounts.
+
+## Image provider boundary
+
+`api/src/create/image-provider.ts` defines the server-only provider seam. A
+production adapter receives purpose, exact dimensions, prompt, optional
+negative prompt, safe area, and an optional variation seed. It must return
+encoded image bytes with matching dimensions and non-sensitive provenance.
+Provider errors are replaced with application-owned copy at the HTTP boundary.
+
+Generated backgrounds are disabled by default. Setting
+`STUDIO_IMAGE_PROVIDER=deterministic` enables the original local gradient
+fixture for development and automated tests. It performs no network request,
+uses no model or credential, and must not be represented as AI output. Adding a
+real provider requires an owner decision, server-side credentials, terms and
+licence review, cost/rate-limit policy, output moderation, and tests through the
+same interface; none of that belongs in Create Studio.
+
 ## Package consumption
 
 Create Studio is private, `UNLICENSED`, and unpublished. A sibling filesystem
@@ -68,8 +93,15 @@ same web build and retain the route.
 3. Choose **Create visual** or open `/create?c=<reflection-id>`.
 4. Confirm the reference, passage wording and translation match the reflection.
 5. Edit a text layer, select **Save**, reload, and confirm the edit reopens.
-6. Select **Export** and inspect the downloaded 1080 × 1080 PNG.
-7. Open `/open-source-licenses` directly, then repeat with the browser offline.
+6. To exercise the provider boundary locally, set
+   `STUDIO_IMAGE_PROVIDER=deterministic`, restart the API, enter a neutral
+   background prompt, and select **Generate background**.
+7. Confirm the background changes while passage and reflection text do not,
+   then try **Generate variation**, save, and reload.
+8. Select **Export** and inspect the downloaded 1080 × 1080 PNG.
+9. Open `/open-source-licenses` directly, then repeat with the browser offline.
 
 Automated checks live in the Create host adapter/component tests and the API
-Studio persistence tests.
+Studio persistence/generated-asset route tests. The package's own component,
+Playwright, and visual tests cover cancellation, regeneration, variations, and
+preservation of deterministic foreground content.

@@ -40,6 +40,9 @@ import { createProfileRoutes } from './profile/routes.ts';
 import { createProfileStore } from './profile/store.ts';
 import { createStudioCreationStore } from './create/store.ts';
 import { readStudioCreation } from './create/validation.ts';
+import { createStudioImageRoutes } from './create/image-routes.ts';
+import { createStudioImageAssetStore } from './create/image-store.ts';
+import type { StudioImageProvider } from './create/image-provider.ts';
 import { SqliteStore } from './db.ts';
 import { MemoryStore, type StoredConversation } from './store.ts';
 
@@ -114,12 +117,14 @@ const sessionCookie = {
 export function createApp(
   store: MemoryStore | SqliteStore = new SqliteStore(),
   ai: AiServiceOptions = {},
+  studioImages: { provider?: StudioImageProvider } = {},
 ) {
   const app = new Hono();
   const aiService = new AiService(ai);
   const bibleService = new BibleService();
   const biblePassages = createPassageStore(store);
   const studioCreations = createStudioCreationStore(store);
+  const studioImageAssets = createStudioImageAssetStore(store);
 
   /**
    * The draft as its format's validator expects to see it.
@@ -471,6 +476,14 @@ export function createApp(
     }
     return { error: null, user, conversation };
   };
+
+  app.route('/api/studio-assets', createStudioImageRoutes({
+    ...(studioImages.provider ? { provider: studioImages.provider } : {}),
+    assets: studioImageAssets,
+    currentUser: (c) => currentUser(c),
+    ownsConversation: (userId, conversationId) => store.conversations.get(conversationId)?.userId === userId,
+    now: nowIso,
+  }));
 
   app.get('/api/conversations/:id', (c) => {
     const { error, conversation } = ownedConversation(c, c.req.param('id'));

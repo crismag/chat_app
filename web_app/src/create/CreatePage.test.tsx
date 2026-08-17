@@ -8,9 +8,10 @@ vi.mock('@crismag/create-studio', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@crismag/create-studio')>()
   return {
     ...actual,
-    CreateStudio: ({ document, onSave }: CreateStudioProps) => (
+    CreateStudio: ({ document, onSave, onRequestGeneratedAsset }: CreateStudioProps) => (
       <div>
         <p>Studio document {document.id}</p>
+        <p>{onRequestGeneratedAsset ? 'Generated backgrounds enabled' : 'Generated backgrounds unavailable'}</p>
         <button type="button" onClick={() => void onSave?.(document)}>Save</button>
       </div>
     ),
@@ -33,6 +34,7 @@ test('the selected reflection opens with its exact saved passage and can be pers
       { id: 'first', title: 'First', scriptureReference: null, publicationState: 'private', updatedAt: '2026-08-16T10:00:00.000Z' },
       { id: 'selected', title: 'Selected reflection', scriptureReference: 'John 15:5', publicationState: 'private', updatedAt: '2026-08-16T11:00:00.000Z' },
     ])
+    if (url.endsWith('/studio-assets/status')) return json({ enabled: true })
     if (url.endsWith('/conversations/selected')) return json({
       id: 'selected',
       format: 'full',
@@ -72,6 +74,7 @@ test('the selected reflection opens with its exact saved passage and can be pers
   render(<MemoryRouter initialEntries={['/create?c=selected']}><CreatePage /></MemoryRouter>)
 
   expect(await screen.findByText('Studio document chat.studio.selected')).toBeInTheDocument()
+  expect(await screen.findByText('Generated backgrounds enabled')).toBeInTheDocument()
   expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/conversations/selected'), expect.anything())
   fireEvent.click(screen.getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(savedBody).not.toBeNull())

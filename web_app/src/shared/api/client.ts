@@ -1,5 +1,10 @@
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? '/api'
 
+/** Resolve one API path for non-JSON asset fetches using the same host setting. */
+export function apiUrl(path: string): string {
+  return `${apiBase}${path}`
+}
+
 /**
  * A failed request, carrying what the server actually said.
  *
