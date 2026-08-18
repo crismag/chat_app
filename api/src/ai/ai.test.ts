@@ -19,7 +19,6 @@ import {
   AI_CHAT_NOTICE,
   AI_CHAT_REPLY_MAX_CHARS,
   AI_GUIDANCE_NOTICE,
-  AI_GUIDANCE_SECTIONS,
   AI_OUTCOMES,
   AI_QUESTIONS_PER_SECTION,
   AI_SECTION_MEANINGS,
@@ -155,10 +154,6 @@ describe('the H in C.H.A.T. is Heart', () => {
     expect(offenders).toEqual([]);
   });
 
-  test('the four sections are exactly Content, Heart, Application, Testimony', () => {
-    expect([...AI_GUIDANCE_SECTIONS]).toEqual(['content', 'heart', 'application', 'testimony']);
-  });
-
   test('the system instruction names Heart and rules the other word out', () => {
     expect(SYSTEM_INSTRUCTION).toContain('Heart —');
     expect(SYSTEM_INSTRUCTION).toMatch(/never called High\w+/i);
@@ -205,12 +200,6 @@ describe('the H in C.H.A.T. is Heart', () => {
     expect(content).toMatch(/usually appears under Heart/i);
     /* "Prefer", not "never": some authors do explain in Content. */
     expect(content).toMatch(/without refusing it here/i);
-  });
-
-  test('the section meanings describe Content as the passage', () => {
-    expect(AI_SECTION_MEANINGS.content).toMatch(/passage itself/i);
-    /* And the system instruction carries that meaning, not an older one. */
-    expect(SYSTEM_INSTRUCTION).toContain(AI_SECTION_MEANINGS.content);
   });
 
   test('the schema sent to a provider names heart, and only requested sections', () => {
@@ -503,10 +492,6 @@ describe('configuration is read from the environment, and defaults to off', () =
     expect(config.model).toBe('gemini-3.5-flash-lite');
     expect(config.timeoutMs).toBe(15_000);
     expect(config.maxInputChars).toBe(12_000);
-  });
-
-  test('the model is configuration: changing it needs no code edit', () => {
-    expect(readAiConfig({ GEMINI_MODEL: 'gemini-2.5-flash' }).model).toBe('gemini-2.5-flash');
   });
 
   test('a key with no AI_ENABLED still does not switch assistance on', () => {

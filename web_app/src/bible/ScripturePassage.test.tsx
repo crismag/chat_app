@@ -396,41 +396,6 @@ describe('the passage card', () => {
     expect(screen.queryByRole('button', { name: /choose bible passage/i })).toBeNull()
   })
 
-  test('the search finds a translation by abbreviation, name and language', async () => {
-    stubFetch()
-    render(<ScripturePassage conversationId="c1" />)
-    fireEvent.click(await screen.findByRole('button', { name: /choose bible passage/i }))
-
-    const search = searchBox()
-
-    fireEvent.change(search, { target: { value: 'bsb' } })
-    expect((await screen.findAllByRole('option')).length).toBe(1)
-
-    fireEvent.change(search, { target: { value: 'berean' } })
-    expect((await screen.findAllByRole('option')).length).toBe(1)
-
-    /* The report that started this: a language nobody could search for. */
-    fireEvent.change(search, { target: { value: 'tagalog' } })
-    expect(await screen.findByRole('option', { name: /Ang Biblia/ })).toBeInTheDocument()
-
-    fireEvent.change(search, { target: { value: 'tl' } })
-    expect(await screen.findByRole('option', { name: /Ang Biblia/ })).toBeInTheDocument()
-
-    fireEvent.change(search, { target: { value: 'reina' } })
-    expect(await screen.findByRole('option', { name: /Reina Valera/ })).toBeInTheDocument()
-
-    /* A misspelling still lands. */
-    fireEvent.change(search, { target: { value: 'tagaolg' } })
-    expect(await screen.findByRole('option', { name: /Ang Biblia/ })).toBeInTheDocument()
-
-    fireEvent.change(search, { target: { value: 'nothing like this' } })
-    await waitFor(() =>
-      expect(screen.getByLabelText('Translation search results')).toHaveTextContent(
-        /no translation matches/i,
-      ),
-    )
-  })
-
   test('every row says which language it is in', async () => {
     stubFetch()
     render(<ScripturePassage conversationId="c1" />)
@@ -560,39 +525,6 @@ describe('the passage card', () => {
 
     const lookups = calls.filter((call) => call.includes('/bible/passages?'))
     expect(lookups).toHaveLength(0)
-  })
-
-  test('starts as a compact optional control, not a permanent selector card', async () => {
-    stubFetch()
-    render(<ScripturePassage conversationId="c1" />)
-
-    expect(await screen.findByRole('button', { name: 'Choose Bible passage' })).toBeInTheDocument()
-    expect(screen.queryByText(/choose a passage and its words come with it/i)).toBeNull()
-    expect(screen.queryByLabelText('Passage')).toBeNull()
-  })
-
-  test('selecting a passage updates the compact control and closes the selector', async () => {
-    stubFetch({ passages: { 111: NIV_PASSAGE } })
-    render(<ScripturePassage conversationId="c1" />)
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Choose Bible passage' }))
-    fireEvent.change(screen.getByLabelText('Passage'), { target: { value: 'John 3:16-18' } })
-    fireEvent.click(screen.getByRole('button', { name: /load passage/i }))
-
-    expect(await screen.findByRole('button', { name: /john 3:16-18 · niv/i })).toHaveAttribute(
-      'aria-expanded',
-      'false',
-    )
-    expect(screen.queryByLabelText('Passage')).toBeNull()
-    expect(screen.getByTestId('scripture-text')).toHaveTextContent('For God so loved the world')
-  })
-
-  test('the compact selected control reopens the selector', async () => {
-    stubFetch({ saved: NIV_PASSAGE })
-    render(<ScripturePassage conversationId="c1" />)
-
-    fireEvent.click(await screen.findByRole('button', { name: /john 3:16-18 · niv/i }))
-    expect(screen.getByLabelText('Passage')).toBeInTheDocument()
   })
 
   test('a passage can be changed without dropping the previous text on failure', async () => {

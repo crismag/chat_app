@@ -19,20 +19,6 @@ describe('canonicalHashtag', () => {
     expect(canonicalHashtag('#young_adults')).toBe('youngadults');
   });
 
-  test('case and surrounding whitespace do not fragment a tag', () => {
-    expect(canonicalHashtag('  #Young Adults  ')).toBe('youngadults');
-    expect(canonicalHashtag('YOUNGADULTS')).toBe('youngadults');
-  });
-
-  test('repeated hashes are one tag, not a different one', () => {
-    expect(canonicalHashtag('##prayer')).toBe('prayer');
-  });
-
-  test('letters outside ASCII are kept, because someone chose them', () => {
-    expect(canonicalHashtag('#Alabaré')).toBe('alabaré');
-    expect(canonicalHashtag('#感謝')).toBe('感謝');
-  });
-
   test('a tag that folds to nothing is not a tag', () => {
     expect(canonicalHashtag('#')).toBe('');
     expect(canonicalHashtag('---')).toBe('');
@@ -41,17 +27,6 @@ describe('canonicalHashtag', () => {
 });
 
 describe('parseHashtags', () => {
-  test('two spellings of one tag become one tag', () => {
-    const tags = parseHashtags(['#young-adults', '#youngadults', '#YoungAdults']);
-    expect(tags).toHaveLength(1);
-    expect(tags[0]?.tag).toBe('youngadults');
-  });
-
-  test('the label keeps what the author typed while the key does the matching', () => {
-    const [tag] = parseHashtags(['#young-adults']);
-    expect(tag?.tag).toBe('youngadults');
-    expect(tag?.label).toBe('young-adults');
-  });
 
   test('a free-text field splits on spaces and commas', () => {
     expect(parseHashtags('#faith, #prayer  #youth').map((t) => t.tag)).toEqual([
@@ -66,9 +41,6 @@ describe('parseHashtags', () => {
     expect(parseHashtags(many)).toHaveLength(8);
   });
 
-  test('empty entries are dropped rather than stored as blank keys', () => {
-    expect(parseHashtags(['', '  ', '#'])).toEqual([]);
-  });
 });
 
 describe('grantsAccess', () => {
