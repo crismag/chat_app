@@ -143,6 +143,15 @@ export type CreateReflectionInput = {
   status?: string;
 };
 
+export type UpdateReflectionInput = {
+  title?: string | null;
+  bibleReference?: string | null;
+  bibleTranslation?: string | null;
+  bibleText?: string | null;
+  chatType: ChatType;
+  chatContent: unknown;
+};
+
 export type CreateAiUsageInput = {
   userId?: number | null;
   sessionUuid?: string | null;
@@ -490,6 +499,42 @@ export class MysqlPersistence {
     const [rows] = await this.pool.execute<RowDataPacket[]>(sql, params);
     const row = rows[0];
     return row ? mapReflection(row) : null;
+  }
+
+  /**
+   * Rewrite a reflection in place, scoped to its owner.
+   *
+   * `chat_content` is replaced whole. MariaDB stores it as LONGTEXT, so there
+   * is no JSON path to update in part — and a whole-document write is what
+   * keeps a save atomic rather than a read-modify-write race between two tabs.
+   *
+   * Ownership is in the WHERE clause, not checked beforehand, so a reflection
+   * cannot be rewritten by anyone else even if a caller forgets to ask.
+   */
+  async updateReflection(
+    id: number,
+    ownerUserId: number,
+    input: UpdateReflectionInput,
+  ): Promise<ReflectionRecord | null> {
+    const chatContent = validateChatContent(input.chatType, input.chatContent);
+    const [result] = await this.pool.execute<ResultSetHeader>(
+      `UPDATE reflections
+          SET title = ?, bible_reference = ?, bible_translation = ?, bible_text = ?,
+              chat_type = ?, chat_content = ?
+        WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
+      [
+        input.title ?? null,
+        input.bibleReference ?? null,
+        input.bibleTranslation ?? null,
+        input.bibleText ?? null,
+        input.chatType,
+        JSON.stringify(chatContent),
+        id,
+        ownerUserId,
+      ],
+    );
+    if (result.affectedRows === 0) return null;
+    return this.getReflectionById(id);
   }
 
   async softDeleteReflection(id: number, ownerUserId: number): Promise<boolean> {
