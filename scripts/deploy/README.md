@@ -74,21 +74,14 @@ else comes from `.env`:
 | `GEMINI_API_KEY`, `AI_ENABLED` | assistance, off unless switched on |
 | `YVP_APP_KEY` | Scripture lookup, on by default but inert without the key |
 
-### The host's names are not the application's
+### Aliases, if a host names things differently
 
-The `.env` on reflections.crishub.com was written for a wider stack than this
-app — it also carries `META_*`, `AWS_*` and `GOOGLE_PROJECT_*` — and it spells
-the database and Scripture credentials differently:
-
-| in `.env` | read by the app |
-| --- | --- |
-| `DB_HOST` `DB_USER` `DB_PASSWORD` `DB_NAME` | `MYSQL_HOST` `MYSQL_USER` `MYSQL_PASSWORD` `MYSQL_DATABASE` |
-| `YOUVERSION_API_KEY` | `YVP_APP_KEY` |
-
-`env-map.sh` maps them at deploy time. Nothing on disk is renamed: the file is
-the host's, something else may depend on those names, and a credentials file is
-a bad thing for a deploy script to rewrite. A name the application already
-understands always wins over its alias.
+`reflections.crishub.com` now uses the application's own names, so nothing is
+mapped there. `env-map.sh` remains for a host that does not: it fills in
+`MYSQL_*` from `DB_*` and `YVP_APP_KEY` from `YOUVERSION_API_KEY`, strips
+surrounding quotes the way `--env-file` does, and never overwrites a name the
+application already understands. Nothing on disk is renamed — a credentials
+file is a bad thing for a deploy script to rewrite.
 
 **`AI_ENABLED` is deliberately not derived from the presence of a key.**
 Assistance sends someone's private reflection to a third party, so it stays off
@@ -122,25 +115,26 @@ Create the application once, in hPanel:
 | Application URL | `reflections.crishub.com/api` |
 | Application startup file | `app.mjs` |
 
-Then add the environment from `.env` — the manager runs the process itself, so
-`restart-api.sh` is **not** used on this host, and neither are the variables it
-would have exported. Set these in the manager alongside the credentials:
+Nothing needs to be typed into the manager's environment editor. `app.mjs`
+reads `private/chat_app/.env` itself, because a managed host runs the startup
+file directly and does not pass `--env-file` — without that, the app would boot
+with no credentials, skip its migrations and report assistance and Scripture as
+switched off: three symptoms of one missing file, none of which name it.
+
+Anything the manager *does* set still wins; `loadEnvFile` has the same
+precedence as `--env-file` and leaves an already-set variable alone.
+
+So `.env` is the single place configuration lives, and it needs the names the
+application reads:
 
 ```
 NODE_ENV=production
 DATABASE_PATH=/home/u471078694/domains/reflections.crishub.com/private/chat_app/data/chat.sqlite
 CHAT_WEB_ORIGINS=https://reflections.crishub.com
-
-# the mapped names, because the manager reads .env directly and does not
-# run env-map.sh
-MYSQL_HOST=<DB_HOST from .env>
-MYSQL_USER=<DB_USER>
-MYSQL_PASSWORD=<DB_PASSWORD>
-MYSQL_DATABASE=<DB_NAME>
-YVP_APP_KEY=<YOUVERSION_API_KEY>
-
-# only if assistance is wanted
-AI_ENABLED=true
+MYSQL_HOST= MYSQL_USER= MYSQL_PASSWORD= MYSQL_DATABASE=
+YVP_APP_KEY=
+GEMINI_API_KEY=
+AI_ENABLED=1        # assistance is off without this, key or no key
 ```
 
 After that, and after every deploy, restart the app from hPanel. These answer
