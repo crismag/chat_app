@@ -3,8 +3,8 @@ import {
   parseChatType,
   parseStoredChatContent,
   validateChatContent,
-  type ChatContent,
 } from './chat-content.ts';
+import type { ChatContent, SectionKey, StoredSection } from './chat-content.ts';
 import type { ChatType, IdentityProvider } from './constants.ts';
 import { IDENTITY_PROVIDERS } from './constants.ts';
 import { asBigIntId, newPublicUuid } from './ids.ts';
@@ -534,6 +534,55 @@ export class MysqlPersistence {
       ],
     );
     if (result.affectedRows === 0) return null;
+    return this.getReflectionById(id);
+  }
+
+  /**
+   * Write ONE section, leaving every other section exactly as it was.
+   *
+   * This is the operation the whole migration turns on. Sections used to be
+   * their own rows, so writing one could not touch the others; they are now
+   * fields of a single document, so a careless write replaces the document and
+   * silently destroys the three sections the author did not touch.
+   *
+   * The row is therefore locked with SELECT ... FOR UPDATE, merged in memory,
+   * and written back inside the same transaction. Without the lock, two
+   * concurrent section writes both read the same document and the second write
+   * erases the first — a lost update that looks exactly like a save that
+   * "did not take", which is the hardest kind of bug to be told about.
+   */
+  async writeReflectionSection(
+    id: number,
+    ownerUserId: number,
+    section: SectionKey,
+    value: StoredSection,
+  ): Promise<ReflectionRecord | null> {
+    const connection = await this.pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      const [rows] = await connection.execute<RowDataPacket[]>(
+        'SELECT chat_type, chat_content FROM reflections WHERE id = ? AND user_id = ? AND deleted_at IS NULL FOR UPDATE',
+        [id, ownerUserId],
+      );
+      const row = rows[0];
+      if (!row) {
+        await connection.rollback();
+        return null;
+      }
+      const chatType = parseChatType(row.chat_type);
+      const current = parseStoredChatContent(chatType, row.chat_content);
+      const merged = { ...current, [section]: value };
+      await connection.execute(
+        'UPDATE reflections SET chat_content = ? WHERE id = ?',
+        [JSON.stringify(validateChatContent(chatType, merged)), id],
+      );
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
     return this.getReflectionById(id);
   }
 

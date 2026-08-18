@@ -16,12 +16,16 @@
 import {
   AUTHOR_ORIGINS,
   CHAT_FORMATS,
-  CHAT_SECTION_TYPES,
-  CONDENSED_SECTION_TYPES,
   type AuthorOrigin,
   type ChatFormat,
 } from '@chat/shared';
-import { ChatContentError, type ChatContent, type StoredSection } from '../mysql/chat-content.ts';
+import {
+  ChatContentError,
+  SECTION_KEYS,
+  type ChatContent,
+  type SectionKey,
+  type StoredSection,
+} from '../mysql/chat-content.ts';
 import type { ChatType } from '../mysql/constants.ts';
 import type { MysqlPersistence } from '../mysql/persistence.ts';
 
@@ -70,11 +74,6 @@ const CHAT_TYPE_TO_FORMAT: Record<ChatType, ChatFormat> = {
   SHORT: CHAT_FORMATS.CONDENSED,
 };
 
-const KEYS_FOR_FORMAT: Record<ChatFormat, readonly string[]> = {
-  [CHAT_FORMATS.FULL]: Object.values(CHAT_SECTION_TYPES),
-  [CHAT_FORMATS.CONDENSED]: Object.values(CONDENSED_SECTION_TYPES),
-};
-
 /**
  * Fill in what the author has not written yet.
  *
@@ -84,18 +83,18 @@ const KEYS_FOR_FORMAT: Record<ChatFormat, readonly string[]> = {
  * words nobody has typed.
  */
 function completeSections(
-  format: ChatFormat,
   sections: Record<string, SectionInput>,
 ): Record<string, StoredSection> {
-  const keys = KEYS_FOR_FORMAT[format];
-  const unknown = Object.keys(sections).filter((key) => !keys.includes(key));
+  const unknown = Object.keys(sections).filter(
+    (key) => !(SECTION_KEYS as readonly string[]).includes(key),
+  );
   if (unknown.length > 0) {
     throw new ReflectionServiceError(
-      `${format} reflections have no section named: ${unknown.join(', ')}`,
+      `There is no section named: ${unknown.join(', ')}`,
     );
   }
   const complete: Record<string, StoredSection> = {};
-  for (const key of keys) {
+  for (const key of SECTION_KEYS) {
     const given = sections[key];
     complete[key] = {
       content: given?.content ?? '',
@@ -131,7 +130,7 @@ export class ReflectionService {
   }
 
   async save(ownerId: number, input: ReflectionInput): Promise<Reflection> {
-    const chatContent = completeSections(input.format, input.sections);
+    const chatContent = completeSections(input.sections);
     try {
       const record = await this.db.createReflection({
         userId: ownerId,
@@ -147,6 +146,39 @@ export class ReflectionService {
       if (error instanceof ChatContentError) throw new ReflectionServiceError(error.message);
       throw error;
     }
+  }
+
+  /**
+   * Write one section of an existing reflection.
+   *
+   * The application saves a field at a time — that is what typing in one of
+   * the four boxes does — so this is the write that happens most, and the one
+   * that must never touch a section the author did not edit. The merge and its
+   * lock live in the repository; this maps the caller's language onto it.
+   *
+   * Both formats' sections are addressable regardless of which format is
+   * active, because a condensed draft is kept beside the full one rather than
+   * on top of it.
+   */
+  async writeSection(
+    publicUuid: string,
+    ownerId: number,
+    section: string,
+    value: SectionInput,
+  ): Promise<Reflection | null> {
+    if (!(SECTION_KEYS as readonly string[]).includes(section)) {
+      throw new ReflectionServiceError(`There is no section named ${section}.`);
+    }
+    const existing = await this.db.getReflectionByPublicUuid(publicUuid);
+    if (!existing) return null;
+    if (existing.userId !== ownerId) {
+      throw new ReflectionServiceError('A reflection may only be written by its owner.');
+    }
+    const record = await this.db.writeReflectionSection(existing.id, ownerId, section as SectionKey, {
+      content: value.content,
+      authorOrigin: value.authorOrigin,
+    });
+    return record ? toReflection(record) : null;
   }
 
   async getByPublicUuid(publicUuid: string): Promise<Reflection | null> {
@@ -172,7 +204,7 @@ export class ReflectionService {
     if (existing.userId !== ownerId) {
       throw new ReflectionServiceError('A reflection may only be updated by its owner.');
     }
-    const chatContent = completeSections(input.format, input.sections);
+    const chatContent = completeSections(input.sections);
     try {
       const record = await this.db.updateReflection(existing.id, ownerId, {
         title: input.title ?? null,
