@@ -20,6 +20,7 @@
 import { Builder, By, Key } from 'selenium-webdriver';
 import chrome from 'selenium-webdriver/chrome.js';
 import { writeFileSync, mkdirSync } from 'node:fs';
+import { biblePassageTrigger, setBiblePassage } from './passage-control.mjs';
 
 const OUT = new URL('./out/', import.meta.url);
 mkdirSync(OUT, { recursive: true });
@@ -154,24 +155,12 @@ try {
    * for, and then asserts on what was actually stored.
    */
   const reference = 'Romans 8:28';
-  await driver.executeScript(
-    `const input = document.querySelector('input[aria-label="Scripture reference"]');
-     const setter = Object.getOwnPropertyDescriptor(
-       window.HTMLInputElement.prototype, 'value',
-     ).set;
-     setter.call(input, arguments[0]);
-     input.dispatchEvent(new Event('input', { bubbles: true }));
-     input.blur();`,
-    reference,
-  );
-  await wait(1200);
-  const storedReference = await driver.executeScript(
-    `return document.querySelector('input[aria-label="Scripture reference"]').value`,
-  );
+  await setBiblePassage(driver, reference);
+  await until(async () => /Romans 8:28/i.test(await (await biblePassageTrigger(driver)).getText()), 8000);
   check(
-    'the Scripture reference is set, whole, before anything is asked about it',
-    storedReference === reference,
-    storedReference,
+    'the Bible passage is set, whole, before anything is asked about it',
+    /Romans 8:28/i.test(await (await biblePassageTrigger(driver)).getText()),
+    await (await biblePassageTrigger(driver)).getText(),
   );
 
   // --- the disclosure comes before anything is sent ----------------------

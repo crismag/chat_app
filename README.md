@@ -221,20 +221,20 @@ in step with the code.
 
 ## Status
 
-**Phases 0–3 built; 4 done; 5 in progress; 6 host-boundary only; 7 done for V1; 8 done for V1.**
+**Phases 0–3 built; 4 done; 5 done; 6 host-boundary only; 7 done for V1; 8 done for V1.**
 
 What works end to end: register and sign in, write and re-open private
 reflections that persist across restarts, look a passage up in one of 47
 translations, write the four sections with live length feedback, and — with a
 key configured — ask for guidance, ask for better wording, hold a bounded
 conversation beside the card, and get title suggestions. Create opens a
-selected reflection in Create Studio, saves the canonical document, and
-exports a 1080 × 1080 PNG. Generated backgrounds use a host-owned provider
-seam; the current adapter is a local fixture, not an AI model.
+selected reflection in Create Studio, applies a layout × style × square or
+portrait format, saves the canonical document, and exports PNG (including a
+carousel). Generated backgrounds use a host-owned provider seam; the current
+adapter is a local fixture, not an AI model.
 
-What does not: Create is a working square-card foundation, not the finished
-layout/style product. Native store signing and a production API host are still
-operator work after `npm run cap:sync`.
+What does not: a production image provider, uploaded artwork, native store
+signing, and a production API host after `npm run cap:sync`.
 
 An honest, page-by-page account of what is incomplete, inert or misleading is in
 [`docs/development/PRODUCT_READINESS.md`](docs/development/PRODUCT_READINESS.md).

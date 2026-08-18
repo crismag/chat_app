@@ -152,18 +152,18 @@ export interface RenderProfile {
  * mark compliant content as Extended and quietly make the recommendation a lie
  * — which is exactly what the first set of numbers here did.
  *
- * At these values one page holds roughly 1,500 characters of prose, so 1,200
- * fits with room for the section gaps, and the 2,400 hard maximum lands inside
- * two pages.
+ * At these values a portrait page holds a complete Full C.H.A.T. at the
+ * recommended combined budget, so 2,000 characters is still one page and the
+ * recommendation is honest.
  */
 export const DEFAULT_RENDER_PROFILE: RenderProfile = {
   width: 1080,
-  height: 1080,
+  height: 1350,
   margin: 72,
-  minFontSize: 26,
-  minLineHeight: 1.35,
-  sectionGap: 24,
-  reservedHeight: 120,
+  minFontSize: 22,
+  minLineHeight: 1.12,
+  sectionGap: 20,
+  reservedHeight: 160,
 };
 
 /**

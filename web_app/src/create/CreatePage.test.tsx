@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, expect, test, vi } from 'vitest'
 import { AUTHOR_ORIGINS, BIBLE_PROVIDERS, emptyChatSections } from '@chat/shared'
@@ -86,16 +86,33 @@ test('the selected reflection opens with its exact saved passage and can be pers
   expect(await screen.findByText('Generated backgrounds enabled')).toBeInTheDocument()
   expect(captured.current?.capabilities).toMatchObject({
     images: false,
-    pages: false,
+    pages: true,
     drawing: false,
     callouts: false,
     groups: false,
     lines: false,
   })
   expect(captured.current?.templates).toEqual([])
+  expect(captured.current?.onExportAll).toEqual(expect.any(Function))
+  expect(captured.current?.onEditorIssue).toEqual(expect.any(Function))
+  expect(await screen.findByLabelText('Layout')).toBeInTheDocument()
+  expect(await screen.findByLabelText('Style')).toBeInTheDocument()
+  expect(await screen.findByLabelText('Format')).toBeInTheDocument()
   expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/conversations/selected'), expect.anything())
   fireEvent.click(screen.getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(savedBody).not.toBeNull())
   expect(JSON.stringify(savedBody)).toContain('I am the vine; you are the branches.')
   expect(JSON.stringify(savedBody)).toContain('John 15:5 · NIV')
+
+  act(() => {
+    captured.current?.onEditorIssue?.({
+      severity: 'warning',
+      code: 'transform-rejected',
+      message: 'That move could not be applied. The previous layout was restored.',
+      recoverable: true,
+    })
+  })
+  expect(screen.getByRole('heading', { name: 'Create an image' })).toBeVisible()
+  expect(screen.getByLabelText('Reflection')).toBeVisible()
+  expect(screen.getByText('That move could not be applied. The previous layout was restored.')).toBeVisible()
 })

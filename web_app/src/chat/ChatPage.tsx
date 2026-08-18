@@ -27,6 +27,7 @@ import {
   type ValidationResult,
 } from '@chat/shared'
 import { ScripturePassage } from '../bible/ScripturePassage.tsx'
+import type { BiblePassage } from '../bible/api.ts'
 import { ApiError, api } from '../shared/api/client.ts'
 import {
   BookIcon,
@@ -125,7 +126,6 @@ export function ChatPage() {
 
   const [titleDraft, setTitleDraft] = useState<string | null>(null)
   const [tagsDraft, setTagsDraft] = useState<string | null>(null)
-  const [referenceDraft, setReferenceDraft] = useState<string | null>(null)
 
   const [discussing, setDiscussing] = useState<FieldType | null>(null)
   const [proposal, setProposal] = useState<Proposal | null>(null)
@@ -238,9 +238,18 @@ export function ChatPage() {
 
   const composerRef = useRef<HTMLTextAreaElement>(null)
   const titleRef = useRef<HTMLInputElement>(null)
-  const referenceRef = useRef<HTMLInputElement>(null)
   const openedRef = useRef<string | null>(null)
+  const creatingRef = useRef<Promise<string> | null>(null)
   const saveTimer = useRef<number | null>(null)
+  /**
+   * Bumped whenever the page leaves the reflection it was showing.
+   *
+   * Loads, patches and URL-driven opens capture the value at the start of their
+   * work and refuse to write back if it has moved on — otherwise a reply, a
+   * save, or a `?c=` effect that began on the previous reflection puts that
+   * reflection back on screen after New has already cleared it.
+   */
+  const viewGeneration = useRef(0)
 
   const isNarrow = useMediaQuery('(max-width: 899px)')
   /*
@@ -327,7 +336,9 @@ export function ChatPage() {
    */
   const openConversation = useCallback(
     async (id: string, options: { continuing?: boolean } = {}) => {
+      const generation = viewGeneration.current
       const next = await api<ConversationDetail>(`/conversations/${id}`)
+      if (viewGeneration.current !== generation) return next
       const switching = openedRef.current !== id && !options.continuing
       openedRef.current = id
       setActiveId(id)
@@ -339,7 +350,7 @@ export function ChatPage() {
         setProposal(null)
         setDiscussing(null)
         setTitleDraft(null)
-        setReferenceDraft(null)
+        setTagsDraft(null)
         setValidation(null)
       }
       setSearchParams(
@@ -356,10 +367,40 @@ export function ChatPage() {
     [setSearchParams],
   )
 
+  const ensureConversation = useCallback(
+    async (seed: { title?: string; scriptureReference?: string } = {}): Promise<string | null> => {
+      if (activeId) return activeId
+      if (creatingRef.current) return creatingRef.current
+      const work = (async () => {
+        const conversation = await api<Summary>('/conversations', {
+          method: 'POST',
+          body: JSON.stringify({
+            title: seed.title?.trim() || titleDraft?.trim() || 'New reflection',
+            ...(seed.scriptureReference?.trim()
+              ? { scriptureReference: seed.scriptureReference.trim() }
+              : {}),
+          }),
+        })
+        await openConversation(conversation.id, { continuing: true })
+        await refreshList()
+        return conversation.id
+      })()
+      creatingRef.current = work
+      try {
+        return await work
+      } finally {
+        if (creatingRef.current === work) creatingRef.current = null
+      }
+    },
+    [activeId, openConversation, refreshList, titleDraft],
+  )
+
   useEffect(() => {
     const requestedId = searchParams.get('c')
+    const generation = viewGeneration.current
     void refreshList()
       .then(async () => {
+        if (viewGeneration.current !== generation) return
         if (requestedId && requestedId !== openedRef.current) {
           await openConversation(requestedId)
         }
@@ -443,11 +484,16 @@ export function ChatPage() {
    * the answer rather than assuming it.
    */
   const saveAll = useCallback(async (): Promise<boolean> => {
-    if (!activeId) return true
     const pending = Object.entries(edits).filter(
       ([field, value]) => value !== storedValue(field as FieldType),
     )
     if (pending.length === 0) return true
+    const generation = viewGeneration.current
+    let id = activeId
+    if (!id) {
+      id = await ensureConversation()
+      if (!id) return false
+    }
 
     setSaveState({ status: 'saving' })
     try {
@@ -463,12 +509,13 @@ export function ChatPage() {
           (storedOrigin(field as FieldType) === AUTHOR_ORIGINS.USER
             ? AUTHOR_ORIGINS.USER
             : AUTHOR_ORIGINS.AI_ASSISTED)
-        await api(`/conversations/${activeId}/sections`, {
+        await api(`/conversations/${id}/sections`, {
           method: 'PATCH',
           body: JSON.stringify({ type: field, content: value, authorOrigin: origin }),
         })
       }
-      const next = await api<ConversationDetail>(`/conversations/${activeId}`)
+      const next = await api<ConversationDetail>(`/conversations/${id}`)
+      if (viewGeneration.current !== generation) return true
       setDetail(next)
       /* Only what was actually written is forgotten; later keystrokes stay. */
       setEdits((current) => {
@@ -492,7 +539,7 @@ export function ChatPage() {
       })
       return false
     }
-  }, [activeId, edits, storedValue, storedOrigin, refreshList, pendingOrigins])
+  }, [activeId, edits, storedValue, storedOrigin, refreshList, pendingOrigins, ensureConversation])
 
   /*
    * Typing settles, and it is written down.
@@ -506,7 +553,7 @@ export function ChatPage() {
   saveAllRef.current = saveAll
 
   useEffect(() => {
-    if (!hasUnsaved || !activeId) return
+    if (!hasUnsaved) return
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
     saveTimer.current = window.setTimeout(() => {
       void saveAllRef.current()
@@ -514,7 +561,7 @@ export function ChatPage() {
     return () => {
       if (saveTimer.current) window.clearTimeout(saveTimer.current)
     }
-  }, [edits, hasUnsaved, activeId])
+  }, [edits, hasUnsaved])
 
   /* The last line of defence: the browser asks before the tab takes it away. */
   useEffect(() => {
@@ -535,19 +582,17 @@ export function ChatPage() {
 
   /* --- Editing the reflection ------------------------------------------ */
 
-  async function patchConversation(body: Record<string, unknown>): Promise<boolean> {
-    if (!activeId) return false
+  async function patchConversation(
+    body: Record<string, unknown>,
+    conversationId = activeId,
+  ): Promise<boolean> {
+    if (!conversationId) return false
+    const generation = viewGeneration.current
     setSaveState({ status: 'saving' })
     try {
-      await api(`/conversations/${activeId}`, { method: 'PATCH', body: JSON.stringify(body) })
-      /*
-       * Refresh the stored record without going through `openConversation`.
-       * That helper also writes the URL; doing so while the author is in the
-       * Scripture-reference field was enough to remount the input and lose
-       * keystrokes, especially after Send moved focus and a later blur saved
-       * a fragment.
-       */
-      const next = await api<ConversationDetail>(`/conversations/${activeId}`)
+      await api(`/conversations/${conversationId}`, { method: 'PATCH', body: JSON.stringify(body) })
+      const next = await api<ConversationDetail>(`/conversations/${conversationId}`)
+      if (viewGeneration.current !== generation) return true
       setDetail(next)
       await refreshList()
       setSaveState({ status: 'saved', at: Date.now() })
@@ -563,6 +608,7 @@ export function ChatPage() {
 
   async function startNew() {
     if (!(await leaveSafely())) return
+    viewGeneration.current += 1
     openedRef.current = null
     setActiveId(null)
     setDetail(null)
@@ -572,7 +618,7 @@ export function ChatPage() {
     setProposal(null)
     setDiscussing(null)
     setTitleDraft(null)
-    setReferenceDraft(null)
+    setTagsDraft(null)
     setValidation(null)
     setListOpen(false)
     setSearchParams(
@@ -661,23 +707,14 @@ export function ChatPage() {
       let id = activeId
       let created = false
       if (!id) {
-        const sent = referenceDraft
-        const reference = sent?.trim()
         const conversation = await api<Summary>('/conversations', {
           method: 'POST',
           body: JSON.stringify({
             title: deriveTitle(content),
-            ...(reference ? { scriptureReference: reference } : {}),
           }),
         })
         id = conversation.id
         created = true
-        /*
-         * Forget the draft only if it is still the one that was just sent. A
-         * round trip is long enough to type a reference in, and clearing it
-         * unconditionally deleted whatever had been typed in the meantime.
-         */
-        setReferenceDraft((current) => (current === sent ? null : current))
       }
       await api(`/conversations/${id}/messages`, {
         method: 'POST',
@@ -775,12 +812,14 @@ export function ChatPage() {
    * sheet is for.
    */
   async function suggestTitle() {
-    if (!activeId) return
+    if (!fields.some((meta) => valueOf(meta.type).trim())) return
+    const id = activeId ?? (await ensureConversation())
+    if (!id) return
     setSuggesting(true)
     setError(null)
     try {
       const result = await api<{ suggestions?: string[]; source?: string }>(
-        `/conversations/${activeId}/ai`,
+        `/conversations/${id}/ai`,
         { method: 'POST', body: JSON.stringify({ action: AI_ACTIONS.SUGGEST_TITLE }) },
       )
       if (result.suggestions?.length) {
@@ -846,7 +885,7 @@ export function ChatPage() {
       }>('/ai/reflection-guidance', {
         method: 'POST',
         body: JSON.stringify({
-          passageReference: referenceDraft ?? detail.scriptureReference ?? '',
+          passageReference: detail.scriptureReference ?? '',
           sections: [field],
           written,
         }),
@@ -885,7 +924,7 @@ export function ChatPage() {
         body: JSON.stringify({
           section: field,
           text,
-          passageReference: referenceDraft ?? detail.scriptureReference ?? '',
+          passageReference: detail.scriptureReference ?? '',
         }),
       })
 
@@ -1018,6 +1057,15 @@ export function ChatPage() {
     addDraftToSection(CHAT_SECTION_TYPES.CONTENT, text, AUTHOR_ORIGINS.USER)
   }
 
+  async function onCanonicalPassageChange(next: BiblePassage | null) {
+    if (!next) {
+      if (activeId) await patchConversation({ scriptureReference: '' }, activeId)
+      return
+    }
+    const id = await ensureConversation({ scriptureReference: next.reference })
+    if (id) await patchConversation({ scriptureReference: next.reference }, id)
+  }
+
   /**
    * Put the text into the section's UNSAVED buffer — never a commit.
    *
@@ -1109,18 +1157,14 @@ export function ChatPage() {
     let created = false
     try {
       if (!id) {
-        const sent = referenceDraft
-        const reference = sent?.trim()
         const conversation = await api<Summary>('/conversations', {
           method: 'POST',
           body: JSON.stringify({
             title: deriveTitle(chip.message),
-            ...(reference ? { scriptureReference: reference } : {}),
           }),
         })
         id = conversation.id
         created = true
-        setReferenceDraft((current) => (current === sent ? null : current))
       }
       await api(`/conversations/${id}/messages`, {
         method: 'POST',
@@ -1239,6 +1283,7 @@ export function ChatPage() {
     try {
       await api(`/conversations/${activeId}`, { method: 'DELETE' })
       setDeleteOpen(false)
+      viewGeneration.current += 1
       openedRef.current = null
       setActiveId(null)
       setDetail(null)
@@ -1260,8 +1305,9 @@ export function ChatPage() {
 
   /* --- Rendering -------------------------------------------------------- */
 
-  const hasWritten = detail !== null && detail.messages.length > 0
+  const hasChatMessages = (detail?.messages.length ?? 0) > 0
   const written = fields.filter((meta) => valueOf(meta.type).trim()).length
+  const hasReflectionText = written > 0
 
   /*
    * Why Suggest title cannot be pressed, when it cannot. `null` means it can —
@@ -1269,21 +1315,17 @@ export function ChatPage() {
    * greyed-out control with no explanation attached to it.
    */
   const suggestReasonId = 'suggest-title-reason'
-  const suggestTitleReason: string | null = !detail
-    ? 'Start a reflection first — there is nothing to name yet.'
-    : !hasWritten
-      ? 'Write something first. A title is drawn from what you have written.'
-      : !ai.enabled
-        ? (ai.reason ?? 'Assistance is unavailable right now.')
-        : null
+  const suggestTitleReason: string | null = !hasReflectionText
+    ? 'Write something first. A title is drawn from what you have written.'
+    : !ai.enabled
+      ? (ai.reason ?? 'Assistance is unavailable right now.')
+      : null
 
-  const liveValidation = detail
-    ? validateChat(format, {
-        title: titleDraft ?? detail.title,
-        scriptureReference: referenceDraft ?? detail.scriptureReference ?? '',
-        ...Object.fromEntries(fields.map((meta) => [meta.type, valueOf(meta.type)])),
-      })
-    : null
+  const liveValidation = validateChat(format, {
+    title: titleDraft ?? detail?.title ?? '',
+    scriptureReference: detail?.scriptureReference ?? '',
+    ...Object.fromEntries(fields.map((meta) => [meta.type, valueOf(meta.type)])),
+  })
 
   useEffect(() => {
     if (!isNarrow) setHelperOpen(false)
@@ -1399,7 +1441,7 @@ export function ChatPage() {
   const helper = (
     <ChatHelper
       format={format}
-      reference={referenceDraft ?? detail?.scriptureReference ?? ''}
+      reference={detail?.scriptureReference ?? ''}
       messages={detail?.messages ?? []}
       draft={draft}
       sending={sending}
@@ -1454,65 +1496,11 @@ export function ChatPage() {
             ) : null}
 
             <div className={styles.identity}>
-              {/*
-                Both of these are editable for as long as the reflection
-                exists. Neither is a decision made once, at the beginning,
-                before there was anything to name.
-              */}
-              {/*
-                The reference, typed by hand — the fallback, not the front door.
-
-                Adding a passage is the passage card's job: it fetches the real
-                words in a chosen translation, keeps them with the reflection,
-                and puts them into Content. This field only records a string, so
-                it no longer says "Add the passage" — a promise it cannot keep,
-                and one that competed with the control that can.
-
-                It is not removed, and removing it was considered. It is the
-                only way to record a passage the picker cannot reach: a
-                translation this key does not carry, an unusual or compound
-                reference, a sermon passage, or simply no network. Deleting it
-                would stop nobody from writing a reflection, and would strand
-                everyone whose Bible is not in the catalog. So it stays, quiet,
-                and says what it is when asked.
-              */}
-              <input
-                ref={referenceRef}
-                className={styles.referenceInput}
-                value={referenceDraft ?? detail?.scriptureReference ?? ''}
-                /* Not an example: an example set in caps reads as a real reference. */
-                placeholder="Reference"
-                title="Type a reference yourself. To bring in the passage's words, use Choose a passage below."
-                aria-label="Scripture reference"
-                onChange={(event) => setReferenceDraft(event.target.value)}
-                onBlur={() => {
-                  if (referenceDraft === null) return
-                  /*
-                   * Before there is a reflection to attach it to, the passage
-                   * waits here and is carried in when the first message creates
-                   * one. Choosing a Scripture has never required a form.
-                   */
-                  if (!detail) return
-                  const sent = referenceDraft
-                  const value = sent.trim()
-                  if (value === (detail?.scriptureReference ?? '')) {
-                    setReferenceDraft(null)
-                    return
-                  }
-                  void patchConversation({ scriptureReference: value }).then((ok) => {
-                    if (!ok) return
-                    /*
-                     * Forget the draft only if it is still the one that was
-                     * just saved. A blur caused by Send disabling, or by the
-                     * field remounting, used to clear a later keystroke.
-                     */
-                    setReferenceDraft((current) => (current === sent ? null : current))
-                  })
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') event.currentTarget.blur()
-                  if (event.key === 'Escape') setReferenceDraft(null)
-                }}
+              <ScripturePassage
+                conversationId={activeId}
+                initialReference={detail?.scriptureReference ?? ''}
+                onPassageChange={(next) => void onCanonicalPassageChange(next)}
+                onUsePassage={addPassageToContent}
               />
               <input
                 ref={titleRef}
@@ -1523,7 +1511,6 @@ export function ChatPage() {
                 }
                 placeholder={detail ? 'Name this reflection' : 'New reflection'}
                 aria-label="Reflection title"
-                disabled={!detail}
                 onChange={(event) => setTitleDraft(event.target.value)}
                 onBlur={() => {
                   if (titleDraft === null) return
@@ -1532,7 +1519,15 @@ export function ChatPage() {
                     setTitleDraft(null)
                     return
                   }
-                  void patchConversation({ title: value }).then(() => setTitleDraft(null))
+                  void (async () => {
+                    if (!detail) {
+                      await ensureConversation({ title: value })
+                      setTitleDraft(null)
+                      return
+                    }
+                    const ok = await patchConversation({ title: value })
+                    if (ok) setTitleDraft(null)
+                  })()
                 }}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') event.currentTarget.blur()
@@ -1547,20 +1542,21 @@ export function ChatPage() {
                 }
                 placeholder="Tags"
                 aria-label="Tags"
-                disabled={!detail}
                 onChange={(event) => setTagsDraft(event.target.value)}
                 onBlur={() => {
-                  if (tagsDraft === null || !detail) return
+                  if (tagsDraft === null) return
                   const next = parseHashtags(tagsDraft)
-                  const previous = (detail.tags ?? []).map((item) => item.tag).join(',')
+                  const previous = (detail?.tags ?? []).map((item) => item.tag).join(',')
                   const upcoming = next.map((item) => item.tag).join(',')
                   if (upcoming === previous) {
                     setTagsDraft(null)
                     return
                   }
-                  void patchConversation({ tags: next.map((item) => item.label) }).then((ok) => {
+                  void (async () => {
+                    const id = await ensureConversation()
+                    const ok = await patchConversation({ tags: next.map((item) => item.label) }, id)
                     if (ok) setTagsDraft(null)
-                  })
+                  })()
                 }}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') event.currentTarget.blur()
@@ -1679,28 +1675,33 @@ export function ChatPage() {
           <button
             type="button"
             className={styles.formatButton}
-            disabled={!detail}
-            onClick={() => setFormatOpen(true)}
+            onClick={() => {
+              if (!detail) {
+                void ensureConversation().then((id) => {
+                  if (id) setFormatOpen(true)
+                })
+                return
+              }
+              setFormatOpen(true)
+            }}
           >
             {format === CHAT_FORMATS.CONDENSED ? 'Condensed C.H.A.T.' : 'Full C.H.A.T.'}
             <span className={styles.formatChange}>Change</span>
           </button>
 
-          {hasWritten ? (
-            <p className={styles.progress}>
-              <span className={styles.progressText}>
-                {written} of {fields.length} written
-              </span>
-              <span className={styles.progressTrack} aria-hidden="true">
-                <span
-                  className={styles.progressFill}
-                  style={{ inlineSize: `${(written / fields.length) * 100}%` }}
-                />
-              </span>
-            </p>
-          ) : null}
+          <p className={styles.progress}>
+            <span className={styles.progressText}>
+              {written} of {fields.length} written
+            </span>
+            <span className={styles.progressTrack} aria-hidden="true">
+              <span
+                className={styles.progressFill}
+                style={{ inlineSize: `${(written / fields.length) * 100}%` }}
+              />
+            </span>
+          </p>
 
-          {liveValidation && hasWritten ? (
+          {liveValidation ? (
             <span className={styles.combined} data-status={liveValidation.combined.status}>
               {liveValidation.combined.length} / {liveValidation.combined.recommended}{' '}
               characters together
@@ -1714,25 +1715,9 @@ export function ChatPage() {
           </p>
         ) : null}
 
-        {/*
-          The passage, above the writing.
-
-          It sits between the reflection's title and its four sections because
-          that is the order of the act: you read the passage, then you write
-          about it. The component owns everything else — its own loading, its
-          own storage, its own recovery — so this page hands it a reflection id
-          and nothing more.
-        */}
-        <ScripturePassage
-          conversationId={activeId}
-          initialReference={referenceDraft ?? detail?.scriptureReference ?? ''}
-          onUsePassage={addPassageToContent}
-        />
-
         <div className={styles.artifactBody}>
           <ChatArtifact
             format={format}
-            hasWritten={hasWritten}
             valueOf={valueOf}
             originOf={storedOrigin}
             dirtyFields={dirtyFields}
@@ -1757,18 +1742,20 @@ export function ChatPage() {
           />
         </div>
 
-        {hasWritten ? (
+        {detail ? (
           <div className={styles.artifactFoot}>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              disabled={busyAction !== null}
-              onClick={() => void runAi(AI_ACTIONS.EXTRACT_CHAT)}
-            >
-              {busyAction === AI_ACTIONS.EXTRACT_CHAT
-                ? 'Reading the conversation…'
-                : 'Suggest from conversation'}
-            </button>
+            {hasChatMessages ? (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                disabled={busyAction !== null}
+                onClick={() => void runAi(AI_ACTIONS.EXTRACT_CHAT)}
+              >
+                {busyAction === AI_ACTIONS.EXTRACT_CHAT
+                  ? 'Reading the conversation…'
+                  : 'Suggest from conversation'}
+              </button>
+            ) : null}
             <button
               type="button"
               className="btn btn-secondary btn-sm"

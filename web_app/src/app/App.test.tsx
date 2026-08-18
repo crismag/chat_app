@@ -58,6 +58,18 @@ function mockAuthenticatedFetch() {
         json: async () => ({ communities: [], invitations: [] }),
       })
     }
+    if (url.includes('/bible/translations')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ translations: [], defaultTranslationId: null }),
+      })
+    }
+    if (url.includes('/passage')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ passage: null }),
+      })
+    }
     if (
       url.includes('/conversations') ||
       url.includes('/community') ||
@@ -110,13 +122,8 @@ test('Reflect opens on a question, and can be written in immediately', async () 
   expect(screen.getByText('Content · Heart · Application · Testimony')).toBeInTheDocument()
   // No title form stands between someone and their first sentence.
   expect(screen.getByLabelText('Write your reflection')).toBeInTheDocument()
-  /*
-   * The passage is a field that is always there rather than a button pressed
-   * once at the start: it can be filled in now, or long after the reflection
-   * has been written.
-   */
-  expect(screen.getByLabelText('Scripture reference')).toBeEnabled()
-  expect(screen.getByLabelText('Reflection title')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Choose Bible passage' })).toBeInTheDocument()
+  expect(screen.getByLabelText('Reflection title')).toBeEnabled()
 })
 
 /*
@@ -124,16 +131,15 @@ test('Reflect opens on a question, and can be written in immediately', async () 
  * empty conversation is the form we removed, so its absence is a test rather
  * than a convention.
  */
-test('the four sections do not appear before anything has been written', async () => {
+test('the four C.H.A.T. sections are writable on a brand-new reflection', async () => {
   vi.stubGlobal('fetch', mockAuthenticatedFetch())
   renderAt('/')
-  expect(
-    await screen.findByText('What passage are you reflecting on today?'),
-  ).toBeInTheDocument()
-  expect(screen.getByText(/C.H.A.T. takes shape as you write/i)).toBeInTheDocument()
-  for (const name of ['Content', 'Heart', 'Application', 'Testimony']) {
-    expect(screen.queryByRole('button', { name: new RegExp(`^${name} `) })).toBeNull()
-  }
+  expect(await screen.findByRole('heading', { name: /content/i })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: /heart/i })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: /application/i })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: /testimony/i })).toBeInTheDocument()
+  expect(screen.queryByText(/C.H.A.T. takes shape as you write/i)).toBeNull()
+  expect(screen.getByLabelText('Reflection title')).toBeEnabled()
 })
 
 test('the header carries one account menu, not an email and a status line', async () => {

@@ -1,5 +1,12 @@
 /*
- * The Scripture reference that lost what was typed into it.
+ * The identity field that lost what was typed into it.
+ *
+ * The original report was a Scripture reference typed immediately after the
+ * first message created the reflection. That free-typed REFERENCE field is
+ * gone: passage identity is a compact Bible selector. The same create-race
+ * still exists for the title — creating a reflection used to look like
+ * switching to a different one and wipe unsaved drafts — so this script types
+ * the title while the create request is in flight.
  *
  * The report: type a reference into the header field IMMEDIATELY after the
  * first message has created the reflection, and it comes back mangled — it
@@ -56,12 +63,12 @@ async function shoot(driver, name) {
 }
 
 /** What the server actually has, asked of the server rather than of the page. */
-async function storedReference(driver) {
+async function storedTitle(driver) {
   return driver.executeAsyncScript(`
     const done = arguments[arguments.length - 1];
     fetch('http://localhost:8000/api/conversations', { credentials: 'include' })
       .then((response) => response.json())
-      .then((list) => done(list[0] ? list[0].scriptureReference : '(no reflection)'))
+      .then((list) => done(list[0] ? list[0].title : '(no reflection)'))
       .catch((caught) => done('(error) ' + caught.message));
   `);
 }
@@ -75,7 +82,7 @@ async function storedReference(driver) {
  * is React re-rendering over them, and it is what this defect actually was.
  */
 const INSTRUMENT = `
-  const input = document.querySelector('input[aria-label="Scripture reference"]');
+  const input = document.querySelector('input[aria-label="Reflection title"]');
   if (!input) return 'no-input';
   /* One set of listeners per element, however many times this is injected. */
   if (input.__instrumented) { window.__refLog = []; return 'already'; }
@@ -130,7 +137,7 @@ const INSTRUMENT = `
 `;
 
 const composer = By.css('textarea[aria-label="Write your reflection"]');
-const referenceField = By.css('input[aria-label="Scripture reference"]');
+const titleField = By.css('input[aria-label="Reflection title"]');
 
 const driver = await new Builder()
   .forBrowser('chrome')
@@ -159,7 +166,7 @@ async function typeAfterSend({ how, reference, message }) {
   console.log(`  instrument: ${await driver.executeScript(INSTRUMENT)}`);
 
   await driver.findElement(composer).sendKeys(message);
-  const field = await driver.findElement(referenceField);
+  const field = await driver.findElement(titleField);
   if (how === 'button') {
     await driver.findElement(By.css('button[aria-label="Send"]')).click();
   } else {
@@ -167,6 +174,7 @@ async function typeAfterSend({ how, reference, message }) {
   }
 
   await field.click();
+  await field.sendKeys(Key.chord(Key.CONTROL, 'a'));
   for (const character of reference) {
     /*
      * Re-found every keystroke. Not defensive coding: the element goes stale
@@ -174,17 +182,17 @@ async function typeAfterSend({ how, reference, message }) {
      * unmounts and replaces loses its DOM value and its focus with it.
      */
     try {
-      await driver.findElement(referenceField).sendKeys(character);
+      await driver.findElement(titleField).sendKeys(character);
     } catch {
       await driver.executeScript("window.__refLog.push({ kind: 'element-replaced', value: '' })");
-      const again = await driver.findElement(referenceField);
+      const again = await driver.findElement(titleField);
       await again.click();
       await again.sendKeys(character);
     }
     await wait(300);
   }
 
-  const inField = await driver.findElement(referenceField).getAttribute('value');
+  const inField = await driver.findElement(titleField).getAttribute('value');
   const log = await driver.executeScript('return window.__refLog || []');
   const rewrites = log
     .filter((entry) => entry.kind === 'react-set')
@@ -199,7 +207,7 @@ async function typeAfterSend({ how, reference, message }) {
   /* Commit it the way a person would, then let the save settle. */
   await driver.findElement(By.css('body')).click();
   await wait(2500);
-  const stored = await storedReference(driver);
+  const stored = await storedTitle(driver);
 
   return { inField, stored, rewrites, blurs };
 }
@@ -255,7 +263,7 @@ try {
 
     if (index > 0) {
       if (!(await startNew())) throw new Error('no New reflection control');
-      await until(async () => (await driver.findElement(referenceField).getAttribute('value')) === '');
+      await until(async () => (await driver.findElement(titleField).getAttribute('value')) === '');
     }
 
     const outcome = await typeAfterSend({
@@ -275,7 +283,7 @@ try {
       `field=${JSON.stringify(outcome.inField)}`,
     );
     check(
-      `${trial.label}: the whole reference was saved`,
+      `${trial.label}: the whole title was saved`,
       outcome.stored === reference,
       `stored=${JSON.stringify(outcome.stored)}`,
     );
@@ -286,8 +294,8 @@ try {
   console.log('\n— the control: typed BEFORE the first message ——————————————');
 
   if (!(await startNew())) throw new Error('no New reflection control');
-  await until(async () => (await driver.findElement(referenceField).getAttribute('value')) === '');
-  const before = await driver.findElement(referenceField);
+  await until(async () => (await driver.findElement(titleField).getAttribute('value')) === '');
+  const before = await driver.findElement(titleField);
   await before.click();
   for (const character of 'Habakkuk 3:17') {
     await before.sendKeys(character);
@@ -297,7 +305,7 @@ try {
   await wait(2500);
   check(
     'typed before the first message, it still survives whole',
-    (await storedReference(driver)) === 'Habakkuk 3:17',
+    (await storedTitle(driver)) === 'Habakkuk 3:17',
   );
 
   await driver.manage().window().setRect({ width: 390, height: 844 });

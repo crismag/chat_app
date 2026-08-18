@@ -127,22 +127,18 @@ try {
 
   const blank = await driver.executeScript(PAINTED);
   check(
-    'the reference field no longer promises to add the passage',
-    /\[placeholder\] Reference$/m.test(blank) && !/\[placeholder\] Add the passage/.test(blank),
+    'the retired Reference field is gone',
+    !/\[placeholder\] Reference$/m.test(blank),
   );
   check(
-    'and it says what it is for, when asked',
-    /Choose a passage below/i.test(
-      (await driver
-        .findElement(By.css('input[aria-label="Scripture reference"]'))
-        .getAttribute('title')) ?? '',
-    ),
+    'a compact Bible passage action is offered',
+    /Choose Bible passage/i.test(blank),
   );
   check(
-    'the passage card points at the picker rather than at the field',
-    /Choose a passage and its words come with it/i.test(blank),
+    'the four C.H.A.T. fields are on the blank page',
+    /The passage itself/i.test(blank) && /What it means to you/i.test(blank),
   );
-  check('the picker is offered by name', /Choose a passage/.test(blank));
+  check('the picker is offered by name', /Choose Bible passage/.test(blank));
 
   /* Now write something, so the sections and the chips are on screen. */
   await driver

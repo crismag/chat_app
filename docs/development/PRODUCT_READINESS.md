@@ -17,6 +17,11 @@ Create no longer exposes Studio's built-in templates or drawing chrome; and
 the Send-button Scripture-reference path is covered by a unit test as well as
 `reference-race.mjs`.
 
+On 2026-08-18 Create gained host-owned layout × style × square/portrait
+composition, readable-minimum shrinking, and leftover-text carousels. The
+Create section below was rewritten for that work; the original 2026-08-16
+"empty room" recommendation is historical.
+
 A further follow-through the same day restored Community to the primary
 navigation because a published entry can now be opened: audiences,
 membership, `GET /api/publications`, a gallery of cards, and
@@ -272,19 +277,23 @@ feature is done; the page is not.
 
 ## Create
 
-**Verdict: the Phase 3 square-card path is functional; this is a working editor
-foundation, not the finished Create product.**
+**Verdict: Phase 5 layout × style × format is usable; it is not a general
+design tool, and generated/uploaded artwork is still Phase 6.**
 
 - `Create visual` honors its `?c=` reflection ID and loads that exact record.
 - The host adapter carries the exact saved passage, reference, translation and
   selected field provenance into neutral semantic slots.
+- Layout, style and square/portrait format are independent host choices; style
+  changes repaint without rewriting Scripture.
+- Short text shrinks to a readable minimum; leftover words move onto following
+  cards. **Export all pages** downloads the carousel.
 - The Fabric-backed editor can change layers, save the canonical document,
-  reopen it after reload, and export a deterministic 1080 × 1080 PNG.
+  reopen it after reload, and export a deterministic PNG.
 - Studio persistence is owner-scoped and separate from Community publication.
 - `/open-source-licenses` is independently reachable and bundles Create Studio
   and application notices for offline use.
-- **Remaining:** visual-template breadth, overflow handling, multi-page work,
-  uploaded/generated assets, and full device-level UX review on signed binaries.
+- **Remaining:** uploaded artwork, a production generated-background provider,
+  and full device-level UX review on signed binaries.
 
 ---
 

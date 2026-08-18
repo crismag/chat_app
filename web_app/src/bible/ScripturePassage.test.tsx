@@ -154,6 +154,7 @@ function stubFetch(options: StubOptions = {}) {
 
     if (url.includes('/passage') && !url.includes('/bible/passages')) {
       if (init?.method === 'PUT') return json({ passage: JSON.parse(String(init.body)) })
+      if (init?.method === 'DELETE') return new Response(null, { status: 204 })
       return json({ passage: options.saved ?? null })
     }
 
@@ -198,7 +199,7 @@ describe('the passage card', () => {
     stubFetch()
     render(<ScripturePassage conversationId="c1" />)
 
-    fireEvent.click(await screen.findByRole('button', { name: /choose a passage/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /choose bible passage/i }))
     const options = await screen.findAllByRole('option')
 
     const selected = options.filter((option) => option.getAttribute('aria-selected') === 'true')
@@ -219,7 +220,7 @@ describe('the passage card', () => {
     stubFetch()
     render(<ScripturePassage conversationId="c1" />)
 
-    fireEvent.click(await screen.findByRole('button', { name: /choose a passage/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /choose bible passage/i }))
     const options = await screen.findAllByRole('option')
     const selected = options.find((option) => option.getAttribute('aria-selected') === 'true')
     expect(within(selected!).getByText('Berean Standard Bible')).toBeInTheDocument()
@@ -232,7 +233,7 @@ describe('the passage card', () => {
     stubFetch()
     render(<ScripturePassage conversationId="c1" />)
 
-    fireEvent.click(await screen.findByRole('button', { name: /choose a passage/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /choose bible passage/i }))
     const options = await screen.findAllByRole('option')
     const selected = options.find((option) => option.getAttribute('aria-selected') === 'true')
     expect(within(selected!).getByText('New International Version')).toBeInTheDocument()
@@ -243,8 +244,8 @@ describe('the passage card', () => {
     render(<ScripturePassage conversationId="c1" />)
 
     expect(await screen.findByTestId('scripture-text')).toHaveTextContent('For God so loved the world')
-    expect(screen.getByRole('heading', { name: 'John 3:16-18' })).toBeInTheDocument()
-    expect(screen.getAllByText('NIV').length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: /john 3:16-18 · niv/i })).toBeInTheDocument()
+    expect(screen.getAllByText(/NIV/).length).toBeGreaterThan(0)
     expect(screen.getByText(/Copyright © 1973, 1978, 1984, 2011 by Biblica/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /read on youversion/i })).toHaveAttribute(
       'href',
@@ -267,7 +268,7 @@ describe('the passage card', () => {
     render(<ScripturePassage conversationId="c1" />)
     await screen.findByTestId('scripture-text')
 
-    fireEvent.click(screen.getByRole('button', { name: /change passage/i }))
+    fireEvent.click(screen.getByRole('button', { name: /john 3:16-18/i }))
     await chooseTranslation('berean', 'Berean Standard Bible')
     fireEvent.click(screen.getByRole('button', { name: /load passage/i }))
 
@@ -296,7 +297,7 @@ describe('the passage card', () => {
     render(<ScripturePassage conversationId="c1" />)
     await screen.findByTestId('scripture-text')
 
-    fireEvent.click(screen.getByRole('button', { name: /change passage/i }))
+    fireEvent.click(screen.getByRole('button', { name: /john 3:16-18/i }))
     await chooseTranslation('berean', 'Berean Standard Bible')
     fireEvent.click(screen.getByRole('button', { name: /load passage/i }))
 
@@ -316,7 +317,7 @@ describe('the passage card', () => {
     render(<ScripturePassage conversationId="c1" />)
     await screen.findByTestId('scripture-text')
 
-    fireEvent.click(screen.getByRole('button', { name: /change passage/i }))
+    fireEvent.click(screen.getByRole('button', { name: /john 3:16-18/i }))
     await chooseTranslation('american standard', 'American Standard Version')
     fireEvent.click(screen.getByRole('button', { name: /load passage/i }))
 
@@ -338,7 +339,7 @@ describe('the passage card', () => {
     render(<ScripturePassage conversationId="c1" />)
     await screen.findByTestId('scripture-text')
 
-    fireEvent.click(screen.getByRole('button', { name: /change passage/i }))
+    fireEvent.click(screen.getByRole('button', { name: /john 3:16-18/i }))
     fireEvent.change(screen.getByLabelText('Passage'), { target: { value: 'John 99:1' } })
     fireEvent.click(screen.getByRole('button', { name: /load passage/i }))
 
@@ -364,13 +365,13 @@ describe('the passage card', () => {
       expect(alert.textContent?.toLowerCase()).not.toContain(word)
     }
     /* Nothing to press, because there is nothing the reader can do about it. */
-    expect(screen.queryByRole('button', { name: /choose a passage/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /choose bible passage/i })).toBeNull()
   })
 
   test('the search finds a translation by abbreviation, name and language', async () => {
     stubFetch()
     render(<ScripturePassage conversationId="c1" />)
-    fireEvent.click(await screen.findByRole('button', { name: /choose a passage/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /choose bible passage/i }))
 
     const search = searchBox()
 
@@ -405,7 +406,7 @@ describe('the passage card', () => {
   test('every row says which language it is in', async () => {
     stubFetch()
     render(<ScripturePassage conversationId="c1" />)
-    fireEvent.click(await screen.findByRole('button', { name: /choose a passage/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /choose bible passage/i }))
 
     /*
      * `CCB` is Chinese and the Cebuano Bible is `APD`. Without the language on
@@ -424,7 +425,7 @@ describe('the passage card', () => {
   test('the whole catalog is reachable behind one control', async () => {
     stubFetch()
     render(<ScripturePassage conversationId="c1" />)
-    fireEvent.click(await screen.findByRole('button', { name: /choose a passage/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /choose bible passage/i }))
 
     /* It opens onto a short list, not an inventory. */
     const initial = await screen.findAllByRole('option')
@@ -439,7 +440,7 @@ describe('the passage card', () => {
   test('the picker is driveable from the keyboard alone', async () => {
     stubFetch({ passages: { 3034: BSB_PASSAGE } })
     render(<ScripturePassage conversationId="c1" />)
-    fireEvent.click(await screen.findByRole('button', { name: /choose a passage/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /choose bible passage/i }))
 
     const search = searchBox()
     fireEvent.change(search, { target: { value: 'berean' } })
@@ -467,7 +468,7 @@ describe('the passage card', () => {
   test('Escape clears the search rather than the selection', async () => {
     stubFetch()
     render(<ScripturePassage conversationId="c1" />)
-    fireEvent.click(await screen.findByRole('button', { name: /choose a passage/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /choose bible passage/i }))
 
     const search = searchBox()
     fireEvent.change(search, { target: { value: 'berean' } })
@@ -488,9 +489,9 @@ describe('the passage card', () => {
     await screen.findByTestId('scripture-text')
 
     /* The card names itself, so it is a landmark rather than an anonymous box. */
-    expect(screen.getByRole('region', { name: 'John 3:16-18' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: /john 3:16-18/i })).toBeInTheDocument()
 
-    const change = screen.getByRole('button', { name: /change passage/i })
+    const change = screen.getByRole('button', { name: /john 3:16-18 · niv/i })
     expect(change).toHaveAttribute('aria-expanded', 'false')
     /* Opened from the keyboard, not only from a pointer. */
     change.focus()
@@ -516,7 +517,7 @@ describe('the passage card', () => {
     render(<ScripturePassage conversationId="c1" />)
 
     await screen.findByTestId('scripture-text')
-    expect(screen.getAllByText('GONE').length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/GONE/).length).toBeGreaterThan(0)
     await waitFor(() =>
       expect(screen.getByText(/no longer available to this app/i)).toBeInTheDocument(),
     )
@@ -531,6 +532,64 @@ describe('the passage card', () => {
 
     const lookups = calls.filter((call) => call.includes('/bible/passages?'))
     expect(lookups).toHaveLength(0)
+  })
+
+  test('starts as a compact optional control, not a permanent selector card', async () => {
+    stubFetch()
+    render(<ScripturePassage conversationId="c1" />)
+
+    expect(await screen.findByRole('button', { name: 'Choose Bible passage' })).toBeInTheDocument()
+    expect(screen.queryByText(/choose a passage and its words come with it/i)).toBeNull()
+    expect(screen.queryByLabelText('Passage')).toBeNull()
+  })
+
+  test('selecting a passage updates the compact control and closes the selector', async () => {
+    stubFetch({ passages: { 111: NIV_PASSAGE } })
+    render(<ScripturePassage conversationId="c1" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Choose Bible passage' }))
+    fireEvent.change(screen.getByLabelText('Passage'), { target: { value: 'John 3:16-18' } })
+    fireEvent.click(screen.getByRole('button', { name: /load passage/i }))
+
+    expect(await screen.findByRole('button', { name: /john 3:16-18 · niv/i })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    )
+    expect(screen.queryByLabelText('Passage')).toBeNull()
+    expect(screen.getByTestId('scripture-text')).toHaveTextContent('For God so loved the world')
+  })
+
+  test('the compact selected control reopens the selector', async () => {
+    stubFetch({ saved: NIV_PASSAGE })
+    render(<ScripturePassage conversationId="c1" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /john 3:16-18 · niv/i }))
+    expect(screen.getByLabelText('Passage')).toBeInTheDocument()
+  })
+
+  test('a passage can be changed without dropping the previous text on failure', async () => {
+    stubFetch({ saved: NIV_PASSAGE, passages: { 3034: BSB_PASSAGE } })
+    render(<ScripturePassage conversationId="c1" />)
+    fireEvent.click(await screen.findByRole('button', { name: /john 3:16-18 · niv/i }))
+    await chooseTranslation('berean', 'Berean Standard Bible')
+    fireEvent.click(screen.getByRole('button', { name: /load passage/i }))
+    expect(await screen.findByTestId('scripture-text')).toHaveTextContent('He gave His one and only Son')
+    expect(screen.getByRole('button', { name: /john 3:16-18 · bsb/i })).toBeInTheDocument()
+  })
+
+  test('removing a passage restores Choose Bible passage and does not offer Content insertion', async () => {
+    const used: string[] = []
+    const { calls } = stubFetch({ saved: NIV_PASSAGE })
+    render(<ScripturePassage conversationId="c1" onUsePassage={(text) => used.push(text)} />)
+    await screen.findByTestId('scripture-text')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove passage' }))
+
+    expect(await screen.findByRole('button', { name: 'Choose Bible passage' })).toBeInTheDocument()
+    expect(screen.queryByTestId('scripture-text')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Add to Content' })).toBeNull()
+    expect(used).toEqual([])
+    expect(calls.some((call) => call.startsWith('DELETE '))).toBe(true)
   })
 })
 
@@ -565,7 +624,7 @@ describe('offering the passage to Content', () => {
     stubFetch()
     render(<ScripturePassage conversationId="c1" onUsePassage={() => {}} />)
 
-    await screen.findByRole('button', { name: /choose a passage/i })
+    await screen.findByRole('button', { name: /choose bible passage/i })
     expect(screen.queryByRole('button', { name: 'Add to Content' })).not.toBeInTheDocument()
   })
 

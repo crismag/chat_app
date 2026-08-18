@@ -115,6 +115,14 @@ export function saveSavedPassage(
   )
 }
 
+/** Drop the stored passage without touching C.H.A.T. section text. */
+export function clearSavedPassage(conversationId: string): Promise<void> {
+  return api(
+    `/bible/reflections/${encodeURIComponent(conversationId)}/passage`,
+    { method: 'DELETE' },
+  )
+}
+
 /* ------------------------------------------------------ previous selection */
 
 const SELECTION_KEY = 'chat.bible.translationId'
