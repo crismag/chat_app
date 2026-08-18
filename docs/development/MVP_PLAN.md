@@ -220,8 +220,15 @@ A user can have many private entries and selectively publish one without exposin
 
 ## Phase 8 — Mobile packaging
 
-Status: **not started.** The web app is responsive down to 390px and has a
-bottom tab bar there, but there is no Capacitor project.
+Status: **done for V1.** Capacitor 7 hosts the same Vite web build. `android/`
+and `ios/` are conventional native projects. Share, PNG export, keyboard
+resize, status bar, and `chat:` deep links are adapters around the existing
+product. Session login is still the `chat_session` cookie; a packaged WebView
+gets `SameSite=None; Secure` so the native HTTP stack can store it.
+
+Build and run steps are in [`MOBILE.md`](./MOBILE.md). CI does not sign
+store binaries. Push, camera, biometrics, and a production API host remain
+out of this phase.
 
 Deliverables:
 

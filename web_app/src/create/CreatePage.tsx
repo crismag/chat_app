@@ -12,6 +12,7 @@ import {
 import '@crismag/create-studio/styles.css'
 import { fetchSavedPassage } from '../bible/api.ts'
 import { api } from '../shared/api/client.ts'
+import { savePng } from '../shared/native/save-image.ts'
 import {
   CHAT_SQUARE_TEMPLATE,
   CHAT_STUDIO_CAPABILITIES,
@@ -161,12 +162,8 @@ export function CreatePage() {
         { pageId, format: 'png', scale: 1 },
         { assetResolver: resolveChatStudioAsset },
       )
-      const url = URL.createObjectURL(result.blob)
-      const link = window.document.createElement('a')
-      link.href = url
-      link.download = safeFilename(source?.title ?? nextDocument.title ?? 'reflection')
-      link.click()
-      URL.revokeObjectURL(url)
+      const filename = safeFilename(source?.title ?? nextDocument.title ?? 'reflection')
+      const saved = await savePng(result.blob, filename)
       const exportMetadata: ExportMetadata = {
         exportedAt: new Date().toISOString(),
         format: 'image/png',
@@ -174,7 +171,11 @@ export function CreatePage() {
         height: result.height,
       }
       await persist(nextDocument, exportMetadata)
-      setMessage(`Exported and saved ${result.width} × ${result.height} PNG.`)
+      setMessage(
+        saved === 'shared'
+          ? `Exported ${result.width} × ${result.height} PNG. Choose where to save it.`
+          : `Exported and saved ${result.width} × ${result.height} PNG.`,
+      )
     } catch (caught) {
       setMessage(null)
       setError(caught instanceof Error ? caught.message : 'Unable to export the composition')

@@ -29,6 +29,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ApiError } from '../shared/api/client.ts'
+import { shareWithPlatform } from '../shared/native/share.ts'
 import { ReflectionCardSkeleton } from '../shared/ui/ReflectionCard.tsx'
 import { PublicationCard } from './PublicationCard.tsx'
 import {
@@ -423,8 +424,11 @@ export function CommunityPage() {
                      * into the community.
                      */
                     if (publication.shareUrl) {
-                      await navigator.clipboard?.writeText(publication.shareUrl)
-                      return 'Public link copied.'
+                      const result = await shareWithPlatform({
+                        title: publication.title,
+                        url: publication.shareUrl,
+                      })
+                      return result === 'copied' ? 'Public link copied.' : 'Opened the share sheet.'
                     }
                     return 'This is yours to share. Copy the words you want to send.'
                   })
