@@ -4,12 +4,12 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx src/index.ts",
-    "dev:watch": "tsx watch src/index.ts",
+    "dev": "tsx --env-file-if-exists=../.env src/index.ts",
+    "dev:watch": "tsx watch --env-file-if-exists=../.env src/index.ts",
     "build": "tsc --noEmit",
-    "start": "tsx src/index.ts",
+    "start": "tsx --env-file-if-exists=../.env src/index.ts",
     "test": "vitest run",
-    "db:migrate": "tsx src/mysql/cli.ts",
+    "db:migrate": "tsx --env-file-if-exists=../.env src/mysql/cli.ts",
     "lint": "oxlint src",
     "typecheck": "tsc --noEmit"
   },

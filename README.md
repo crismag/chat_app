@@ -138,9 +138,9 @@ npm run dev
 - API health: http://localhost:8000/api/health
 
 The app starts, and the whole manual writing workflow works, with no keys at
-all. To turn on the optional connectors, copy `.env.example` to `.env`
-(gitignored) and fill it in, or export the variables in the shell that runs the
-API:
+all. To turn on the optional connectors, copy `.env.example` to `.env` in the
+repository root (gitignored) and fill it in — the API loads it on start — or
+export the variables in the shell that runs it:
 
 ```bash
 # AI assistance — off unless switched on
