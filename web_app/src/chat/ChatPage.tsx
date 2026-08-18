@@ -17,6 +17,7 @@ import {
   CHAT_SECTION_TYPES,
   TITLE_SOURCES,
   CHAT_FORMATS,
+  parseHashtags,
   validateChat,
   type AiAction,
   type AiCapabilities,
@@ -123,6 +124,7 @@ export function ChatPage() {
   const [overflow, setOverflow] = useState<{ field: FieldType; text: string } | null>(null)
 
   const [titleDraft, setTitleDraft] = useState<string | null>(null)
+  const [tagsDraft, setTagsDraft] = useState<string | null>(null)
   const [referenceDraft, setReferenceDraft] = useState<string | null>(null)
 
   const [discussing, setDiscussing] = useState<FieldType | null>(null)
@@ -1535,6 +1537,34 @@ export function ChatPage() {
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') event.currentTarget.blur()
                   if (event.key === 'Escape') setTitleDraft(null)
+                }}
+              />
+              <input
+                className={styles.tagsInput}
+                value={
+                  tagsDraft ??
+                  (detail?.tags ?? []).map((item) => item.label).join(', ')
+                }
+                placeholder="Tags"
+                aria-label="Tags"
+                disabled={!detail}
+                onChange={(event) => setTagsDraft(event.target.value)}
+                onBlur={() => {
+                  if (tagsDraft === null || !detail) return
+                  const next = parseHashtags(tagsDraft)
+                  const previous = (detail.tags ?? []).map((item) => item.tag).join(',')
+                  const upcoming = next.map((item) => item.tag).join(',')
+                  if (upcoming === previous) {
+                    setTagsDraft(null)
+                    return
+                  }
+                  void patchConversation({ tags: next.map((item) => item.label) }).then((ok) => {
+                    if (ok) setTagsDraft(null)
+                  })
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') event.currentTarget.blur()
+                  if (event.key === 'Escape') setTagsDraft(null)
                 }}
               />
             </div>

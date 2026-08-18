@@ -624,14 +624,70 @@ describe('library search', () => {
     const mine = await app.request('/api/library?q=John%2015', {
       headers: { Cookie: owner.cookie },
     });
-    expect(await json<Array<{ scriptureReference: string | null }>>(mine)).toEqual([
-      expect.objectContaining({ scriptureReference: 'John 15:5' }),
-    ]);
+    expect(await json<{ items: Array<{ scriptureReference: string | null }> }>(mine)).toEqual(
+      expect.objectContaining({
+        items: [expect.objectContaining({ scriptureReference: 'John 15:5' })],
+      }),
+    );
 
     const theirs = await app.request('/api/library?q=John%2015', {
       headers: { Cookie: stranger.cookie },
     });
-    expect(await json<unknown[]>(theirs)).toEqual([]);
+    expect(await json<{ items: unknown[] }>(theirs)).toEqual(
+      expect.objectContaining({ items: [] }),
+    );
+  });
+
+  test('filters by book, written section, tag and day', async () => {
+    const app = createApp(new MemoryStore());
+    const { cookie } = await register(app, 'owner@example.com');
+    const created = await app.request('/api/conversations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ title: 'Abide', scriptureReference: 'Jn 15:5' }),
+    });
+    const conversation = await json<{ id: string }>(created);
+    await app.request(`/api/conversations/${conversation.id}/sections`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ type: 'heart', content: 'It met my fear.' }),
+    });
+    await app.request(`/api/conversations/${conversation.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ tags: ['faith'] }),
+    });
+
+    const byBook = await json<{ items: unknown[]; books: { usfm: string }[] }>(
+      await app.request('/api/reflections?book=John', { headers: { Cookie: cookie } }),
+    );
+    expect(byBook.items).toHaveLength(1);
+    expect(byBook.books).toEqual([expect.objectContaining({ usfm: 'JHN' })]);
+
+    const bySection = await json<{ items: unknown[] }>(
+      await app.request('/api/reflections?section=heart', { headers: { Cookie: cookie } }),
+    );
+    expect(bySection.items).toHaveLength(1);
+    const emptySection = await json<{ items: unknown[] }>(
+      await app.request('/api/reflections?section=testimony', { headers: { Cookie: cookie } }),
+    );
+    expect(emptySection.items).toHaveLength(0);
+
+    const byTag = await json<{ items: unknown[]; tags: { tag: string }[] }>(
+      await app.request('/api/reflections?tag=faith', { headers: { Cookie: cookie } }),
+    );
+    expect(byTag.items).toHaveLength(1);
+    expect(byTag.tags).toEqual([expect.objectContaining({ tag: 'faith' })]);
+
+    const day = new Date().toISOString().slice(0, 10);
+    const today = await json<{ items: unknown[] }>(
+      await app.request(`/api/reflections?from=${day}&to=${day}`, { headers: { Cookie: cookie } }),
+    );
+    expect(today.items).toHaveLength(1);
+    const lastYear = await json<{ items: unknown[] }>(
+      await app.request('/api/reflections?to=2020-01-01', { headers: { Cookie: cookie } }),
+    );
+    expect(lastYear.items).toHaveLength(0);
   });
 });
 

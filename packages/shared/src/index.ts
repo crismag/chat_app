@@ -102,6 +102,7 @@ export type ConversationSummary = {
   scriptureReference: string | null;
   publicationState: PublicationState;
   updatedAt: string;
+  tags: { tag: string; label: string }[];
 };
 
 export function isCommunityVisible(state: PublicationState): boolean {

@@ -399,7 +399,8 @@
  * neither is a decision locked in at the moment a reflection began.
  */
 .referenceInput,
-.titleInput {
+.titleInput,
+.tagsInput {
   width: 100%;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
@@ -427,14 +428,21 @@
   font-weight: 600;
 }
 
+.tagsInput {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
 .referenceInput:hover:not(:disabled),
-.titleInput:hover:not(:disabled) {
+.titleInput:hover:not(:disabled),
+.tagsInput:hover:not(:disabled) {
   border-color: var(--line);
   background: var(--surface-2);
 }
 
 .referenceInput:focus-visible,
-.titleInput:focus-visible {
+.titleInput:focus-visible,
+.tagsInput:focus-visible {
   outline: none;
   border-color: var(--accent);
   background: var(--surface);
@@ -452,7 +460,8 @@
 }
 
 .referenceInput:disabled,
-.titleInput:disabled {
+.titleInput:disabled,
+.tagsInput:disabled {
   opacity: 0.6;
 }
 

@@ -73,6 +73,7 @@ function mockServer(server: Server) {
         title: 'A reflection',
         scriptureReference: server.reference,
         publicationState: 'private',
+        tags: [],
         updatedAt: new Date().toISOString(),
       })
     }
@@ -96,6 +97,7 @@ function mockServer(server: Server) {
         title: 'A reflection',
         scriptureReference: server.reference,
         publicationState: 'private',
+        tags: [],
         updatedAt: new Date().toISOString(),
         messages: [{ id: 'm1', role: 'user', content: 'Starting a reflection.' }],
         sections: emptySections,
