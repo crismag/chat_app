@@ -44,6 +44,7 @@ import { ChatHelper } from './ChatHelper.tsx'
 import {
   DeleteSheet,
   FormatSheet,
+  Sheet,
   ShareSheet,
   TitleSuggestionSheet,
   type ShareAudience,
@@ -235,6 +236,13 @@ export function ChatPage() {
   const [searchFocusToken, setSearchFocusToken] = useState(0)
   const [helperOpen, setHelperOpen] = useState(false)
   const [listOpen, setListOpen] = useState(false)
+  /*
+   * The passage sheet, and the reason it is state on the page rather than
+   * inside the connector: the connector is not mounted until this is true.
+   * Nothing about Bible lookup — no translation catalog, no saved passage —
+   * is fetched by a reflection nobody asked a passage question about.
+   */
+  const [passageOpen, setPassageOpen] = useState(false)
 
   const composerRef = useRef<HTMLTextAreaElement>(null)
   const titleRef = useRef<HTMLInputElement>(null)
@@ -1496,12 +1504,28 @@ export function ChatPage() {
             ) : null}
 
             <div className={styles.identity}>
-              <ScripturePassage
-                conversationId={activeId}
-                initialReference={detail?.scriptureReference ?? ''}
-                onPassageChange={(next) => void onCanonicalPassageChange(next)}
-                onUsePassage={addPassageToContent}
-              />
+              {/*
+                * The passage, as one line rather than as a card.
+                *
+                * What sat here was the whole connector — a chooser, a
+                * translation picker, a quotation and its copyright — above four
+                * empty sections, so a page for writing opened on a Bible. The
+                * reflection is the point; the passage is what it is written
+                * against. This says which passage that is, and everything else
+                * about it lives behind the press.
+                */}
+              <button
+                type="button"
+                className={styles.passageButton}
+                aria-haspopup="dialog"
+                title="Look up a Bible passage. Optional — you can write without one."
+                onClick={() => setPassageOpen(true)}
+              >
+                <span aria-hidden="true">📖</span>
+                {detail?.scriptureReference?.trim()
+                  ? detail.scriptureReference.trim()
+                  : 'Add Bible passage'}
+              </button>
               <input
                 ref={titleRef}
                 className={styles.titleInput}
@@ -1818,6 +1842,25 @@ export function ChatPage() {
             <div className={styles.helper}>{helper}</div>
           </div>
         </div>
+      ) : null}
+
+      {passageOpen ? (
+        <Sheet title="Bible passage" onClose={() => setPassageOpen(false)}>
+          <ScripturePassage
+            conversationId={activeId}
+            initialReference={detail?.scriptureReference ?? ''}
+            onPassageChange={(next) => void onCanonicalPassageChange(next)}
+            onUsePassage={(text) => {
+              /*
+               * Shut before handing over. Content may already have writing in
+               * it, and that raises the section sheet — two modals stacked on
+               * each other is not a choice anybody can read.
+               */
+              setPassageOpen(false)
+              addPassageToContent(text)
+            }}
+          />
+        </Sheet>
       ) : null}
 
       {shareOpen && detail ? (

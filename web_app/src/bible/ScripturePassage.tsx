@@ -106,14 +106,13 @@ export function ScripturePassage({
   /*
    * Whether the passage is shown in full.
    *
-   * Starts closed, and stays closed when a saved passage is restored. Opening
-   * an old reflection is an act of reading what you wrote, not of reading the
-   * verse again — the words the author wants are the four sections below, and a
-   * passage occupying the first screen pushes them under the fold. A lookup the
-   * author just asked for opens (see `load`), because there the passage IS the
-   * thing they asked to see.
+   * Open to begin with, because this card is only ever mounted by somebody
+   * pressing for it — it lives in a sheet, not on the reflection page — and
+   * opening collapsed would hide the thing the press was for. The disclosure
+   * exists for the other direction: a long passage that has been read and is
+   * now in the way of the translation picker under it.
    */
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(true)
   const [reference, setReference] = useState(initialReference ?? '')
 
   useEffect(() => {

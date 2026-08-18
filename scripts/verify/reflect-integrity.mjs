@@ -15,7 +15,7 @@
 import { Builder, By, Key } from 'selenium-webdriver';
 import chrome from 'selenium-webdriver/chrome.js';
 import { writeFileSync } from 'node:fs';
-import { biblePassageTrigger, setBiblePassage } from './passage-control.mjs';
+import { biblePassageControl, setBiblePassage } from './passage-control.mjs';
 
 const OUT = new URL('./out/', import.meta.url);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -194,7 +194,7 @@ try {
   const titleValue = await driver
     .findElement(By.css('input[aria-label="Reflection title"]'))
     .getAttribute('value');
-  const passageLabel = await (await biblePassageTrigger(driver)).getText();
+  const passageLabel = await (await biblePassageControl(driver)).getText();
   check('the title can be set and survives a reload',
     titleValue === 'The week I could not see it', titleValue);
   check('the Bible passage can be set and survives a reload',
