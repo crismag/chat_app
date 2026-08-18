@@ -1,22 +1,27 @@
 # reflections.crishub.com
 #
-# Two jobs: hand /api to the Node process, and let the single-page app own
-# every other path.
+# One job: let the single-page app own every path that is not a real file.
+# /api belongs to the host's Node application manager, which writes its own
+# rules above these.
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
 
   # --- the API -----------------------------------------------------------
   #
-  # The Node process listens on the loopback only. This is the one route to
-  # it, so the port is never reachable from outside.
+  # There is deliberately no proxy rule here.
   #
-  # If your plan manages Node through hPanel instead, that tool mounts the app
-  # at a URL itself — delete this block and set VITE_API_BASE_URL to whatever
-  # URL it gives you, then rebuild. `preflight.sh` reports which case you are
-  # in.
-  RewriteCond %{REQUEST_URI} ^/api/
-  RewriteRule ^api/(.*)$ http://127.0.0.1:8000/api/$1 [P,L,QSA]
+  # Proxying to a local port from .htaccess was the original plan and it does
+  # not work on this host: a `RewriteRule ... [P]` to 127.0.0.1 answers 503,
+  # tested against reflections.crishub.com with a listener confirmed running on
+  # the loopback. Shared plans do not permit mod_proxy, and a rule that 503s is
+  # worse than no rule, because the failure looks like the API is broken rather
+  # than absent.
+  #
+  # The API is mounted by the host's Node application manager instead (hPanel
+  # -> Setup Node.js App), which writes its own rules ABOVE this file's — see
+  # scripts/deploy/README.md. Do not add a /api rule here: the manager owns
+  # that path, and a rule here would shadow it.
 
   # --- the app -----------------------------------------------------------
   #
