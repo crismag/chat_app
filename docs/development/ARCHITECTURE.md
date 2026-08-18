@@ -178,9 +178,27 @@ same image rather than the `mysql:8` default.
 
 **Privacy boundary:** the central database stores users, identities, profiles,
 settings, sessions, reflections, revisions, generated-image records, and
-**non-content** AI usage metadata. It does **not** store AI conversation
-transcripts, prompts, or responses. Those remain device-local working data
-(IndexedDB on the web, later).
+**non-content** AI usage metadata. Migration `003` adds communities and
+membership, publications and their copied sections, tags, reactions, saves and
+reports, the Create Studio document and its image bytes, and the passage a
+reflection was written against.
+
+It does **not** store AI conversation transcripts, prompts, or responses. Those
+remain device-local working data (IndexedDB on the web), and that is the one
+table SQLite still holds which will never have a MariaDB equivalent — moving
+the transcript to the device is product work that has to happen before SQLite
+can be retired.
+
+`schema.privacy.test.ts` reads every migration in the directory, so a table or
+column that would turn telemetry into an archive fails the suite rather than
+relying on review.
+
+Two things migration `003` keeps from the SQLite tables it replaces, because
+they are rules rather than shapes: `publications.audience` is a single column
+with no join table, so *exactly one audience per publication* is enforced by
+the schema; and `publication_reactions` is keyed on (publication, user), so a
+doubled request cannot inflate a count. A publication stores **copied** section
+text, so choosing what appears can never mutate the reflection it came from.
 
 What is actually implemented for the live SQLite path, in `api/src/db.ts`:
 
