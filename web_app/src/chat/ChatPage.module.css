@@ -21,10 +21,21 @@
 
 @media (min-width: 900px) {
   .workspace {
-    /* The header, plus the main element's own vertical padding. */
-    height: calc(100svh - 10.5rem);
-    min-height: 32rem;
-    align-items: stretch;
+    /*
+     * The reflection is not given a window to be read through.
+     *
+     * This column used to be a fixed `calc(100svh - 10.5rem)` frame with the
+     * sections scrolling inside it. With four sections written that frame
+     * showed 349px of 1004px — a third of the reflection, and the page scrolled
+     * as well, so there were two scrollbars and the thing being made was the
+     * one boxed in. Someone writing their Testimony could not see their
+     * Content, which is the whole claim of the format.
+     *
+     * The artifact now grows to its content and the page is the only thing
+     * that scrolls. The flanks are pinned instead, so the history and the
+     * conversation stay beside the writing rather than scrolling away from it.
+     */
+    align-items: start;
     /*
      * The chat column grew from 20rem. It is a conversation now rather than a
      * transcript, and 320px made every reply a narrow ribbon.
@@ -46,6 +57,28 @@
   .artifact,
   .helper {
     min-height: 0;
+  }
+
+  /*
+   * The flanks hold their place while the reflection scrolls past them. Each
+   * keeps its own scroll for when its content is the taller one — a long
+   * history, a long conversation — but neither imposes a height on the middle.
+   */
+  .sidebar,
+  .helper {
+    position: sticky;
+    top: var(--space-4);
+    max-height: calc(100svh - 8rem);
+  }
+
+  /* One scrollbar, and it belongs to the page. */
+  .artifact {
+    overflow: visible;
+  }
+
+  .artifactBody {
+    overflow-y: visible;
+    scrollbar-gutter: auto;
   }
 }
 
