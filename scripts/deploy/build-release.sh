@@ -21,9 +21,17 @@ STAGE="$(mktemp -d)"
 trap 'rm -rf "${STAGE}"' EXIT
 
 echo "==> building the web app"
-# Same-origin: the browser calls /api on reflections.crishub.com, which the
-# rewrite hands to the local API. No cross-origin request, so no CORS to relax.
-VITE_API_BASE_URL=/api npm run build -w web_app >/dev/null
+# Where the browser sends API calls. Baked in at build time, because Vite
+# replaces import.meta.env at compile time — changing it needs a rebuild, not a
+# restart.
+#
+# The default is the API subdomain rather than a same-origin /api, because
+# mod_proxy is not permitted on this host and a rewrite to a local port answers
+# 503. The path keeps its /api prefix: the routes are defined as /api/... and
+# the subdomain does not strip it.
+: "${VITE_API_BASE_URL:=https://api.${DEPLOY_DOMAIN}/api}"
+echo "    API base: ${VITE_API_BASE_URL}"
+VITE_API_BASE_URL="${VITE_API_BASE_URL}" npm run build -w web_app >/dev/null
 
 echo "==> checking the API runs without dev dependencies"
 # The one assumption worth failing early on. `start` used to need tsx, which is

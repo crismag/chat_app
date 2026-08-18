@@ -90,7 +90,35 @@ until that is switched on on purpose.
 `NODE_ENV=production` is what marks the session cookie `Secure`, so it is set
 by `restart-api.sh` rather than left to the file.
 
-## How /api is served, on this host
+## The API lives on its own subdomain
+
+`api.reflections.crishub.com`, whose document root is
+`public_html/api`. The web app is built against
+`https://api.reflections.crishub.com/api` — note the path is kept, because the
+routes are defined as `/api/...` and the subdomain does not strip it.
+
+Two consequences worth knowing.
+
+**It is cross-origin, and that is already handled.** `cors()` runs on `/api/*`
+with `credentials: true` and reads `CHAT_WEB_ORIGINS`, which the deployment
+sets to `https://reflections.crishub.com`. The session cookie still arrives:
+both hosts sit under `crishub.com`, so they are the same *site* even though
+they are different origins, and a `SameSite=Lax` cookie is sent.
+
+**The subdomain's document root is inside the main one.** Everything it holds
+is therefore also addressable at `reflections.crishub.com/api/...`, so
+`.htaccess` answers 404 for that prefix **before** it checks whether the file
+exists. Tested: with the rule ordered the other way, `/api/ping.txt` returned
+the file.
+
+The base URL is baked in at build time — Vite replaces `import.meta.env` when
+it compiles — so changing it is a rebuild, not a restart:
+
+```bash
+VITE_API_BASE_URL=https://elsewhere.example/api ./scripts/deploy/build-release.sh
+```
+
+## How /api was served before, and why it is not
 
 Settled by testing rather than assumption, on reflections.crishub.com:
 
