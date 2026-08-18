@@ -253,6 +253,42 @@ describe('the passage card', () => {
     )
   })
 
+  /*
+   * Opening an old reflection should land the reader in their own writing, not
+   * in the verse — but the verse must still be reachable in one press, and the
+   * words must never leave the document while it is shut.
+   */
+  test('a restored passage opens collapsed, and one press shows all of it', async () => {
+    stubFetch({ saved: NIV_PASSAGE })
+    render(<ScripturePassage conversationId="c1" />)
+
+    const quote = await screen.findByTestId('scripture-text')
+    expect(quote).toHaveAttribute('data-collapsed', 'true')
+
+    const disclosure = screen.getByRole('button', { name: 'Show full passage' })
+    expect(disclosure).toHaveAttribute('aria-expanded', 'false')
+    expect(disclosure).toHaveAttribute('aria-controls', quote.getAttribute('id'))
+    /* Clipped for the eye, never withheld from a reader that does not use one. */
+    expect(quote).toHaveTextContent('he gave his one and only Son')
+
+    fireEvent.click(disclosure)
+    expect(screen.getByTestId('scripture-text')).toHaveAttribute('data-collapsed', 'false')
+    expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  test('a passage the author just looked up opens in full', async () => {
+    stubFetch({ passages: { 111: NIV_PASSAGE } })
+    render(<ScripturePassage conversationId="c1" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /choose bible passage/i }))
+    fireEvent.change(screen.getByLabelText('Passage'), { target: { value: 'John 3:16-18' } })
+    fireEvent.click(screen.getByRole('button', { name: /load passage/i }))
+
+    const quote = await screen.findByTestId('scripture-text')
+    await waitFor(() => expect(quote).toHaveAttribute('data-collapsed', 'false'))
+    expect(screen.getByRole('button', { name: 'Show less' })).toBeInTheDocument()
+  })
+
   test('the passage is source material, not an editable field', async () => {
     stubFetch({ saved: NIV_PASSAGE })
     render(<ScripturePassage conversationId="c1" />)

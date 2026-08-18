@@ -31,12 +31,6 @@
   background: var(--surface-sunk);
 }
 
-.card[data-compact='true'] .passage {
-  font-size: var(--text-xs);
-  line-height: var(--leading-snug);
-  max-block-size: 4.5rem;
-  overflow: hidden;
-}
 
 .trigger {
   display: inline-flex;
@@ -126,6 +120,46 @@
   color: var(--ink);
   /* Provider text. Selectable and readable; never a field. */
   white-space: pre-wrap;
+}
+
+/*
+ * The collapsed passage.
+ *
+ * Clipped to three lines and faded out at the cut, so the clipping reads as
+ * "there is more" rather than as a passage that happens to end mid-sentence.
+ * Driven by the disclosure below it and by nothing else: an earlier version
+ * clamped whenever the chooser was shut, which meant every restored reflection
+ * showed a silently truncated verse with no control that would finish it.
+ */
+.passage[data-collapsed='true'] {
+  max-block-size: 5.4rem;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, #000 60%, transparent 100%);
+}
+
+/*
+ * The disclosure.
+ *
+ * A full-height target rather than a link-sized one, because on a phone it sits
+ * directly under the text somebody is trying to read more of.
+ */
+.disclosure {
+  align-self: start;
+  min-height: 2.25rem;
+  padding: var(--space-1) 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  cursor: pointer;
+}
+
+.disclosure:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
 }
 
 /*
