@@ -35,7 +35,10 @@ echo "==> installing production dependencies"
 ( cd "${TARGET}" && npm ci --omit=dev --no-audit --fund=false )
 
 echo "==> applying database migrations"
-( cd "${TARGET}/api" && node --env-file="${DEPLOY_ENV_FILE}" --experimental-strip-types src/mysql/cli.ts )
+# The host's .env names the database DB_*; the application reads MYSQL_*.
+# See env-map.sh — nothing is renamed on disk.
+( set +u; . "${HERE}/env-map.sh" "${DEPLOY_ENV_FILE}"; set -u
+  cd "${TARGET}/api" && node --env-file="${DEPLOY_ENV_FILE}" --experimental-strip-types src/mysql/cli.ts )
 
 echo "==> pointing current at it"
 ln -sfn "${TARGET}" "${DEPLOY_CURRENT}"

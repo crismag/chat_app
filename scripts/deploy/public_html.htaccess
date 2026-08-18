@@ -31,6 +31,14 @@
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]
+
+  # /api is never the app. Without this exclusion the fallback answers an API
+  # call with index.html and a 200, so the browser tries to parse a page as
+  # JSON and reports something that has nothing to do with the real fault —
+  # which is that the API is not mounted. Excluded, an unmounted API 404s,
+  # which is true and legible.
+  RewriteRule ^api(/|$) - [R=404,L]
+
   RewriteRule ^ index.html [L]
 </IfModule>
 

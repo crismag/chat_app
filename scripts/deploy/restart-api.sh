@@ -22,6 +22,9 @@ fi
 mkdir -p "$(dirname "${DEPLOY_LOG}")"
 cd "${DEPLOY_CURRENT}"
 
+# DB_* -> MYSQL_*, YOUVERSION_API_KEY -> YVP_APP_KEY. See env-map.sh.
+set +u; . "$(cd "$(dirname "$0")" && pwd)/env-map.sh" "${DEPLOY_ENV_FILE}"; set -u
+
 # These four are set here and NOT in .env, and that is a precedence decision:
 # `node --env-file` does not overwrite a variable that is already set, so
 # anything exported on this line wins over the file. .env supplies credentials

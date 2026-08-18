@@ -53,10 +53,10 @@ echo "== the API route =="
 if [ -n "$(command -v httpd 2>/dev/null || command -v apache2 2>/dev/null)" ]; then
   ok "an Apache-family server is present"
 fi
-warn "confirm ONE of these is true, because the browser has to reach /api:"
-echo "        a) .htaccess may proxy — the RewriteRule [P] to 127.0.0.1:${DEPLOY_API_PORT} works, or"
-echo "        b) hPanel runs the Node app and gives it a URL — then set"
-echo "           VITE_API_BASE_URL to that URL and rebuild, and drop the proxy block."
-echo "        After installing: curl -sS ${DEPLOY_URL}/api/health"
+warn "the API is mounted by the host's Node application manager, not by these"
+echo "        scripts and not by .htaccess — a [P] rewrite answers 503 here."
+echo "        Create it once in hPanel (see README), then after every deploy:"
+echo "          restart the application there, and"
+echo "          curl -sS ${DEPLOY_URL}/api/health"
 
 exit "${fail}"
