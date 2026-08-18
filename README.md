@@ -90,7 +90,7 @@ The intended baseline is:
 - **Build tooling:** Node.js
 - **Mobile packaging:** Capacitor
 - **Backend:** TypeScript API (Hono) sharing types with the web app
-- **Database:** SQLite today, through Node's built-in `node:sqlite` — no service to run and no native build step. PostgreSQL remains the intended destination for a deployed multi-instance product.
+- **Database:** SQLite (`node:sqlite`) still backs the running demo. Durable product records use **MariaDB** on Hostinger (11.8.x; MySQL-compatible SQL in `api/src/mysql/`, `MYSQL_*` env). AI conversation transcripts are not stored there.
 - **Visual renderer:** React + HTML/CSS templates with image export
 - **AI:** provider abstraction so text and image providers can be changed without rewriting product logic. Google Gemini (`gemini-3.5-flash-lite`) sits behind it today, off unless switched on.
 - **Scripture:** YouVersion Platform API behind its own connector — 47 translations across 7 languages, on by default
