@@ -8,6 +8,40 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+
+    # The durable store, as it is in production.
+    #
+    # Pinned to MariaDB 11.8 rather than left to the `mysql` default on
+    # purpose: the two disagree about JSON — MariaDB stores a declared JSON
+    # column as LONGTEXT with a json_valid() check — so testing against MySQL
+    # would be testing something we do not deploy. See
+    # docs/development/ARCHITECTURE.md.
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: ci-root
+          MARIADB_DATABASE: chat_ci
+          MARIADB_USER: chat_ci
+          MARIADB_PASSWORD: ci-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: 3306
+      MYSQL_USER: chat_ci
+      MYSQL_PASSWORD: ci-password
+      MYSQL_DATABASE: chat_ci
+      # Local container, no TLS to terminate. Production resolves this to true
+      # for any non-localhost host, which is where it matters.
+      MYSQL_SSL: 'false'
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -17,5 +51,10 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      # Also the guard on the tests below. They skip themselves when MYSQL_* is
+      # unset, so a run that quietly lost its database would still be green —
+      # but this step exits 1 on a missing or unreachable configuration, so the
+      # skip cannot happen silently.
+      - run: npm run db:migrate -w api
       - run: npm test
       - run: npm run build
