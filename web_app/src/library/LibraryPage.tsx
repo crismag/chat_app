@@ -3,6 +3,12 @@ import type { ConversationSummary } from '@chat/shared'
 import { api } from '../shared/api/client.ts'
 import styles from './LibraryPage.module.css'
 
+function readLibrary(body: unknown): ConversationSummary[] {
+  if (Array.isArray(body)) return body as ConversationSummary[]
+  const items = (body as { items?: ConversationSummary[] })?.items
+  return Array.isArray(items) ? items : []
+}
+
 export function LibraryPage() {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<ConversationSummary[]>([])
@@ -12,7 +18,9 @@ export function LibraryPage() {
     event.preventDefault()
     setError(null)
     try {
-      setResults(await api<ConversationSummary[]>(`/library?q=${encodeURIComponent(query)}`))
+      setResults(
+        readLibrary(await api<unknown>(`/library?q=${encodeURIComponent(query)}`)),
+      )
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Search failed')
     }
