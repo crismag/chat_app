@@ -129,10 +129,11 @@ A user with enough saved content to make browsing inconvenient can reliably reco
 ## Phase 5 — Create engine V1
 
 Status: **in progress.** The separate Create Studio package now supplies a
-Fabric-backed live editor, deterministic square PNG export, and host-controlled
-save/reopen. The selected reflection and exact saved passage are mapped through
-semantic slots. This proves the first verse-plus-reflection format; the broader
-layout/style, overflow, portrait and multi-page deliverables below remain.
+Fabric-backed live editor, deterministic square PNG export, host-controlled
+save/reopen, and an optional generated-background callback. The selected
+reflection and exact saved passage are mapped through semantic slots. The host
+narrows Studio capabilities to that square card. The broader layout/style,
+overflow, portrait and multi-page deliverables below remain.
 
 Deliverables:
 
@@ -192,9 +193,9 @@ AI artwork enhances the composition without being responsible for rendering Scri
 Status: **backend done, frontend barely begun.** Publish and unpublish are
 implemented and validated server-side, and `GET /api/community` returns only
 records whose `publicationState` is `published`, so the privacy boundary holds
-where it matters. The Community page itself is thirty lines: a title and a
-reference per row, as plain `<span>`s. Nothing is clickable, no author is
-named, and there is no way to open a published entry.
+where it matters. The Community page itself is still a title-and-reference
+listing with nothing clickable. It is out of the primary navigation until a
+published entry can be opened.
 
 Deliverables:
 

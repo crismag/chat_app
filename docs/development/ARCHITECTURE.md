@@ -298,8 +298,12 @@ another provider are all in [`AI_PROVIDER.md`](./AI_PROVIDER.md). The
 conversation panel's own brief is in
 [`REFLECTION_CHAT.md`](./REFLECTION_CHAT.md).
 
-Image generation should be a separate capability from text assistance. None
-exists yet.
+Image generation is a separate capability from text assistance. Create Studio
+requests a background through an optional host callback; C.H.A.T. owns the
+server-only provider seam, credentials, permanent storage, and provenance.
+The current `STUDIO_IMAGE_PROVIDER=deterministic` adapter is a local fixture
+for the integration, not a production model. No image-provider SDK belongs in
+the browser or in Create Studio.
 
 Do not make AI provider response formats part of the domain model.
 

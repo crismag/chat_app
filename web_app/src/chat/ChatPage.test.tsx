@@ -170,6 +170,30 @@ test('a reference typed while the first message is creating the reflection survi
   )
 })
 
+test('the Send button path keeps a reference typed during creation', async () => {
+  renderPage()
+
+  const composer = await screen.findByLabelText('Write your reflection')
+  fireEvent.change(composer, { target: { value: 'Starting a reflection.' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+  await waitFor(() => expect(server.createdWith).not.toBeNull())
+
+  type(screen.getByLabelText('Scripture reference'), REFERENCE)
+  server.create.settle()
+
+  await waitFor(() =>
+    expect((screen.getByLabelText('Scripture reference') as HTMLInputElement).value).toBe(
+      REFERENCE,
+    ),
+  )
+
+  fireEvent.blur(screen.getByLabelText('Scripture reference'))
+  await waitFor(() =>
+    expect(server.patched.some((body) => body['scriptureReference'] === REFERENCE)).toBe(true),
+  )
+})
+
 test('opening a different reflection still discards the drafts of the one left behind', async () => {
   /*
    * The other half of the same rule. `continuing` must not become a licence to

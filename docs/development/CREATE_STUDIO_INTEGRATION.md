@@ -75,6 +75,10 @@ registry version when package publication and CI credentials are configured.
 
 Application code imports only `@crismag/create-studio` and its documented CSS
 and notice exports. It does not import Fabric.js or internal Studio modules.
+The host passes a narrowed capability policy and no Studio built-in templates,
+so the Create page stays a square reflection card rather than a general design
+editor. Pages, drawing, callouts, connectors, and template replacement stay
+off until C.H.A.T. maps those layouts itself.
 
 ## Notices
 

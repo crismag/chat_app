@@ -700,6 +700,23 @@
   transition: border-color var(--fast) var(--ease);
 }
 
+.fieldHeading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted, var(--muted));
+}
+
+.fieldLetter {
+  font-size: 0.95rem;
+  letter-spacing: 0;
+}
+
 /* Being discussed is stated by the banner in the chat as well as marked here. */
 /*
  * The destination, briefly marked after something lands in it.
@@ -721,20 +738,38 @@
 .content {
   border-left-color: var(--content);
 }
+.content .fieldLetter {
+  color: var(--content);
+}
 .heart {
   border-left-color: var(--heart);
+}
+.heart .fieldLetter {
+  color: var(--heart);
 }
 .application {
   border-left-color: var(--application);
 }
+.application .fieldLetter {
+  color: var(--application);
+}
 .testimony {
   border-left-color: var(--testimony);
+}
+.testimony .fieldLetter {
+  color: var(--testimony);
 }
 .verse {
   border-left-color: var(--content);
 }
+.verse .fieldLetter {
+  color: var(--content);
+}
 .reflection {
   border-left-color: var(--testimony);
+}
+.reflection .fieldLetter {
+  color: var(--testimony);
 }
 
 /* --- The marks under a field -------------------------------------------- */

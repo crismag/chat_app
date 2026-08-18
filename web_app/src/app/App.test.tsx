@@ -152,6 +152,21 @@ test('create engine keeps text in the app', async () => {
   expect(screen.getByText(/never sent to an image model/i)).toBeInTheDocument()
 })
 
+test('an unknown address keeps the shell and explains itself', async () => {
+  vi.stubGlobal('fetch', mockAuthenticatedFetch())
+  renderAt('/nope')
+  expect(await screen.findByRole('heading', { name: 'This page is not in C.H.A.T.' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Back to Reflect' })).toBeInTheDocument()
+  expect(screen.getByRole('navigation', { name: 'Primary desktop' })).toBeInTheDocument()
+})
+
+test('Community stays off the primary navigation until it can open an entry', async () => {
+  vi.stubGlobal('fetch', mockAuthenticatedFetch())
+  renderAt('/')
+  const desktop = await screen.findByRole('navigation', { name: 'Primary desktop' })
+  expect(within(desktop).queryByRole('link', { name: 'Community' })).toBeNull()
+})
+
 test('open-source licences remain directly reachable without signing in', async () => {
   vi.stubGlobal('fetch', mockUnauthenticatedFetch())
   renderAt('/open-source-licenses')
