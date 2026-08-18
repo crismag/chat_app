@@ -59,6 +59,58 @@ type Enrichment = { excerpt: string; written: ChatSectionType[] }
 type Display = 'auto' | 'tiles' | 'list'
 type Filter = 'all' | 'drafts' | 'completed' | 'published'
 type Sort = 'recent' | 'title'
+type DatePreset = 'any' | 'today' | 'week' | 'month' | 'year' | 'custom'
+type TagFacet = { tag: string; label: string; count: number }
+type BookFacet = { usfm: string; name: string; count: number }
+
+type ReflectionsPayload = {
+  items: ReflectionSummary[]
+  tags: TagFacet[]
+  books: BookFacet[]
+}
+
+const SECTIONS_FILTERS: { id: string; label: string }[] = [
+  { id: 'content', label: 'Content' },
+  { id: 'heart', label: 'Heart' },
+  { id: 'application', label: 'Application' },
+  { id: 'testimony', label: 'Testimony' },
+]
+
+const DATE_PRESETS: { id: DatePreset; label: string }[] = [
+  { id: 'any', label: 'Any time' },
+  { id: 'today', label: 'Today' },
+  { id: 'week', label: 'This week' },
+  { id: 'month', label: 'This month' },
+  { id: 'year', label: 'This year' },
+  { id: 'custom', label: 'Custom' },
+]
+
+function utcDay(offset = 0): string {
+  const value = new Date()
+  value.setUTCDate(value.getUTCDate() + offset)
+  return value.toISOString().slice(0, 10)
+}
+
+function rangeFor(preset: DatePreset): { from: string; to: string } {
+  const to = utcDay()
+  if (preset === 'today') return { from: to, to }
+  if (preset === 'week') return { from: utcDay(-6), to }
+  if (preset === 'month') return { from: utcDay(-29), to }
+  if (preset === 'year') return { from: utcDay(-364), to }
+  return { from: '', to: '' }
+}
+
+function readPayload(body: unknown): ReflectionsPayload {
+  if (Array.isArray(body)) {
+    return { items: body as ReflectionSummary[], tags: [], books: [] }
+  }
+  const record = (body ?? {}) as Partial<ReflectionsPayload>
+  return {
+    items: Array.isArray(record.items) ? record.items : [],
+    tags: Array.isArray(record.tags) ? record.tags : [],
+    books: Array.isArray(record.books) ? record.books : [],
+  }
+}
 
 const DISPLAY_KEY = 'chat.reflections.display'
 
@@ -247,6 +299,16 @@ export function ReflectionsPage() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
   const [sort, setSort] = useState<Sort>('recent')
+  const [datePreset, setDatePreset] = useState<DatePreset>('any')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const [section, setSection] = useState<string | null>(null)
+  const [tag, setTag] = useState<string | null>(null)
+  const [book, setBook] = useState<string | null>(null)
+  const [facets, setFacets] = useState<{ tags: TagFacet[]; books: BookFacet[] }>({
+    tags: [],
+    books: [],
+  })
   const [display, setDisplay] = useState<Display>(() => {
     try {
       const stored = window.localStorage.getItem(DISPLAY_KEY)
@@ -291,14 +353,18 @@ export function ReflectionsPage() {
     let live = true
     setLoading(true)
     const params = new URLSearchParams({ q: search, filter, sort })
-    api<ReflectionSummary[]>(`/reflections?${params.toString()}`)
-      .then((next) => {
+    if (from) params.set('from', from)
+    if (to) params.set('to', to)
+    if (section) params.set('section', section)
+    if (tag) params.set('tag', tag)
+    if (book) params.set('book', book)
+    api<unknown>(`/reflections?${params.toString()}`)
+      .then((body) => {
         if (!live) return
-        // A malformed or unexpected body is an empty page, never a crash.
-        const rows = Array.isArray(next) ? next : []
-        setItems(rows)
-        // Results with nothing to enrich are already as complete as they get.
-        setSettled(rows.length === 0)
+        const payload = readPayload(body)
+        setItems(payload.items)
+        setFacets({ tags: payload.tags, books: payload.books })
+        setSettled(payload.items.length === 0)
         setNow(Date.now())
         setError(null)
       })
@@ -314,7 +380,7 @@ export function ReflectionsPage() {
     return () => {
       live = false
     }
-  }, [search, filter, sort])
+  }, [search, filter, sort, from, to, section, tag, book])
 
   /*
    * Excerpt and completion come from the conversation detail, keyed by the
@@ -358,6 +424,32 @@ export function ReflectionsPage() {
   )
 
   const searching = search.length > 0
+  const narrowing = searching || Boolean(section || tag || book || from || to)
+
+  function chooseDatePreset(next: DatePreset) {
+    setDatePreset(next)
+    if (next === 'custom' || next === 'any') {
+      if (next === 'any') {
+        setFrom('')
+        setTo('')
+      }
+      return
+    }
+    const range = rangeFor(next)
+    setFrom(range.from)
+    setTo(range.to)
+  }
+
+  function clearFilters() {
+    setQuery('')
+    setFilter('all')
+    setDatePreset('any')
+    setFrom('')
+    setTo('')
+    setSection(null)
+    setTag(null)
+    setBook(null)
+  }
 
   /*
    * Auto is width-driven for columns — that part is CSS — and content-driven
@@ -368,7 +460,7 @@ export function ReflectionsPage() {
     (display === 'auto' && searching && items.length > DENSE_SEARCH_THRESHOLD)
 
   const { continuing, recent, earlier } = useMemo(() => {
-    if (searching) {
+    if (narrowing) {
       return { continuing: [] as ReflectionSummary[], recent: items, earlier: [] as ReflectionSummary[] }
     }
     const unfinished = items
@@ -385,7 +477,7 @@ export function ReflectionsPage() {
       recent: rest.filter((item) => now - new Date(item.updatedAt).getTime() <= 30 * DAY),
       earlier: rest.filter((item) => now - new Date(item.updatedAt).getTime() > 30 * DAY),
     }
-  }, [items, enriched, searching, now])
+  }, [items, enriched, narrowing, now])
 
   const grouped = useMemo(() => {
     const order: string[] = []
@@ -418,7 +510,8 @@ export function ReflectionsPage() {
       ? 'Return to conversations and moments that mattered.'
       : `${items.length} ${items.length === 1 ? 'reflection' : 'reflections'} · return to conversations and moments that mattered.`
 
-  const nothingAtAll = !preparing && items.length === 0 && !searching && filter === 'all'
+  const nothingAtAll =
+    !preparing && items.length === 0 && !narrowing && filter === 'all'
 
   return (
     <div className={styles.page} data-reflections-root="">
@@ -490,6 +583,84 @@ export function ReflectionsPage() {
               </div>
             </div>
           </div>
+          <div className={styles.chips} role="group" aria-label="When it was updated">
+            {DATE_PRESETS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={styles.chip}
+                aria-pressed={datePreset === option.id}
+                onClick={() => chooseDatePreset(option.id)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          {datePreset === 'custom' ? (
+            <div className={styles.dateRow}>
+              <label className={styles.dateField}>
+                From
+                <input
+                  type="date"
+                  className={`input ${styles.dateInput}`}
+                  value={from}
+                  onChange={(event) => setFrom(event.target.value)}
+                />
+              </label>
+              <label className={styles.dateField}>
+                To
+                <input
+                  type="date"
+                  className={`input ${styles.dateInput}`}
+                  value={to}
+                  onChange={(event) => setTo(event.target.value)}
+                />
+              </label>
+            </div>
+          ) : null}
+          <div className={styles.chips} role="group" aria-label="Written section">
+            {SECTIONS_FILTERS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={styles.chip}
+                aria-pressed={section === option.id}
+                onClick={() => setSection(section === option.id ? null : option.id)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          {facets.books.length > 0 ? (
+            <div className={styles.chips} role="group" aria-label="Scripture book">
+              {facets.books.map((item) => (
+                <button
+                  key={item.usfm}
+                  type="button"
+                  className={styles.chip}
+                  aria-pressed={book === item.usfm}
+                  onClick={() => setBook(book === item.usfm ? null : item.usfm)}
+                >
+                  {item.name}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {facets.tags.length > 0 ? (
+            <div className={styles.chips} role="group" aria-label="Tags">
+              {facets.tags.map((item) => (
+                <button
+                  key={item.tag}
+                  type="button"
+                  className={styles.chip}
+                  aria-pressed={tag === item.tag}
+                  onClick={() => setTag(tag === item.tag ? null : item.tag)}
+                >
+                  #{item.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -525,10 +696,7 @@ export function ReflectionsPage() {
           <button
             type="button"
             className="btn btn-ghost btn-sm"
-            onClick={() => {
-              setQuery('')
-              setFilter('all')
-            }}
+            onClick={clearFilters}
           >
             Clear search and filters
           </button>
@@ -566,7 +734,7 @@ export function ReflectionsPage() {
           ) : null}
           {recent.length > 0 ? (
             <section className={styles.section}>
-              <h2 className={styles.sectionTitle}>{searching ? 'Results' : 'Recent'}</h2>
+              <h2 className={styles.sectionTitle}>{narrowing ? 'Results' : 'Recent'}</h2>
               <ul className={styles.grid} data-view="tiles" data-grid="tiles">
                 {recent.map((item) => (
                   <Tile key={item.id} item={item} enrichment={enrichmentFor(item)} now={now} />

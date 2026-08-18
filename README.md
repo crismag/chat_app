@@ -216,7 +216,7 @@ in step with the code.
 
 ## Status
 
-**Phases 0–3 built; 4 partly; 5 in progress; 6 host-boundary only; 7 done for V1; 8 not.**
+**Phases 0–3 built; 4 done; 5 in progress; 6 host-boundary only; 7 done for V1; 8 not.**
 
 What works end to end: register and sign in, write and re-open private
 reflections that persist across restarts, look a passage up in one of 47

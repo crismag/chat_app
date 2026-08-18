@@ -13,6 +13,7 @@ const reflections = [
     title: 'Trusting while I cannot see',
     scriptureReference: 'Romans 8:28',
     publicationState: 'private',
+    tags: [],
     updatedAt: new Date(now - 60_000).toISOString(),
   },
   {
@@ -21,6 +22,7 @@ const reflections = [
     title: 'Be still and know',
     scriptureReference: 'Psalm 46:10',
     publicationState: 'published',
+    tags: [],
     updatedAt: new Date(now - 200 * DAY).toISOString(),
   },
 ]
@@ -30,14 +32,21 @@ function mockFetch(items: unknown[] = reflections) {
     const url = String(input)
     if (url.includes('/reflections')) {
       const query = new URL(url, 'http://localhost').searchParams.get('q') ?? ''
+      const rows = query
+        ? items.filter((item) =>
+            (item as { title: string }).title.toLowerCase().includes(query.toLowerCase()),
+          )
+        : items
       return Promise.resolve({
         ok: true,
-        json: async () =>
-          query
-            ? items.filter((item) =>
-                (item as { title: string }).title.toLowerCase().includes(query.toLowerCase()),
-              )
-            : items,
+        json: async () => ({
+          items: rows,
+          tags: [],
+          books: [
+            { usfm: 'ROM', name: 'Romans', count: 1 },
+            { usfm: 'PSA', name: 'Psalm', count: 1 },
+          ],
+        }),
       })
     }
     return Promise.resolve({
@@ -123,4 +132,12 @@ test('groups by Today, This week and month', () => {
   expect(groupLabel(new Date(now).toISOString(), now)).toBe('Today')
   expect(groupLabel(new Date(now - 3 * DAY).toISOString(), now)).toBe('This week')
   expect(groupLabel(new Date(now - 400 * DAY).toISOString(), now)).toBe('Older')
+})
+
+test('offers book and section filters once there is something to find', async () => {
+  vi.stubGlobal('fetch', mockFetch())
+  renderPage()
+  expect(await screen.findByRole('button', { name: 'Romans' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Heart' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'This week' })).toBeInTheDocument()
 })

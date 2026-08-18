@@ -17,6 +17,7 @@ export type StoredConversation = {
   title: string;
   scriptureReference: string | null;
   publicationState: 'private' | 'published';
+  tags: { tag: string; label: string }[];
   createdAt: string;
   updatedAt: string;
 };

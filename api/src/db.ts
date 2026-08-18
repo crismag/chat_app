@@ -24,6 +24,7 @@ import type {
   StoredSession,
   StoredUser,
 } from './store.ts';
+import { readStoredTags, tagsJson } from './reflections/tags.ts';
 
 /** How long a session lasts before it must be established again. */
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -52,6 +53,7 @@ function migrate(db: DatabaseSync): void {
       title TEXT NOT NULL,
       scriptureReference TEXT,
       publicationState TEXT NOT NULL,
+      tags TEXT NOT NULL DEFAULT '[]',
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
     );
@@ -91,6 +93,7 @@ function migrate(db: DatabaseSync): void {
    */
   addColumn(db, 'messages', 'draftText', 'TEXT');
   addColumn(db, 'messages', 'draftSection', 'TEXT');
+  addColumn(db, 'conversations', 'tags', "TEXT NOT NULL DEFAULT '[]'");
 
   renameContextSectionToContent(db);
 }
@@ -175,6 +178,20 @@ function addColumn(db: DatabaseSync, table: string, column: string, type: string
 
 /** Rows come back as plain objects; this keeps the casts in one place. */
 type Row = Record<string, unknown>;
+
+function conversationFromRow(row: Row): StoredConversation {
+  return {
+    id: String(row['id']),
+    userId: String(row['userId']),
+    format: row['format'] === 'condensed' ? 'condensed' : 'full',
+    title: String(row['title']),
+    scriptureReference: row['scriptureReference'] == null ? null : String(row['scriptureReference']),
+    publicationState: row['publicationState'] === 'published' ? 'published' : 'private',
+    tags: readStoredTags(row['tags']),
+    createdAt: String(row['createdAt']),
+    updatedAt: String(row['updatedAt']),
+  };
+}
 
 class UserTable {
   private readonly db: DatabaseSync;
@@ -278,20 +295,21 @@ class ConversationTable {
     const row = this.db
       .prepare('SELECT * FROM conversations WHERE id = ?')
       .get(id) as Row | undefined;
-    return row as StoredConversation | undefined;
+    return row ? conversationFromRow(row) : undefined;
   }
 
   set(id: string, conversation: StoredConversation): this {
     this.db
       .prepare(
         `INSERT INTO conversations
-           (id, userId, format, title, scriptureReference, publicationState, createdAt, updatedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           (id, userId, format, title, scriptureReference, publicationState, tags, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            format = excluded.format,
            title = excluded.title,
            scriptureReference = excluded.scriptureReference,
            publicationState = excluded.publicationState,
+           tags = excluded.tags,
            updatedAt = excluded.updatedAt`,
       )
       .run(
@@ -301,6 +319,7 @@ class ConversationTable {
         conversation.title,
         conversation.scriptureReference,
         conversation.publicationState,
+        tagsJson(conversation.tags ?? []),
         conversation.createdAt,
         conversation.updatedAt,
       );
@@ -310,7 +329,8 @@ class ConversationTable {
   values(): StoredConversation[] {
     return this.db
       .prepare('SELECT * FROM conversations')
-      .all() as unknown as StoredConversation[];
+      .all()
+      .map((row) => conversationFromRow(row as Row));
   }
 
   /**

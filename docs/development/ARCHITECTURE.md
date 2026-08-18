@@ -413,17 +413,19 @@ Storage policy should be revisited before large-scale public usage.
 
 Start with structured and text search in the relational store — SQLite today,
 PostgreSQL if and when the product moves there. `GET /api/reflections` does this
-now: a `q` term, a `filter` of `all` / `drafts` / `completed` / `published`, and
-a `sort` of `recent` / `title`.
+now: a `q` term, `filter`, `sort`, `book`, `section`, `tag`, `from` and `to`.
 
 Search dimensions can include:
 
 - message/content text;
 - title;
-- Scripture reference;
-- tags;
+- Scripture reference, including book/chapter/verse locators;
+- tags saved on the reflection and hashtags in the writing;
 - C/H/A/T section;
-- date.
+- date (`from` / `to` as `YYYY-MM-DD`).
+
+`GET /api/reflections` answers with `{ items, tags, books }` so the page can
+offer chips it did not invent. `/api/library` is the same payload.
 
 Semantic/vector search should be introduced only when it solves retrieval failures that conventional search cannot.
 

@@ -108,10 +108,12 @@ The area is called **Reflections**, not Library. `GET /api/library` survives
 only as an alias of `GET /api/reflections`, and `/library` in the web app
 redirects.
 
-Status: **partly done.** The list, its filters (`all` / `drafts` / `completed`
-/ `published`), its sorts (`recent` / `title`) and a text query are built and
-open back into the right reflection. Search by book/chapter/verse, by date
-range, by tag and by section is not.
+Status: **done.** The list, its filters (`all` / `drafts` / `completed` /
+`published`), its sorts (`recent` / `title`) and a text query are built and
+open back into the right reflection. Search also understands a Scripture
+book, chapter or verse (so `Jn 15` finds `John 15:5`), a UTC date range,
+a written C/H/A/T section, and tags — both tags saved on the reflection and
+hashtags written in the body.
 
 Deliverables:
 

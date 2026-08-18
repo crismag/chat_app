@@ -47,6 +47,10 @@ import { createStudioImageAssetStore } from './create/image-store.ts';
 import type { StudioImageProvider } from './create/image-provider.ts';
 import { SqliteStore } from './db.ts';
 import { MemoryStore, type StoredConversation } from './store.ts';
+import { BOOKS } from './bible/books.ts';
+import { matchesReflection, readReflectionFilters } from './reflections/query.ts';
+import { parseScriptureQuery } from './reflections/scripture-query.ts';
+import { readStoredTags } from './reflections/tags.ts';
 
 const SESSION_COOKIE = 'chat_session';
 
@@ -76,8 +80,42 @@ function summaryOf(conversation: StoredConversation) {
     title: conversation.title,
     scriptureReference: conversation.scriptureReference,
     publicationState: conversation.publicationState,
+    tags: conversation.tags ?? [],
     updatedAt: conversation.updatedAt,
   };
+}
+
+function tagFacets(conversations: StoredConversation[]) {
+  const counts = new Map<string, { tag: string; label: string; count: number }>();
+  for (const conversation of conversations) {
+    for (const item of conversation.tags ?? []) {
+      const current = counts.get(item.tag);
+      if (current) {
+        current.count += 1;
+      } else {
+        counts.set(item.tag, { tag: item.tag, label: item.label, count: 1 });
+      }
+    }
+  }
+  return [...counts.values()].sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function bookFacets(conversations: StoredConversation[]) {
+  const counts = new Map<string, number>();
+  for (const conversation of conversations) {
+    const locator = conversation.scriptureReference
+      ? parseScriptureQuery(conversation.scriptureReference)
+      : null;
+    if (!locator) continue;
+    counts.set(locator.book, (counts.get(locator.book) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([usfm, count]) => ({
+      usfm,
+      name: BOOKS.find((book) => book.usfm === usfm)?.name ?? usfm,
+      count,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** Every field name a section row may carry, for validating a write. */
@@ -488,6 +526,7 @@ export function createApp(
       title: body.title?.trim() || reference || 'New reflection',
       scriptureReference: reference,
       publicationState: PUBLICATION_STATES.PRIVATE,
+      tags: [],
       createdAt: timestamp,
       updatedAt: timestamp,
     };
@@ -565,8 +604,8 @@ export function createApp(
       return c.json({ error: 'Conversation not found.' }, 404);
     }
     const body = await c.req
-      .json<{ title?: string; scriptureReference?: string | null; format?: ChatFormat }>()
-      .catch(() => ({}) as { title?: string; scriptureReference?: string | null; format?: ChatFormat });
+      .json<{ title?: string; scriptureReference?: string | null; format?: ChatFormat; tags?: unknown }>()
+      .catch(() => ({}) as { title?: string; scriptureReference?: string | null; format?: ChatFormat; tags?: unknown });
 
     if (body.format !== undefined && !Object.values(CHAT_FORMATS).includes(body.format)) {
       return c.json({ error: 'Unknown format.' }, 400);
@@ -613,6 +652,11 @@ export function createApp(
     conversation.title = proposedTitle;
     conversation.scriptureReference = proposedReference;
     conversation.format = format;
+    if (body.tags !== undefined) {
+      conversation.tags = readStoredTags(body.tags);
+    } else {
+      conversation.tags = conversation.tags ?? [];
+    }
     conversation.updatedAt = nowIso();
     store.conversations.set(conversation.id, conversation);
     return c.json(summaryOf(conversation));
@@ -989,9 +1033,12 @@ export function createApp(
       return c.json({ error: 'Unauthenticated.' }, 401);
     }
 
-    const query = (c.req.query('q') ?? '').trim().toLowerCase();
-    const filter = c.req.query('filter') ?? 'all';
-    const sort = c.req.query('sort') ?? 'recent';
+    const parsed = readReflectionFilters({
+      get: (name) => c.req.query(name),
+    });
+    if ('error' in parsed) {
+      return c.json({ error: parsed.error }, 400);
+    }
 
     const mine = [...store.conversations.values()].filter(
       (conversation) => conversation.userId === user.id,
@@ -1003,45 +1050,39 @@ export function createApp(
        * validator that gates publication — rather than a flag someone
        * remembered to set.
        */
-      if (filter !== 'all') {
+      if (parsed.filter !== 'all') {
         const complete =
           validateChat(conversation.format, draftOf(conversation)).missing.length === 0;
 
-        if (filter === 'drafts' && complete) return false;
-        if (filter === 'completed' && !complete) return false;
+        if (parsed.filter === 'drafts' && complete) return false;
+        if (parsed.filter === 'completed' && !complete) return false;
         if (
-          filter === 'published' &&
+          parsed.filter === 'published' &&
           conversation.publicationState !== PUBLICATION_STATES.PUBLISHED
         ) {
           return false;
         }
       }
 
-      if (!query) return true;
-
-      // Search what the person actually wrote, not only what they titled it.
-      const sections = Object.values(
-        sectionsFromStore(store.sections.get(conversation.id)),
-      ).map((section) => section.content);
-      const messages = store.messages.get(conversation.id) ?? [];
-      return [
-        conversation.title,
-        conversation.scriptureReference ?? '',
-        ...messages.map((message) => message.content),
-        ...sections,
-      ]
-        .join('\n')
-        .toLowerCase()
-        .includes(query);
+      return matchesReflection(
+        conversation,
+        store.sections.get(conversation.id),
+        store.messages.get(conversation.id) ?? [],
+        parsed,
+      );
     });
 
     items.sort((a, b) =>
-      sort === 'title'
+      parsed.sort === 'title'
         ? a.title.localeCompare(b.title)
         : b.updatedAt.localeCompare(a.updatedAt),
     );
 
-    return c.json(items.map(summaryOf));
+    return c.json({
+      items: items.map(summaryOf),
+      tags: tagFacets(mine),
+      books: bookFacets(mine),
+    });
   };
 
   app.get('/api/reflections', reflections);
