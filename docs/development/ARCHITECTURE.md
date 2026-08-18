@@ -127,15 +127,24 @@ A later Python service remains possible if a specific AI/tooling need appears. I
 
 ## Database
 
-**Decision (Phase 1): SQLite, through Node's built-in `node:sqlite`.**
+**Decision (durable store): MariaDB / MySQL-compatible SQL**, via `api/src/mysql/`,
+environment-driven and applied with versioned migrations. The hosted database
+is Hostinger **MariaDB 11.8**. Internal rows use `BIGINT`; anything shown to a
+browser, URL, or mobile client uses a `CHAR(36)` UUID. Credentials never leave
+the API process.
 
-PostgreSQL remains the preferred database for a deployed multi-instance
-product, and nothing here should make moving to it hard. It is not what runs
-today. `node:sqlite` needs no native build step, no service to start and no
-container, which is the whole reason it won: a contributor clones the
-repository and the storage layer is simply there.
+The live demonstrable app still uses **SQLite** (`api/src/db.ts`, `DATABASE_PATH`)
+so local development does not require Hostinger. When `MYSQL_HOST` is set, the
+API applies migrations on boot. Application routes are not switched onto this
+store in the foundation phase.
 
-What is actually implemented, in `api/src/db.ts`:
+**Privacy boundary:** the central database stores users, identities, profiles,
+settings, sessions, reflections, revisions, generated-image records, and
+**non-content** AI usage metadata. It does **not** store AI conversation
+transcripts, prompts, or responses. Those remain device-local working data
+(IndexedDB on the web, later).
+
+What is actually implemented for the live SQLite path, in `api/src/db.ts`:
 
 - one file, `chat.sqlite`, overridable with `DATABASE_PATH`;
 - `PRAGMA journal_mode = WAL` and `PRAGMA foreign_keys = ON`;
