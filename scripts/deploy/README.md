@@ -77,25 +77,51 @@ else comes from `.env`:
 `NODE_ENV=production` is what marks the session cookie `Secure`, so it is set
 by `restart-api.sh` rather than left to the file.
 
-## The part these scripts cannot decide
+## How /api is served, on this host
 
-The browser asks `reflections.crishub.com/api/...`, and something has to hand
-that to the Node process. `public_html/.htaccess` proxies it to `127.0.0.1:8000`,
-which keeps the port off the public internet. **That rewrite depends on the
-host allowing `[P]`,** and shared plans often do not.
+Settled by testing rather than assumption, on reflections.crishub.com:
 
-If your plan instead runs Node through hPanel, that tool mounts the app at a
-URL of its own. In that case: delete the proxy block from `.htaccess`, rebuild
-with `VITE_API_BASE_URL=<that URL>`, and let hPanel own the process instead of
-`restart-api.sh`.
+| | |
+| --- | --- |
+| `RewriteRule … [P]` to `127.0.0.1` | **503.** Tested with a listener confirmed answering on the loopback — mod_proxy is not permitted on this plan |
+| a background `node` started with `nohup` | **survives logout.** Still answering after the SSH session ended |
+| `node` on the host | 22.18.0 at `/opt/alt/alt-nodejs22/root/usr/bin`, and `--experimental-strip-types` works |
+| `cloudlinux-selector` CLI | not available; the Node app can only be created in hPanel |
 
-`preflight.sh` reports which case you are in. After installing, these two
-answer it for certain:
+So the API is mounted by **hPanel → Setup Node.js App**, not by a proxy rule.
+`.htaccess` therefore carries no `/api` rule at all: the manager writes its own
+above it, and a rule here would shadow them.
+
+Create the application once, in hPanel:
+
+| field | value |
+| --- | --- |
+| Node.js version | 22 |
+| Application mode | Production |
+| Application root | `domains/reflections.crishub.com/private/chat_app/current` |
+| Application URL | `reflections.crishub.com/api` |
+| Application startup file | `app.mjs` |
+
+Then add the environment from `.env` — the manager runs the process itself, so
+`restart-api.sh` is **not** used on this host, and neither are the variables it
+would have exported. Set these in the manager alongside the credentials:
+
+```
+NODE_ENV=production
+DATABASE_PATH=/home/u471078694/domains/reflections.crishub.com/private/chat_app/data/chat.sqlite
+CHAT_WEB_ORIGINS=https://reflections.crishub.com
+```
+
+After that, and after every deploy, restart the app from hPanel. These answer
+whether it worked:
 
 ```bash
 curl -sS  https://reflections.crishub.com/api/health      # {"status":"ok",…}
 curl -sSI https://reflections.crishub.com/reflections     # 200 and the app, not a 404
 ```
+
+`restart-api.sh` remains for hosts that do let you run your own process; the
+nohup test above shows it would work here too if the proxy did.
 
 ## Still SQLite
 
