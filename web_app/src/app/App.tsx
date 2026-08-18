@@ -8,6 +8,7 @@ import { CommunityPage } from '../community/CommunityPage.tsx'
 import { CreatePage } from '../create/CreatePage.tsx'
 import { ProfilePage } from '../profile/ProfilePage.tsx'
 import { OpenSourceLicencesPage } from '../licenses/OpenSourceLicencesPage.tsx'
+import { NotFoundPage } from '../shared/ui/NotFoundPage.tsx'
 
 export function App() {
   return (
@@ -34,6 +35,7 @@ export function App() {
           */}
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/profile/:handle" element={<ProfilePage />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>
     </AuthProvider>

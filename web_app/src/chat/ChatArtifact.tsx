@@ -20,17 +20,12 @@ import styles from './ChatPage.module.css'
  * clamped lines behind an Edit button — it is shown whole and typed into
  * directly.
  *
- * What is *not* on the face of the card is deliberate. The letter, the section
- * name, "Not yet", "Written", "Your words", "Unsaved" and a Save button used to
- * sit around every one of four fields, and four fields' worth of that is more
- * interface than reflection. `docs/examples/REAL_CHAT_SAMPLES.md` transcribes
- * roughly thirty real C.H.A.T.s: the labels vary in case and form, several omit
- * them entirely, and some skip the C heading altogether and simply open with
- * the verse — because the verse *is* the content and the label is redundant to
- * the person writing it. So the section is carried by its colour, by the
- * question in the empty field, and by wording one hover or one keyboard focus
- * away; the state is carried by marks. Nothing has been removed from the
- * accessibility tree, and nothing that was stored has changed.
+ * What is *not* on the face of the card is deliberate clutter, not the
+ * framework itself. Status words, "Your words", and a Save button used to sit
+ * around every one of four fields. The letter and the section name stay: four
+ * identical boxes cannot teach C.H.A.T., and the names vanish from the
+ * placeholder the moment there is writing in the field. The heading is the
+ * name; the question remains the placeholder of an empty field.
  */
 function Field({
   meta,
@@ -110,10 +105,16 @@ function Field({
       data-flash={flashed ? 'true' : 'false'}
     >
       {/*
-        The heading is kept for anything that navigates by headings; it is the
-        printing of it on the card that was the clutter, not the fact of it.
+        The heading is the section. It stays visible after the placeholder
+        has left, because that is when a person most needs to know which
+        box they are in.
       */}
-      <h3 className="sr-only">{meta.name}</h3>
+      <h3 className={styles.fieldHeading}>
+        <span className={styles.fieldLetter} aria-hidden="true">
+          {meta.letter}
+        </span>
+        {meta.name}
+      </h3>
 
       <textarea
         ref={areaRef}

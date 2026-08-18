@@ -1,21 +1,19 @@
 import { Navigate, NavLink, Outlet, useNavigate } from 'react-router'
 import { useAuth } from '../../auth/useAuth.ts'
-import { ChatIcon, CommunityIcon, LibraryIcon, PlusIcon } from '../ui/icons.tsx'
+import { ChatIcon, LibraryIcon, PlusIcon } from '../ui/icons.tsx'
 import { ProfileMenu } from '../ui/ProfileMenu.tsx'
 import styles from './AppShell.module.css'
 
 /*
- * Three destinations, not four.
+ * Two destinations, not four.
  *
- * Create left the primary navigation because it is an action on a finished
- * reflection rather than a place of its own — it is reached from the C.H.A.T.
- * companion and from the account menu. What remains is the actual shape of the
- * product: write, revisit, share.
+ * Create is an action on a finished reflection, reached from the card and the
+ * account menu. Community is not in the shell until it can open a published
+ * entry. What remains is the product that works: write, and revisit.
  */
 const navItems = [
   { to: '/', label: 'Reflect', end: true, Icon: ChatIcon },
   { to: '/reflections', label: 'Reflections', end: false, Icon: LibraryIcon },
-  { to: '/community', label: 'Community', end: false, Icon: CommunityIcon },
 ] as const
 
 /*
@@ -71,7 +69,7 @@ export function AppShell() {
             </span>
           </NavLink>
 
-          <nav className={styles.desktopNav} aria-label="Primary">
+          <nav className={styles.desktopNav} aria-label="Primary desktop">
             {navItems.map(({ to, label, end, Icon }) => (
               <NavLink
                 key={to}
@@ -116,7 +114,7 @@ export function AppShell() {
         place to reach. It carries the same destinations as the header, and
         icons let the labels stay legible instead of shrinking to fit.
       */}
-      <nav className={styles.mobileNav} aria-label="Primary">
+      <nav className={styles.mobileNav} aria-label="Primary phone">
         {navItems.map(({ to, label, end, Icon }) => (
           <NavLink
             key={to}

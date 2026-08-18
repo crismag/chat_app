@@ -517,7 +517,15 @@ export function ChatPage() {
     setSaveState({ status: 'saving' })
     try {
       await api(`/conversations/${activeId}`, { method: 'PATCH', body: JSON.stringify(body) })
-      await openConversation(activeId)
+      /*
+       * Refresh the stored record without going through `openConversation`.
+       * That helper also writes the URL; doing so while the author is in the
+       * Scripture-reference field was enough to remount the input and lose
+       * keystrokes, especially after Send moved focus and a later blur saved
+       * a fragment.
+       */
+      const next = await api<ConversationDetail>(`/conversations/${activeId}`)
+      setDetail(next)
       await refreshList()
       setSaveState({ status: 'saved', at: Date.now() })
       return true
@@ -607,7 +615,7 @@ export function ChatPage() {
        * there when they come back.
        */
       if (openedRef.current === conversationId) {
-        await openConversation(conversationId)
+        await openConversation(conversationId, { continuing: true })
       }
     } catch (caught: unknown) {
       /*
@@ -1440,14 +1448,21 @@ export function ChatPage() {
                    * one. Choosing a Scripture has never required a form.
                    */
                   if (!detail) return
-                  const value = referenceDraft.trim()
+                  const sent = referenceDraft
+                  const value = sent.trim()
                   if (value === (detail?.scriptureReference ?? '')) {
                     setReferenceDraft(null)
                     return
                   }
-                  void patchConversation({ scriptureReference: value }).then(() =>
-                    setReferenceDraft(null),
-                  )
+                  void patchConversation({ scriptureReference: value }).then((ok) => {
+                    if (!ok) return
+                    /*
+                     * Forget the draft only if it is still the one that was
+                     * just saved. A blur caused by Send disabling, or by the
+                     * field remounting, used to clear a later keystroke.
+                     */
+                    setReferenceDraft((current) => (current === sent ? null : current))
+                  })
                 }}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') event.currentTarget.blur()

@@ -15,6 +15,24 @@ import {
 
 export const CHAT_SQUARE_TEMPLATE = { id: 'chat.square-reflection', version: 1 } as const
 
+/**
+ * Host policy for the square verse-plus-reflection card. Pages, drawing,
+ * callouts and Studio's built-in templates stay off until C.H.A.T. maps
+ * those layouts itself. Generated backgrounds remain available through the
+ * host callback when the API has a provider.
+ */
+export const CHAT_STUDIO_CAPABILITIES = {
+  images: false,
+  imageAdjustments: false,
+  lines: false,
+  pages: false,
+  groups: false,
+  drawing: false,
+  callouts: false,
+} as const
+
+export const CHAT_STUDIO_TEMPLATES = [] as const
+
 export type ReflectionField = 'heart' | 'application' | 'testimony' | 'reflection'
 
 export interface StudioReflectionSource {

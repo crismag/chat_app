@@ -10,6 +10,14 @@ findings were fixed by the owner during the review and are recorded at the
 bottom as **fixed during review** rather than deleted, because the trail
 matters. Re-run the scripts before trusting a line item.
 
+A later follow-through on 2026-08-17 changed some of the product-surface
+findings below: unknown URLs now render a 404 inside the shell; the two
+primary landmarks have distinct names; Community left the primary navigation;
+section names returned to the card; Create no longer exposes Studio's
+built-in templates or drawing chrome; and the Send-button Scripture-reference
+path is covered by a unit test as well as `reference-race.mjs`. The rest of
+this document is still the 2026-08-16 browser tour.
+
 The other documents in this directory describe intent. This one is the
 counterweight, and it is deliberately unflattering. Where it disagrees with
 them, believe this one and fix the code.

@@ -14,6 +14,8 @@ import { fetchSavedPassage } from '../bible/api.ts'
 import { api } from '../shared/api/client.ts'
 import {
   CHAT_SQUARE_TEMPLATE,
+  CHAT_STUDIO_CAPABILITIES,
+  CHAT_STUDIO_TEMPLATES,
   availableReflectionFields,
   buildChatStudioDocument,
   defaultReflectionField,
@@ -239,7 +241,8 @@ export function CreatePage() {
             generatedAssetSafeArea={{ x: 0.12, y: 0.12, width: 0.76, height: 0.76 }}
             generatedAssetMetadata={{ sourceApplication: 'chat_app', sourceReflectionId: conversationId }}
             onRenderResult={reportRender}
-            capabilities={{ images: false }}
+            capabilities={CHAT_STUDIO_CAPABILITIES}
+            templates={CHAT_STUDIO_TEMPLATES}
           />
         </div>
       ) : null}

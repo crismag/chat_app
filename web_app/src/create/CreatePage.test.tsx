@@ -4,17 +4,24 @@ import { afterEach, expect, test, vi } from 'vitest'
 import { AUTHOR_ORIGINS, BIBLE_PROVIDERS, emptyChatSections } from '@chat/shared'
 import type { CreateStudioProps } from '@crismag/create-studio'
 
+const { captured } = vi.hoisted(() => ({
+  captured: { current: null as CreateStudioProps | null },
+}))
+
 vi.mock('@crismag/create-studio', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@crismag/create-studio')>()
   return {
     ...actual,
-    CreateStudio: ({ document, onSave, onRequestGeneratedAsset }: CreateStudioProps) => (
-      <div>
-        <p>Studio document {document.id}</p>
-        <p>{onRequestGeneratedAsset ? 'Generated backgrounds enabled' : 'Generated backgrounds unavailable'}</p>
-        <button type="button" onClick={() => void onSave?.(document)}>Save</button>
-      </div>
-    ),
+    CreateStudio: (props: CreateStudioProps) => {
+      captured.current = props
+      return (
+        <div>
+          <p>Studio document {props.document.id}</p>
+          <p>{props.onRequestGeneratedAsset ? 'Generated backgrounds enabled' : 'Generated backgrounds unavailable'}</p>
+          <button type="button" onClick={() => void props.onSave?.(props.document)}>Save</button>
+        </div>
+      )
+    },
   }
 })
 
@@ -23,6 +30,7 @@ const { CreatePage } = await import('./CreatePage.tsx')
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  captured.current = null
 })
 
 test('the selected reflection opens with its exact saved passage and can be persisted', async () => {
@@ -75,6 +83,15 @@ test('the selected reflection opens with its exact saved passage and can be pers
 
   expect(await screen.findByText('Studio document chat.studio.selected')).toBeInTheDocument()
   expect(await screen.findByText('Generated backgrounds enabled')).toBeInTheDocument()
+  expect(captured.current?.capabilities).toMatchObject({
+    images: false,
+    pages: false,
+    drawing: false,
+    callouts: false,
+    groups: false,
+    lines: false,
+  })
+  expect(captured.current?.templates).toEqual([])
   expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/conversations/selected'), expect.anything())
   fireEvent.click(screen.getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(savedBody).not.toBeNull())
