@@ -253,6 +253,34 @@ describe('the passage card', () => {
     )
   })
 
+  /*
+   * This card is only mounted because somebody pressed for it, so it opens
+   * showing the verse. The disclosure is for getting a long passage out of the
+   * way of the picker beneath it — and it clips rather than withholds, so a
+   * screen reader still reads the whole quotation either way.
+   */
+  test('a passage opens in full, and can be folded away and back', async () => {
+    stubFetch({ saved: NIV_PASSAGE })
+    render(<ScripturePassage conversationId="c1" />)
+
+    const quote = await screen.findByTestId('scripture-text')
+    expect(quote).toHaveAttribute('data-collapsed', 'false')
+
+    const disclosure = screen.getByRole('button', { name: 'Show less' })
+    expect(disclosure).toHaveAttribute('aria-expanded', 'true')
+    expect(disclosure).toHaveAttribute('aria-controls', quote.getAttribute('id'))
+
+    fireEvent.click(disclosure)
+    expect(screen.getByTestId('scripture-text')).toHaveAttribute('data-collapsed', 'true')
+    /* Clipped for the eye, never withheld from a reader that does not use one. */
+    expect(screen.getByTestId('scripture-text')).toHaveTextContent('he gave his one and only Son')
+
+    const reopen = screen.getByRole('button', { name: 'Show full passage' })
+    expect(reopen).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(reopen)
+    expect(screen.getByTestId('scripture-text')).toHaveAttribute('data-collapsed', 'false')
+  })
+
   test('the passage is source material, not an editable field', async () => {
     stubFetch({ saved: NIV_PASSAGE })
     render(<ScripturePassage conversationId="c1" />)

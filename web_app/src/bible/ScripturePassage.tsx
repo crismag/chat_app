@@ -103,6 +103,16 @@ export function ScripturePassage({
   const [failure, setFailure] = useState<LookupFailure | null>(null)
   const [choosing, setChoosing] = useState(false)
   const [recentIds, setRecentIds] = useState<number[]>(() => readRecentTranslationIds())
+  /*
+   * Whether the passage is shown in full.
+   *
+   * Open to begin with, because this card is only ever mounted by somebody
+   * pressing for it — it lives in a sheet, not on the reflection page — and
+   * opening collapsed would hide the thing the press was for. The disclosure
+   * exists for the other direction: a long passage that has been read and is
+   * now in the way of the translation picker under it.
+   */
+  const [expanded, setExpanded] = useState(true)
   const [reference, setReference] = useState(initialReference ?? '')
 
   useEffect(() => {
@@ -215,6 +225,7 @@ export function ScripturePassage({
         setPassage(answer.passage)
         setReference(answer.passage.reference)
         setChoosing(false)
+        setExpanded(true)
         rememberTranslationId(answer.passage.translationId)
         setRecentIds(readRecentTranslationIds())
         onPassageChange?.(answer.passage)
@@ -249,6 +260,7 @@ export function ScripturePassage({
   const clearPassage = useCallback(async () => {
     setPassage(null)
     setChoosing(false)
+    setExpanded(false)
     setFailure(null)
     setReference('')
     onPassageChange?.(null)
@@ -330,9 +342,31 @@ export function ScripturePassage({
 
       {passage ? (
         <>
-          <blockquote className={styles.passage} data-testid="scripture-text">
+          <blockquote
+            id={`${formId}-passage`}
+            className={styles.passage}
+            data-collapsed={expanded ? 'false' : 'true'}
+            data-testid="scripture-text"
+          >
             {passage.content}
           </blockquote>
+          {/*
+            * The disclosure, below the words rather than above them.
+            *
+            * Collapsed, the passage is clipped by CSS and stays in the document,
+            * so a screen reader still reads the whole verse and a find-in-page
+            * still matches it. This truncates a quotation visually; it does not
+            * withhold one.
+            */}
+          <button
+            type="button"
+            className={styles.disclosure}
+            aria-expanded={expanded}
+            aria-controls={`${formId}-passage`}
+            onClick={() => setExpanded((open) => !open)}
+          >
+            {expanded ? 'Show less' : 'Show full passage'}
+          </button>
           <footer className={styles.attribution}>
             <span className={styles.reference}>
               {passage.reference} ({shownAbbreviation})

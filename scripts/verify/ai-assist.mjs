@@ -20,7 +20,7 @@
 import { Builder, By, Key } from 'selenium-webdriver';
 import chrome from 'selenium-webdriver/chrome.js';
 import { writeFileSync, mkdirSync } from 'node:fs';
-import { biblePassageTrigger, setBiblePassage } from './passage-control.mjs';
+import { biblePassageControl, setBiblePassage } from './passage-control.mjs';
 
 const OUT = new URL('./out/', import.meta.url);
 mkdirSync(OUT, { recursive: true });
@@ -156,11 +156,11 @@ try {
    */
   const reference = 'Romans 8:28';
   await setBiblePassage(driver, reference);
-  await until(async () => /Romans 8:28/i.test(await (await biblePassageTrigger(driver)).getText()), 8000);
+  await until(async () => /Romans 8:28/i.test(await (await biblePassageControl(driver)).getText()), 8000);
   check(
     'the Bible passage is set, whole, before anything is asked about it',
-    /Romans 8:28/i.test(await (await biblePassageTrigger(driver)).getText()),
-    await (await biblePassageTrigger(driver)).getText(),
+    /Romans 8:28/i.test(await (await biblePassageControl(driver)).getText()),
+    await (await biblePassageControl(driver)).getText(),
   );
 
   // --- the disclosure comes before anything is sent ----------------------

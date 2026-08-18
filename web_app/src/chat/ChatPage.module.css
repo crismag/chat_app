@@ -392,6 +392,49 @@
 }
 
 /*
+ * The passage control.
+ *
+ * Deliberately quiet and deliberately one line: it names the passage the
+ * reflection is written against and opens the connector, and it does nothing
+ * else. It sits above the title because that is the order the reflection is
+ * described in, and it keeps a full-height target so it is pressable on a
+ * phone despite reading as small caps.
+ */
+.passageButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  align-self: start;
+  max-width: 100%;
+  min-height: 2.5rem;
+  margin-inline-start: -0.45rem;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: var(--tracking-caps);
+  text-align: start;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.passageButton:hover,
+.passageButton:focus-visible {
+  border-color: var(--line);
+  background: var(--surface-2);
+}
+
+.passageButton:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--ring);
+}
+
+/*
  * The title and the reference are fields, not labels.
  *
  * They look like text until they are focused, because they are read far more

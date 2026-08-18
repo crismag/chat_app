@@ -132,13 +132,20 @@ try {
   );
   check(
     'a compact Bible passage action is offered',
-    /Choose Bible passage/i.test(blank),
+    /Add Bible passage/i.test(blank),
   );
   check(
     'the four C.H.A.T. fields are on the blank page',
     /The passage itself/i.test(blank) && /What it means to you/i.test(blank),
   );
-  check('the picker is offered by name', /Choose Bible passage/.test(blank));
+  /*
+   * The connector is behind the press, not beside the writing. A blank page
+   * showing a translation picker or a quotation is the layout this replaced.
+   */
+  check(
+    'the picker itself is not on the blank page',
+    !/Choose Bible passage/.test(blank) && !/\[placeholder\] John 3:16-18/.test(blank),
+  );
 
   /* Now write something, so the sections and the chips are on screen. */
   await driver

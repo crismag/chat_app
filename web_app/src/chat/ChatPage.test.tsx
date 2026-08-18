@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { ChatPage } from './ChatPage.tsx'
@@ -283,7 +283,10 @@ test('a brand-new reflection shows every C.H.A.T. field and a writable title', a
   expect(screen.getByRole('heading', { name: /testimony/i })).toBeInTheDocument()
   expect(screen.getByLabelText('Reflection title')).toBeEnabled()
   expect(screen.getByLabelText('Tags')).toBeEnabled()
-  expect(screen.getByRole('button', { name: 'Choose Bible passage' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Add Bible passage' })).toBeInTheDocument()
+  /* The connector is behind that press and nowhere on the page until then. */
+  expect(screen.queryByPlaceholderText('John 3:16-18')).toBeNull()
+  expect(screen.queryByRole('combobox', { name: 'Translation' })).toBeNull()
   expect(screen.queryByLabelText('Scripture reference')).toBeNull()
   expect(screen.queryByPlaceholderText('Reference')).toBeNull()
   expect(screen.getByRole('button', { name: 'Suggest title' })).toBeDisabled()
@@ -295,7 +298,7 @@ test('writing Content does not require a Bible passage first', async () => {
   const content = await screen.findByLabelText(/Content — the passage itself/i)
   fireEvent.change(content, { target: { value: 'The vine is the source.' } })
   expect((content as HTMLTextAreaElement).value).toBe('The vine is the source.')
-  expect(screen.getByRole('button', { name: 'Choose Bible passage' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Add Bible passage' })).toBeInTheDocument()
 })
 
 test('a saved reflection hydrates its title, passage control and C.H.A.T. fields', async () => {
@@ -344,42 +347,36 @@ test('Suggest title stays disabled until a C.H.A.T. field has text', async () =>
   expect(screen.getByLabelText('Reflection title')).toBeEnabled()
 })
 
-test('selecting a Bible passage updates the compact control and leaves C.H.A.T. writing alone', async () => {
+test('the passage connector opens in a sheet, and closing it leaves C.H.A.T. writing alone', async () => {
   renderPage()
 
   const content = await screen.findByLabelText(/Content — the passage itself/i)
   fireEvent.change(content, { target: { value: 'The vine is the source.' } })
 
-  fireEvent.click(await screen.findByRole('button', { name: 'Choose Bible passage' }))
-  const passageField = await screen.findByPlaceholderText('John 3:16-18')
+  /* Nothing about Bible lookup exists until the control is pressed. */
+  expect(screen.queryByRole('dialog', { name: 'Bible passage' })).toBeNull()
+  fireEvent.click(await screen.findByRole('button', { name: 'Add Bible passage' }))
+  const sheet = await screen.findByRole('dialog', { name: 'Bible passage' })
+
+  fireEvent.click(await within(sheet).findByRole('button', { name: /choose bible passage/i }))
+  const passageField = await within(sheet).findByPlaceholderText('John 3:16-18')
   fireEvent.change(passageField, { target: { value: 'John 3:16' } })
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Load passage' })).toBeEnabled())
-  fireEvent.click(screen.getByRole('button', { name: 'Load passage' }))
-
   await waitFor(() =>
-    expect(screen.getByRole('button', { name: /John 3:16 · NIV/i })).toHaveAttribute(
-      'aria-expanded',
-      'false',
-    ),
+    expect(within(sheet).getByRole('button', { name: 'Load passage' })).toBeEnabled(),
   )
+  fireEvent.click(within(sheet).getByRole('button', { name: 'Load passage' }))
+
+  /* A passage the author just asked for is shown in full, not collapsed. */
+  await waitFor(() =>
+    expect(within(sheet).getByTestId('scripture-text')).toHaveAttribute('data-collapsed', 'false'),
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Close Bible passage' }))
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Bible passage' })).toBeNull())
+
+  /* The page names the passage it is written against, and nothing more. */
+  expect(await screen.findByRole('button', { name: /John 3:16/ })).toBeInTheDocument()
   expect(screen.queryByPlaceholderText('John 3:16-18')).toBeNull()
-  expect(screen.getByLabelText(/Content — the passage itself/i)).toHaveValue(
-    'The vine is the source.',
-  )
-
-  fireEvent.click(screen.getByRole('button', { name: /John 3:16 · NIV/i }))
-  expect(await screen.findByPlaceholderText('John 3:16-18')).toBeInTheDocument()
-
-  fireEvent.change(screen.getByPlaceholderText('John 3:16-18'), {
-    target: { value: 'Philippians 4:6-7' },
-  })
-  fireEvent.click(screen.getByRole('button', { name: 'Load passage' }))
-  await waitFor(() =>
-    expect(screen.getByRole('button', { name: /Philippians 4:6-7 · NIV/i })).toBeInTheDocument(),
-  )
-
-  fireEvent.click(screen.getByRole('button', { name: 'Remove passage' }))
-  expect(await screen.findByRole('button', { name: 'Choose Bible passage' })).toBeInTheDocument()
   expect(screen.getByLabelText(/Content — the passage itself/i)).toHaveValue(
     'The vine is the source.',
   )

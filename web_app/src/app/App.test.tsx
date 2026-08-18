@@ -122,7 +122,7 @@ test('Reflect opens on a question, and can be written in immediately', async () 
   expect(screen.getByText('Content · Heart · Application · Testimony')).toBeInTheDocument()
   // No title form stands between someone and their first sentence.
   expect(screen.getByLabelText('Write your reflection')).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Choose Bible passage' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Add Bible passage' })).toBeInTheDocument()
   expect(screen.getByLabelText('Reflection title')).toBeEnabled()
 })
 
