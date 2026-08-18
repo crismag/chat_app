@@ -67,7 +67,7 @@ Conversational Scripture study, reflection, AI assistance, and structured C/H/A/
 Persistent conversation history, Scripture references, tags, collections, search, and personal testimony history. (Named Library once; `GET /api/library` is now only an alias of `GET /api/reflections`.)
 
 ### Community
-Discovery of only those C.H.A.T.s that users explicitly publish. Future community features may include saves, reactions, comments, following, and discussion.
+Discovery of only those C.H.A.T.s that users explicitly publish, either publicly or into one community they belong to. Encouraged and private Save are in V1. Comment threads, following, and ranking are not.
 
 ### Create
 Template-driven visual creation for:
@@ -216,7 +216,7 @@ in step with the code.
 
 ## Status
 
-**Phases 0–3 built; 4 partly; 5 in progress; 6 host-boundary only; 7–8 not.**
+**Phases 0–3 built; 4 partly; 5 in progress; 6 host-boundary only; 7 done for V1; 8 not.**
 
 What works end to end: register and sign in, write and re-open private
 reflections that persist across restarts, look a passage up in one of 47
@@ -227,9 +227,8 @@ selected reflection in Create Studio, saves the canonical document, and
 exports a 1080 × 1080 PNG. Generated backgrounds use a host-owned provider
 seam; the current adapter is a local fixture, not an AI model.
 
-What does not: **Community** is hidden from navigation because it still cannot
-open a published entry. Create is a working square-card foundation, not the
-finished layout/style product.
+What does not: Create is a working square-card foundation, not the finished
+layout/style product. There is no Capacitor packaging yet.
 
 An honest, page-by-page account of what is incomplete, inert or misleading is in
 [`docs/development/PRODUCT_READINESS.md`](docs/development/PRODUCT_READINESS.md).

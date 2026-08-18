@@ -136,3 +136,4 @@ export function emptyChatSections(): Record<ChatSectionType, ChatSection> {
 export * from './formats.ts';
 export * from './ai.ts';
 export * from './bible.ts';
+export * from './community.ts';

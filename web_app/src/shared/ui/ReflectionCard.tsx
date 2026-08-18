@@ -150,9 +150,19 @@ export function ReflectionCard({
   emptyExcerpt = 'Nothing written yet.',
   badge,
   actions,
+  meta,
+  footer,
+  dateLabel = 'Last updated ',
+  progress,
 }: {
   item: ReflectionCardItem
-  excerpt: string | undefined
+  /*
+   * A string for a plain excerpt, or nodes when the card carries several
+   * section excerpts with their C/H/A/T markers — which is what a Community
+   * publication shows. Widening this was the alternative to a second card that
+   * differed from this one only in its middle.
+   */
+  excerpt: ReactNode | undefined
   written: ChatSectionType[] | undefined
   now: number
   href?: string
@@ -161,13 +171,30 @@ export function ReflectionCard({
   emptyExcerpt?: string
   badge?: ReactNode
   actions?: ReactNode
+  /**
+   * An identity line above the Scripture reference — author, audience, time.
+   *
+   * Community needs it and Reflections does not: on your own shelf, every
+   * reflection is yours and saying so on each card would be noise. It sits
+   * above the reference because the reference is the strong contextual anchor,
+   * and metadata stays visually secondary to the reflection.
+   */
+  meta?: ReactNode
+  /** A row under the foot — hashtags, Encouraged, Save, Share, overflow. */
+  footer?: ReactNode
+  dateLabel?: string
+  /** Replaces the C.H.A.T. progress, for a card where completion is not the point. */
+  progress?: ReactNode
 }) {
   return (
     <li
       className={featured ? `${styles.tile} ${styles.featured}` : styles.tile}
       data-interactive={href ? 'true' : 'false'}
+      data-has-meta={meta ? 'true' : 'false'}
+      data-has-footer={footer ? 'true' : 'false'}
     >
       <SectionMarks written={written} variant="strip" />
+      {meta ? <div className={styles.meta}>{meta}</div> : null}
       <div className={styles.tileTop}>
         <span className={`eyebrow ${styles.reference}`}>
           {item.scriptureReference || 'No Scripture reference'}
@@ -177,15 +204,16 @@ export function ReflectionCard({
       <h3 className={styles.tileTitle}>
         {href ? <Link to={href}>{item.title}</Link> : item.title}
       </h3>
-      <p className={styles.excerpt}>{excerpt || emptyExcerpt}</p>
+      <div className={styles.excerpt}>{excerpt || emptyExcerpt}</div>
       <div className={styles.tileFoot}>
-        <ChatProgress format={item.format} written={written} />
+        {progress ?? <ChatProgress format={item.format} written={written} />}
         <span className={styles.date}>
-          <span className="sr-only">Last updated </span>
+          <span className="sr-only">{dateLabel}</span>
           {formatDate(item.updatedAt, now)}
         </span>
         {actions}
       </div>
+      {footer ? <div className={styles.tileExtra}>{footer}</div> : null}
     </li>
   )
 }

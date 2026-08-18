@@ -277,7 +277,8 @@ When content is too long, the application should offer intelligent alternatives 
 
 ## Community
 
-The community layer consists only of explicitly published entries.
+The community layer consists only of explicitly published entries. Each
+publication has one audience: public, or one community the author belongs to.
 
 The initial community experience can remain small:
 

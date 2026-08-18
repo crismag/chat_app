@@ -2391,3 +2391,33 @@
     padding: 0;
   }
 }
+
+/* --- Choosing a community in the share sheet ---------------------------- */
+
+/*
+ * Nested under the Community destination rather than beside it, so the shape of
+ * the choice matches the rule: an audience first, and only then which one.
+ */
+.communityChoice {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0 var(--space-6);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.communityOption {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.communityHint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-body);
+}

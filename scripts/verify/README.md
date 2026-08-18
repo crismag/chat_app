@@ -85,6 +85,15 @@ database it has been run against will contain published entries. That is where
 the rows on the Community page come from; they are real records, not seeded
 placeholders.
 
+## `community.mjs` — membership is re-checked on the live payload
+
+Three real browser sessions. A member can read a community publication; a
+non-member gets 404 on the same URL and the body names nothing; a removed
+member loses access on the next request. Private reflections never appear in
+any Community response. Encouraged is one per user. Save stays invisible to
+the author. A public link works for a stranger; a community publication
+offers no external share URL.
+
 ## `readiness-tour.mjs` — every page, both widths, no assertions
 
 Signs up and walks Auth, Reflect, Reflections, Community, Create, the `/library`

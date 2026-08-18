@@ -190,12 +190,20 @@ AI artwork enhances the composition without being responsible for rendering Scri
 
 ## Phase 7 — Internal publication/community
 
-Status: **backend done, frontend barely begun.** Publish and unpublish are
-implemented and validated server-side, and `GET /api/community` returns only
-records whose `publicationState` is `published`, so the privacy boundary holds
-where it matters. The Community page itself is still a title-and-reference
-listing with nothing clickable. It is out of the primary navigation until a
-published entry can be opened.
+Status: **done for V1.** Sharing is an explicit action from a reflection. A
+publication is a copy with one audience — public, or one community the author
+belongs to. Membership is stored in SQLite and re-checked on every read.
+Authorisation is a single SQL visibility predicate applied before retrieval,
+not a filter after the list is loaded.
+
+The Community page is a reading feed (Shared, Public, Communities) with
+openable publication cards and a dedicated `/community/publications/:id`
+address. Possessing that URL grants nothing: a member reads it; someone who
+has left the community gets the same 404 as a missing record. Encouraged and
+private Save exist; comment threads, following, and ranking do not.
+
+`GET /api/community` remains as a published-conversation listing for older
+callers. The live feed is `GET /api/publications`.
 
 Deliverables:
 
