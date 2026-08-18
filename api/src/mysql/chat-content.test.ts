@@ -12,12 +12,18 @@ describe('chat_content validation', () => {
       application: user('I will tell someone.'),
       testimony: user('God met me here.'),
     };
-    expect(validateChatContent('FULL', payload)).toEqual(payload);
+    const stored = validateChatContent('FULL', payload);
+    expect(stored).toMatchObject(payload);
+    /* The condensed slots exist and are empty; the format says which is live. */
+    expect(stored.verse).toEqual({ content: '', authorOrigin: AUTHOR_ORIGINS.USER });
+    expect(stored.reflection).toEqual({ content: '', authorOrigin: AUTHOR_ORIGINS.USER });
   });
 
   it('accepts a SHORT payload with both condensed fields', () => {
     const payload = { verse: user('John 3:16'), reflection: user('God is faithful.') };
-    expect(validateChatContent('SHORT', payload)).toEqual(payload);
+    const stored = validateChatContent('SHORT', payload);
+    expect(stored).toMatchObject(payload);
+    expect(stored.heart).toEqual({ content: '', authorOrigin: AUTHOR_ORIGINS.USER });
   });
 
   it('rejects a SHORT payload that has lost its verse', () => {
@@ -63,7 +69,7 @@ describe('chat_content validation', () => {
   /* The column is LONGTEXT on this server, so what comes back is a string. */
   it('parses a stored payload back through the same rule', () => {
     const payload = { verse: user('John 3:16'), reflection: user('God is faithful.') };
-    expect(parseStoredChatContent('SHORT', JSON.stringify(payload))).toEqual(payload);
+    expect(parseStoredChatContent('SHORT', JSON.stringify(payload))).toMatchObject(payload);
     expect(() => parseStoredChatContent('SHORT', '{not json')).toThrow(ChatContentError);
   });
 });

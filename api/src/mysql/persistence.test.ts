@@ -144,7 +144,7 @@ describe.skipIf(!config)('MySQL persistence', () => {
     });
     const loadedFull = await db.getReflectionByPublicUuid(fullRow.publicUuid, created.id);
     expect(loadedFull?.chatType).toBe('FULL');
-    expect(loadedFull?.chatContent).toEqual(full);
+    expect(loadedFull?.chatContent).toMatchObject(full);
     expect(loadedFull?.bibleReference).toBe('John 3:16-18');
     expect(loadedFull?.bibleTranslation).toBe('NIV');
     expect(loadedFull?.bibleText).toContain('God so loved');
@@ -158,7 +158,7 @@ describe.skipIf(!config)('MySQL persistence', () => {
       chatContent: short,
     });
     const loadedShort = await db.getReflectionByPublicUuid(shortRow.publicUuid);
-    expect(loadedShort?.chatContent).toEqual(short);
+    expect(loadedShort?.chatContent).toMatchObject(short);
   });
 
   it('rejects invalid chat_content before insert', async () => {

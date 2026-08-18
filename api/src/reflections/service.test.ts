@@ -70,7 +70,9 @@ describe.skipIf(!config)('durable reflections', () => {
     expect(read?.format).toBe(CHAT_FORMATS.FULL);
     expect(read?.title).toBe('The week I could not see it');
     expect(read?.bibleTranslation).toBe('NIV');
-    expect(read?.sections).toEqual(fullSections);
+    expect(read?.sections).toMatchObject(fullSections);
+    /* Every slot is stored; the format names the live ones. */
+    expect(read?.sections['verse']).toEqual({ content: '', authorOrigin: AUTHOR_ORIGINS.USER });
   });
 
   /*
@@ -97,8 +99,8 @@ describe.skipIf(!config)('durable reflections', () => {
       },
     });
     const read = await service.getByPublicUuid(saved.publicUuid);
-    expect(Object.keys(read?.sections ?? {}).sort()).toEqual(['reflection', 'verse']);
     expect(read?.sections['verse']?.content).toBe('Romans 8:28');
+    expect(read?.sections['reflection']?.content).toBe('All things. Not some.');
   });
 
   /* Who wrote a sentence has to survive the round trip, or the badge lies. */
@@ -154,6 +156,101 @@ describe.skipIf(!config)('durable reflections', () => {
     });
     const read = await service.getByPublicUuid(saved.publicUuid);
     expect(read?.sections['heart']).toEqual({ content: '', authorOrigin: AUTHOR_ORIGINS.USER });
+  });
+
+  /*
+   * The defect this migration could introduce, and the reason the write is a
+   * locked read-modify-write rather than an UPDATE of the whole document.
+   *
+   * Sections used to be their own rows, so writing one could not reach the
+   * others. They are fields of one document now, and a careless write replaces
+   * the document — taking three sections the author never touched with it.
+   */
+  it('writes one section without disturbing the others', async () => {
+    const me = await owner();
+    const saved = await service.save(me.id, { format: CHAT_FORMATS.FULL, sections: fullSections });
+
+    const after = await service.writeSection(saved.publicUuid, me.id, 'heart', {
+      content: 'Rewritten heart.',
+      authorOrigin: AUTHOR_ORIGINS.USER,
+    });
+
+    expect(after?.sections['heart']?.content).toBe('Rewritten heart.');
+    expect(after?.sections['content']?.content).toBe(fullSections.content.content);
+    expect(after?.sections['application']?.content).toBe(fullSections.application.content);
+    expect(after?.sections['testimony']?.content).toBe(fullSections.testimony.content);
+    expect(after?.sections['application']?.authorOrigin).toBe(AUTHOR_ORIGINS.AI_ASSISTED);
+  });
+
+  /*
+   * Two writes at once. Without SELECT ... FOR UPDATE both read the same
+   * document and the second erases the first — a lost update that reads to the
+   * author as a save that simply did not happen.
+   */
+  it('does not lose one of two concurrent section writes', async () => {
+    const me = await owner();
+    const saved = await service.save(me.id, { format: CHAT_FORMATS.FULL, sections: fullSections });
+
+    await Promise.all([
+      service.writeSection(saved.publicUuid, me.id, 'heart', {
+        content: 'From the first writer.',
+        authorOrigin: AUTHOR_ORIGINS.USER,
+      }),
+      service.writeSection(saved.publicUuid, me.id, 'testimony', {
+        content: 'From the second writer.',
+        authorOrigin: AUTHOR_ORIGINS.USER,
+      }),
+    ]);
+
+    const read = await service.getByPublicUuid(saved.publicUuid);
+    expect(read?.sections['heart']?.content).toBe('From the first writer.');
+    expect(read?.sections['testimony']?.content).toBe('From the second writer.');
+  });
+
+  /*
+   * Both drafts, in both directions. Condensing a full reflection and changing
+   * your mind must not cost you the four sections you wrote.
+   */
+  it('keeps a condensed draft beside the full one rather than on top of it', async () => {
+    const me = await owner();
+    const saved = await service.save(me.id, { format: CHAT_FORMATS.FULL, sections: fullSections });
+
+    await service.writeSection(saved.publicUuid, me.id, 'reflection', {
+      content: 'The condensed version.',
+      authorOrigin: AUTHOR_ORIGINS.USER,
+    });
+    const condensed = await service.update(saved.publicUuid, me.id, {
+      format: CHAT_FORMATS.CONDENSED,
+      sections: {
+        verse: { content: 'John 3:16', authorOrigin: AUTHOR_ORIGINS.USER },
+        reflection: { content: 'The condensed version.', authorOrigin: AUTHOR_ORIGINS.USER },
+        ...fullSections,
+      },
+    });
+
+    expect(condensed?.format).toBe(CHAT_FORMATS.CONDENSED);
+    expect(condensed?.sections['heart']?.content).toBe(fullSections.heart.content);
+    expect(condensed?.sections['reflection']?.content).toBe('The condensed version.');
+  });
+
+  it('refuses a section that does not exist, and another owner’s write', async () => {
+    const me = await owner();
+    const stranger = await owner();
+    const saved = await service.save(me.id, { format: CHAT_FORMATS.FULL, sections: fullSections });
+
+    await expect(
+      service.writeSection(saved.publicUuid, me.id, 'context', {
+        content: 'the retired name',
+        authorOrigin: AUTHOR_ORIGINS.USER,
+      }),
+    ).rejects.toBeInstanceOf(ReflectionServiceError);
+
+    await expect(
+      service.writeSection(saved.publicUuid, stranger.id, 'heart', {
+        content: 'not mine to write',
+        authorOrigin: AUTHOR_ORIGINS.USER,
+      }),
+    ).rejects.toBeInstanceOf(ReflectionServiceError);
   });
 
   it('returns null for a UUID that is not there', async () => {
