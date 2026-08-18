@@ -15,6 +15,7 @@
 import { Builder, By, Key } from 'selenium-webdriver';
 import chrome from 'selenium-webdriver/chrome.js';
 import { writeFileSync } from 'node:fs';
+import { biblePassageTrigger, setBiblePassage } from './passage-control.mjs';
 
 const OUT = new URL('./out/', import.meta.url);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -185,10 +186,7 @@ try {
   await title.sendKeys('The week I could not see it');
   await title.sendKeys(Key.ENTER);
   await wait(900);
-  const reference = await driver.findElement(By.css('input[aria-label="Scripture reference"]'));
-  await reference.clear();
-  await reference.sendKeys('Romans 8:28');
-  await reference.sendKeys(Key.ENTER);
+  await setBiblePassage(driver, 'Romans 8:28');
   await wait(900);
 
   await driver.navigate().refresh();
@@ -196,13 +194,11 @@ try {
   const titleValue = await driver
     .findElement(By.css('input[aria-label="Reflection title"]'))
     .getAttribute('value');
-  const referenceValue = await driver
-    .findElement(By.css('input[aria-label="Scripture reference"]'))
-    .getAttribute('value');
+  const passageLabel = await (await biblePassageTrigger(driver)).getText();
   check('the title can be set and survives a reload',
     titleValue === 'The week I could not see it', titleValue);
-  check('the Scripture reference can be set and survives a reload',
-    referenceValue === 'Romans 8:28', referenceValue);
+  check('the Bible passage can be set and survives a reload',
+    /Romans 8:28/i.test(passageLabel), passageLabel);
 
   /*
    * Suggest title — an assist, and only an assist.

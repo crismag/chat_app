@@ -79,10 +79,23 @@ export const CREATE_STYLES = {
   CREAM_BOTANICAL: 'cream-botanical',
   MODERN_MINIMAL: 'modern-minimal',
   DARK_WORSHIP: 'dark-worship',
+  WARM_PHOTOGRAPHIC: 'warm-photographic',
   JOURNAL_PAPER: 'journal-paper',
 } as const;
 
 export type CreateStyle = (typeof CREATE_STYLES)[keyof typeof CREATE_STYLES];
+
+export const CREATE_FORMATS = {
+  SQUARE: 'square',
+  PORTRAIT: 'portrait',
+} as const;
+
+export type CreateFormat = (typeof CREATE_FORMATS)[keyof typeof CREATE_FORMATS];
+
+export const CREATE_FORMAT_SIZE: Record<CreateFormat, { width: number; height: number }> = {
+  [CREATE_FORMATS.SQUARE]: { width: 1080, height: 1080 },
+  [CREATE_FORMATS.PORTRAIT]: { width: 1080, height: 1350 },
+};
 
 export type HealthResponse = {
   status: 'ok';

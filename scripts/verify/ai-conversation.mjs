@@ -25,6 +25,7 @@
 import { Builder, By, Key } from 'selenium-webdriver';
 import chrome from 'selenium-webdriver/chrome.js';
 import { writeFileSync, mkdirSync } from 'node:fs';
+import { setBiblePassage } from './passage-control.mjs';
 
 const OUT = new URL('./out/', import.meta.url);
 mkdirSync(OUT, { recursive: true });
@@ -132,9 +133,7 @@ try {
     console.log(`\n  ${results.length - failed.length}/${results.length} checks passed (AI off)`);
     process.exitCode = failed.length === 0 ? 0 : 1;
   } else {
-    await driver
-      .findElement(By.css('input[aria-label="Scripture reference"]'))
-      .sendKeys('Romans 8:28', Key.ENTER);
+    await setBiblePassage(driver, 'Romans 8:28');
     await wait(600);
 
     // --- 1. a message gets a reply, and the reply is the assistant's -------

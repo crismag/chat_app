@@ -107,34 +107,35 @@ try {
   await wait(1500);
   await shoot(driver, 'reply-1280');
 
-  // ---------- the reference field ----------
-  const ref = await driver.findElement(By.css('input[aria-label="Scripture reference"]'));
-  console.log('  reference field currently holds:', JSON.stringify(await ref.getAttribute('value')));
+  // ---------- the title field (the identity race that remains) ----------
+  const title = By.css('input[aria-label="Reflection title"]');
+  const ref = await driver.findElement(title);
+  console.log('  title field currently holds:', JSON.stringify(await ref.getAttribute('value')));
 
   await driver.navigate().refresh();
   await wait(3500);
-  console.log('\n  == existing reflection: type the reference (the control case) ==');
-  const ref2 = await driver.findElement(By.css('input[aria-label="Scripture reference"]'));
+  console.log('\n  == existing reflection: type the title (the control case) ==');
+  const ref2 = await driver.findElement(title);
   await ref2.click();
+  await ref2.sendKeys(Key.chord(Key.CONTROL, 'a'));
   for (const ch of 'Romans 8:28') { await ref2.sendKeys(ch); await wait(60); }
   await wait(1500);
   console.log('  typed "Romans 8:28" →', JSON.stringify(await ref2.getAttribute('value')));
 
   // ---------- now the real case: a brand-new reflection ----------
-  console.log('\n  == brand new reflection: send, then type the reference immediately ==');
+  console.log('\n  == brand new reflection: send, then type the title immediately ==');
   await driver.get(`${WEB}/?new=1`);
   await wait(2500);
   const composer2 = await driver.findElement(By.css('textarea'));
   await composer2.sendKeys('Sitting with Psalm 23 tonight.');
   await driver.findElement(By.css('button[aria-label=Send]')).click();
-  await wait(150); // a person's hand moves to the reference box about now
-  const ref3 = await driver.findElement(By.css('input[aria-label="Scripture reference"]'));
+  await wait(150); // a person's hand moves to the title box about now
+  const ref3 = await driver.findElement(title);
   await ref3.click();
+  await ref3.sendKeys(Key.chord(Key.CONTROL, 'a'));
   for (const ch of 'Psalm 23') { await ref3.sendKeys(ch); await wait(90); }
   await wait(3000);
-  const kept = await driver.findElement(
-    By.css('input[aria-label="Scripture reference"]'),
-  ).getAttribute('value');
+  const kept = await driver.findElement(title).getAttribute('value');
   console.log(`  typed "Psalm 23" immediately after send → field holds ${JSON.stringify(kept)}`);
   console.log(`  KEYSTROKES LOST: ${kept !== 'Psalm 23'}`);
   await shoot(driver, 'reference-after-send');

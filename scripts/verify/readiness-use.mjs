@@ -110,27 +110,20 @@ async function run(label, width, height) {
     await wait(2500);
     await shoot(driver, `after-first-message-${label}`);
 
-    // ---- the Scripture reference bug: type immediately afterwards ----
-    const refs = await driver.findElements(
-      By.css('input[id*=reference i], input[placeholder*=Romans i], input[placeholder*=reference i], input[name*=reference i]'),
-    );
-    console.log(`  reference-ish inputs found: ${refs.length}`);
-    const allInputs = await driver.executeScript(`
-      return [...document.querySelectorAll('input')].map((i) => ({
-        id: i.id, name: i.name, placeholder: i.placeholder, value: i.value, type: i.type,
-      }));
-    `);
-    console.log('  inputs:', JSON.stringify(allInputs));
-
-    if (refs.length) {
-      const ref = refs[0];
-      await ref.click();
-      await ref.sendKeys('Romans 8:28');
+    // ---- identity fields immediately after create ----
+    const title = await driver.findElements(By.css('input[aria-label="Reflection title"]'));
+    console.log(`  title fields found: ${title.length}`);
+    if (title.length) {
+      await title[0].click();
+      await title[0].sendKeys(Key.chord(Key.CONTROL, 'a'));
+      await title[0].sendKeys('Romans 8:28');
       await wait(1200);
-      const kept = await ref.getAttribute('value');
-      console.log(`  REFERENCE FIELD: typed "Romans 8:28", field now holds "${kept}"`);
-      await shoot(driver, `reference-typed-${label}`);
+      const kept = await title[0].getAttribute('value');
+      console.log(`  TITLE FIELD: typed "Romans 8:28", field now holds "${kept}"`);
+      await shoot(driver, `title-typed-${label}`);
     }
+    const passage = await driver.findElements(By.css('button[aria-expanded]'));
+    console.log(`  expandable controls: ${passage.length}`);
 
     // ---- the assistance row under each section ----
     const assist = await driver.executeScript(`

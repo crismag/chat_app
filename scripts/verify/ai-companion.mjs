@@ -22,6 +22,7 @@
 import { Builder, By, Key } from 'selenium-webdriver';
 import chrome from 'selenium-webdriver/chrome.js';
 import { writeFileSync, mkdirSync } from 'node:fs';
+import { setBiblePassage } from './passage-control.mjs';
 
 const OUT = new URL('./out/', import.meta.url);
 mkdirSync(OUT, { recursive: true });
@@ -122,9 +123,7 @@ try {
   const body = () => driver.findElement(By.css('body')).getText();
 
   // --- the passage, set whole ---------------------------------------------
-  await driver
-    .findElement(By.css('input[aria-label="Scripture reference"]'))
-    .sendKeys('Matthew 1:1', Key.ENTER);
+  await setBiblePassage(driver, 'Matthew 1:1');
   await wait(900);
 
   // --- the panel's three regions ------------------------------------------

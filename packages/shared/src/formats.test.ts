@@ -42,16 +42,15 @@ describe('Full C.H.A.T.', () => {
   });
 
   /*
-   * The rule most likely to be got wrong. Four sections of 500 are each under
-   * their own 600 maximum, and 2,000 together is over the 1,200 recommended —
-   * so the C.H.A.T. is Extended even though no single field is.
+   * The combined budget still overrides the per-field ones. Four sections of
+   * 510 are each under 700, and 2,040 together is over the 2,000 recommended.
    */
   it('applies the combined limit even when every field is individually fine', () => {
     const draft = fullDraft({
-      content: fill(500),
-      heart: fill(500),
-      application: fill(500),
-      testimony: fill(500),
+      content: fill(510),
+      heart: fill(510),
+      application: fill(510),
+      testimony: fill(510),
     });
     for (const field of ['content', 'heart', 'application', 'testimony'] as const) {
       expect(counterFor(CHAT_FORMATS.FULL, field, draft[field])!.status).not.toBe(
@@ -59,7 +58,7 @@ describe('Full C.H.A.T.', () => {
       );
     }
     const result = validateChat(CHAT_FORMATS.FULL, draft);
-    expect(result.combined.length).toBe(2000);
+    expect(result.combined.length).toBe(2040);
     expect(result.status).toBe(LENGTH_STATUS.EXTENDED);
   });
 
@@ -101,7 +100,7 @@ describe('Full C.H.A.T.', () => {
   });
 
   it('requires acknowledgement when extended, and accepts it', () => {
-    const draft = fullDraft({ content: fill(700), heart: fill(600) });
+    const draft = fullDraft({ content: fill(700), heart: fill(700), application: fill(450) });
     const unacknowledged = validateChat(CHAT_FORMATS.FULL, draft);
     expect(unacknowledged.requiresExtensionAcknowledgement).toBe(true);
     expect(unacknowledged.publishable).toBe(false);

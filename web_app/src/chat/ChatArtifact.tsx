@@ -251,7 +251,6 @@ function Field({
 
 export function ChatArtifact({
   format,
-  hasWritten,
   valueOf,
   originOf,
   dirtyFields,
@@ -268,7 +267,6 @@ export function ChatArtifact({
   onDismissProposal,
 }: {
   format: ChatFormat
-  hasWritten: boolean
   valueOf: (field: FieldType) => string
   originOf: (field: FieldType) => string
   dirtyFields: ReadonlySet<FieldType>
@@ -285,27 +283,6 @@ export function ChatArtifact({
   onDismissProposal: () => void
 }) {
   const fields = fieldsFor(format)
-
-  /*
-   * The rule the redesign was built on, and it survives the rearrangement:
-   * the structure does not appear before there is anything to structure.
-   */
-  if (!hasWritten) {
-    return (
-      <div className={styles.artifactWaiting}>
-        <p className={styles.waitingLead}>
-          {format === 'condensed'
-            ? 'Your Condensed C.H.A.T. takes shape as you write'
-            : 'Your C.H.A.T. takes shape as you write'}
-        </p>
-        <p className={styles.waitingBody}>
-          {format === 'condensed'
-            ? 'The verse and your reflection appear here once you have begun — drawn from the conversation beside you rather than asked for up front.'
-            : 'Content, Heart, Application and Testimony appear here once your reflection has begun — drawn from the conversation beside you rather than asked for up front.'}
-        </p>
-      </div>
-    )
-  }
 
   return (
     <div className={styles.fields}>

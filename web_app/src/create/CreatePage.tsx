@@ -1,12 +1,23 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import type { BiblePassage, ConversationSummary } from '@chat/shared'
+import {
+  CREATE_FORMATS,
+  CREATE_LAYOUTS,
+  CREATE_STYLES,
+  type BiblePassage,
+  type ConversationSummary,
+  type CreateFormat,
+  type CreateLayout,
+  type CreateStyle,
+} from '@chat/shared'
 import {
   CreateStudio,
   deserializeStudioDocument,
   exportStudioDocumentPage,
+  exportStudioDocumentPages,
   serializeStudioDocument,
   type StudioDocument,
+  type StudioEditorIssue,
   type StudioRenderResult,
 } from '@crismag/create-studio'
 import '@crismag/create-studio/styles.css'
@@ -14,15 +25,19 @@ import { fetchSavedPassage } from '../bible/api.ts'
 import { api } from '../shared/api/client.ts'
 import { savePng } from '../shared/native/save-image.ts'
 import {
-  CHAT_SQUARE_TEMPLATE,
   CHAT_STUDIO_CAPABILITIES,
+  CHAT_STUDIO_TEMPLATE,
   CHAT_STUDIO_TEMPLATES,
   availableReflectionFields,
   buildChatStudioDocument,
   defaultReflectionField,
+  readComposeOptions,
+  usesSelectedField,
   type ReflectionField,
   type StudioReflectionSource,
 } from './host-adapter.ts'
+import { collectOverflowingText, fitChatStudioDocument } from './overflow.ts'
+import { applyChatStudioStyle } from './styles.ts'
 import styles from './CreatePage.module.css'
 import {
   createChatGeneratedAssetCallback,
@@ -53,9 +68,29 @@ const FIELD_LABELS: Record<ReflectionField, string> = {
   reflection: 'Reflection',
 }
 
+const LAYOUT_LABELS: Record<CreateLayout, string> = {
+  [CREATE_LAYOUTS.QUOTE_FOCUS]: 'Quote focus',
+  [CREATE_LAYOUTS.VERSE_REFLECTION]: 'Verse + reflection',
+  [CREATE_LAYOUTS.CHAT_STACKED]: 'Full C.H.A.T. stacked',
+  [CREATE_LAYOUTS.CHAT_TWO_COLUMN]: 'Full C.H.A.T. two-column',
+}
+
+const STYLE_LABELS: Record<CreateStyle, string> = {
+  [CREATE_STYLES.CREAM_BOTANICAL]: 'Cream botanical',
+  [CREATE_STYLES.MODERN_MINIMAL]: 'Modern minimal',
+  [CREATE_STYLES.DARK_WORSHIP]: 'Dark worship',
+  [CREATE_STYLES.WARM_PHOTOGRAPHIC]: 'Warm photographic overlay',
+  [CREATE_STYLES.JOURNAL_PAPER]: 'Journal / paper',
+}
+
+const FORMAT_LABELS: Record<CreateFormat, string> = {
+  [CREATE_FORMATS.SQUARE]: 'Square',
+  [CREATE_FORMATS.PORTRAIT]: 'Portrait',
+}
+
 function safeFilename(title: string): string {
   const value = title.trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')
-  return `${value || 'reflection'}.png`
+  return value || 'reflection'
 }
 
 export function CreatePage() {
@@ -65,12 +100,16 @@ export function CreatePage() {
   const [source, setSource] = useState<StudioReflectionSource | null>(null)
   const [passage, setPassage] = useState<BiblePassage | null>(null)
   const [document, setDocument] = useState<StudioDocument | null>(null)
+  const [layout, setLayout] = useState<CreateLayout>(CREATE_LAYOUTS.CHAT_STACKED)
+  const [style, setStyle] = useState<CreateStyle>(CREATE_STYLES.CREAM_BOTANICAL)
+  const [format, setFormat] = useState<CreateFormat>(CREATE_FORMATS.PORTRAIT)
   const [selectedField, setSelectedField] = useState<ReflectionField | null>(null)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [generatedAssetsEnabled, setGeneratedAssetsEnabled] = useState(false)
   const fields = useMemo(() => source ? availableReflectionFields(source) : [], [source])
+  const overflowCount = document ? collectOverflowingText(document).length : 0
   const generatedAssetCallback = useMemo(
     () => conversationId && generatedAssetsEnabled ? createChatGeneratedAssetCallback(conversationId) : undefined,
     [conversationId, generatedAssetsEnabled],
@@ -112,16 +151,16 @@ export function CreatePage() {
         if (!active) return
         const restored = saved.creation
           ? deserializeStudioDocument(JSON.stringify(saved.creation.document))
-          : buildChatStudioDocument(reflection, savedPassage.passage)
-        const storedField = restored.metadata?.['selectedField']
+          : null
+        const compose = readComposeOptions(restored)
+        const field = compose.selectedField ?? defaultReflectionField(reflection)
         setSource(reflection)
         setPassage(savedPassage.passage)
-        setSelectedField(
-          typeof storedField === 'string' && ['heart', 'application', 'testimony', 'reflection'].includes(storedField)
-            ? storedField as ReflectionField
-            : defaultReflectionField(reflection),
-        )
-        setDocument(restored)
+        setLayout(compose.layout)
+        setStyle(compose.style)
+        setFormat(compose.format)
+        setSelectedField(field)
+        setDocument(restored ?? buildChatStudioDocument(reflection, savedPassage.passage, field, compose))
         if (saved.creation) setMessage('Saved Studio document reopened.')
       })
       .catch((caught: unknown) => setError(caught instanceof Error ? caught.message : 'Unable to open this reflection in Studio'))
@@ -135,7 +174,7 @@ export function CreatePage() {
       method: 'PUT',
       body: JSON.stringify({
         document: canonical,
-        template: CHAT_SQUARE_TEMPLATE,
+        template: CHAT_STUDIO_TEMPLATE,
         ...(exportMetadata ? { exportMetadata } : {}),
       }),
     })
@@ -162,7 +201,7 @@ export function CreatePage() {
         { pageId, format: 'png', scale: 1 },
         { assetResolver: resolveChatStudioAsset },
       )
-      const filename = safeFilename(source?.title ?? nextDocument.title ?? 'reflection')
+      const filename = `${safeFilename(source?.title ?? nextDocument.title ?? 'reflection')}.png`
       const saved = await savePng(result.blob, filename)
       const exportMetadata: ExportMetadata = {
         exportedAt: new Date().toISOString(),
@@ -182,14 +221,79 @@ export function CreatePage() {
     }
   }
 
-  function rebuildFromSelection() {
+  async function exportAll(nextDocument: StudioDocument) {
+    setError(null)
+    setMessage('Preparing carousel PNGs…')
+    try {
+      const result = await exportStudioDocumentPages(
+        nextDocument,
+        { format: 'png', scale: 1 },
+        { assetResolver: resolveChatStudioAsset },
+      )
+      const base = safeFilename(source?.title ?? nextDocument.title ?? 'reflection')
+      let last = result.pages[0]
+      for (const page of result.pages) {
+        last = page
+        await savePng(page.blob, `${base}-${String(page.pageNumber).padStart(2, '0')}.png`)
+      }
+      if (last) {
+        await persist(nextDocument, {
+          exportedAt: new Date().toISOString(),
+          format: 'image/png',
+          width: last.width,
+          height: last.height,
+        })
+      }
+      setMessage(`Exported ${result.pages.length} PNG${result.pages.length === 1 ? '' : 's'} for this carousel.`)
+    } catch (caught) {
+      setMessage(null)
+      setError(caught instanceof Error ? caught.message : 'Unable to export the carousel')
+    }
+  }
+
+  function composeFromSource(
+    nextLayout = layout,
+    nextStyle = style,
+    nextFormat = format,
+    nextField = selectedField,
+  ) {
     if (!source) return
-    setDocument(buildChatStudioDocument(source, passage, selectedField))
+    setDocument(buildChatStudioDocument(source, passage, nextField, {
+      layout: nextLayout,
+      style: nextStyle,
+      format: nextFormat,
+      selectedField: nextField,
+    }))
     setMessage('Card rebuilt from the exact saved reflection. Save to keep it.')
+  }
+
+  function changeStyle(next: CreateStyle) {
+    setStyle(next)
+    setDocument((current) => current ? applyChatStudioStyle(current, next) : current)
+  }
+
+  function splitOverflow() {
+    if (!document) return
+    const fitted = fitChatStudioDocument(document)
+    setDocument(fitted.document)
+    setMessage(
+      fitted.overflowRemaining.length > 0
+        ? 'Some text still does not fit the readable minimum. Shorten it, or choose a stacked layout.'
+        : 'Leftover words were moved onto following cards. Save to keep the carousel.',
+    )
   }
 
   function reportRender(result: StudioRenderResult) {
     if (result.issues.length > 0) setError(result.issues.map(({ message: issue }) => issue).join(' '))
+  }
+
+  function reportEditorIssue(issue: StudioEditorIssue) {
+    if (issue.severity === 'info') return
+    if (issue.code === 'transform-rejected' || issue.code === 'stale-runtime-event' || issue.code === 'document-invalid') {
+      setMessage(issue.message)
+      return
+    }
+    setError(issue.message)
   }
 
   return (
@@ -198,7 +302,7 @@ export function CreatePage() {
         <div>
           <p className="eyebrow">Create Studio</p>
           <h1>Create an image</h1>
-          <p>Text is rendered deterministically in C.H.A.T. and is never sent to an image model.</p>
+          <p>Choose a layout and style. Text is rendered in C.H.A.T. and is never sent to an image model.</p>
         </div>
         <label className={styles.reflectionPicker}>
           <span>Reflection</span>
@@ -217,15 +321,53 @@ export function CreatePage() {
 
       {loading ? <p role="status">Opening Studio…</p> : null}
       {!loading && conversations.length === 0 ? <p>Finish a reflection before creating an image.</p> : null}
-      {source && fields.length > 0 ? (
+      {source ? (
         <div className={styles.sourceControls}>
           <label>
-            <span>Reflection field on card</span>
-            <select value={selectedField ?? ''} onChange={(event) => setSelectedField(event.currentTarget.value as ReflectionField)}>
-              {fields.map((field) => <option key={field} value={field}>{FIELD_LABELS[field]}</option>)}
+            <span>Format</span>
+            <select value={format} onChange={(event) => {
+              const next = event.currentTarget.value as CreateFormat
+              setFormat(next)
+              composeFromSource(layout, style, next, selectedField)
+            }}>
+              {Object.values(CREATE_FORMATS).map((value) => <option key={value} value={value}>{FORMAT_LABELS[value]}</option>)}
             </select>
           </label>
-          <button type="button" className="btn btn-secondary" onClick={rebuildFromSelection}>Rebuild from reflection</button>
+          <label>
+            <span>Layout</span>
+            <select value={layout} onChange={(event) => {
+              const next = event.currentTarget.value as CreateLayout
+              setLayout(next)
+              composeFromSource(next, style, format, selectedField)
+            }}>
+              {Object.values(CREATE_LAYOUTS).map((value) => <option key={value} value={value}>{LAYOUT_LABELS[value]}</option>)}
+            </select>
+          </label>
+          <label>
+            <span>Style</span>
+            <select value={style} onChange={(event) => changeStyle(event.currentTarget.value as CreateStyle)}>
+              {Object.values(CREATE_STYLES).map((value) => <option key={value} value={value}>{STYLE_LABELS[value]}</option>)}
+            </select>
+          </label>
+          {usesSelectedField(layout) && fields.length > 0 ? (
+            <label>
+              <span>Reflection field on card</span>
+              <select value={selectedField ?? ''} onChange={(event) => {
+                const next = event.currentTarget.value as ReflectionField
+                setSelectedField(next)
+                composeFromSource(layout, style, format, next)
+              }}>
+                {fields.map((field) => <option key={field} value={field}>{FIELD_LABELS[field]}</option>)}
+              </select>
+            </label>
+          ) : null}
+          <button type="button" className="btn btn-secondary" onClick={() => composeFromSource()}>Rebuild from reflection</button>
+        </div>
+      ) : null}
+      {overflowCount > 0 ? (
+        <div className={styles.overflow} role="status">
+          <p>{overflowCount} text {overflowCount === 1 ? 'block still overflows' : 'blocks still overflow'} the readable area. Words are never dropped.</p>
+          <button type="button" className="btn btn-secondary" onClick={splitOverflow}>Split leftover text across cards</button>
         </div>
       ) : null}
       {message ? <p className={styles.status} role="status">{message}</p> : null}
@@ -237,11 +379,13 @@ export function CreatePage() {
             onDocumentChange={setDocument}
             onSave={save}
             onExport={exportPng}
+            onExportAll={exportAll}
             assetResolver={resolveChatStudioAsset}
             onRequestGeneratedAsset={generatedAssetCallback}
             generatedAssetSafeArea={{ x: 0.12, y: 0.12, width: 0.76, height: 0.76 }}
             generatedAssetMetadata={{ sourceApplication: 'chat_app', sourceReflectionId: conversationId }}
             onRenderResult={reportRender}
+            onEditorIssue={reportEditorIssue}
             capabilities={CHAT_STUDIO_CAPABILITIES}
             templates={CHAT_STUDIO_TEMPLATES}
           />

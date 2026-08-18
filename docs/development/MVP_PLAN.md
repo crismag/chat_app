@@ -130,12 +130,15 @@ A user with enough saved content to make browsing inconvenient can reliably reco
 
 ## Phase 5 — Create engine V1
 
-Status: **in progress.** The separate Create Studio package now supplies a
-Fabric-backed live editor, deterministic square PNG export, host-controlled
-save/reopen, and an optional generated-background callback. The selected
-reflection and exact saved passage are mapped through semantic slots. The host
-narrows Studio capabilities to that square card. The broader layout/style,
-overflow, portrait and multi-page deliverables below remain.
+Status: **done.** Layout, style and format are independent host choices on top
+of Create Studio. The four V1 layouts (quote focus, verse + reflection, full
+C.H.A.T. stacked, full C.H.A.T. two-column) combine with five styles (cream
+botanical, modern minimal, dark worship, warm photographic overlay, journal
+paper) and two formats (1080×1080 square, 1080×1350 portrait). Short text
+shrinks to a readable minimum; leftover words move onto following cards rather
+than being dropped. Live preview and PNG export, including Export all for a
+carousel, stay in Create Studio. Studio's own blank/quote templates stay off;
+C.H.A.T. maps these layouts.
 
 Deliverables:
 

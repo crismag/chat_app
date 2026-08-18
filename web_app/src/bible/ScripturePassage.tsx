@@ -31,6 +31,7 @@ import {
   BIBLE_OUTCOMES,
   asLookupFailure,
   fetchPassage,
+  clearSavedPassage,
   fetchSavedPassage,
   fetchTranslations,
   passageAsWritten,
@@ -103,6 +104,11 @@ export function ScripturePassage({
   const [choosing, setChoosing] = useState(false)
   const [recentIds, setRecentIds] = useState<number[]>(() => readRecentTranslationIds())
   const [reference, setReference] = useState(initialReference ?? '')
+
+  useEffect(() => {
+    if (choosing || passage) return
+    setReference(initialReference ?? '')
+  }, [initialReference, choosing, passage])
 
   const formId = useId()
   const referenceId = `${formId}-reference`
@@ -240,6 +246,15 @@ export function ScripturePassage({
     if (attempt) void load(attempt.translationId, attempt.reference)
   }, [load])
 
+  const clearPassage = useCallback(async () => {
+    setPassage(null)
+    setChoosing(false)
+    setFailure(null)
+    setReference('')
+    onPassageChange?.(null)
+    if (conversationId) await clearSavedPassage(conversationId).catch(() => {})
+  }, [conversationId, onPassageChange])
+
   /* ------------------------------------------------------------ selector */
 
   const selected = useMemo(
@@ -262,51 +277,59 @@ export function ScripturePassage({
   const busy = phase === 'loading-passage'
   const notConfigured = failure?.outcome === BIBLE_OUTCOMES.NOT_CONFIGURED
 
+  const triggerLabel = passage
+    ? `${passage.reference} · ${shownAbbreviation}`
+    : initialReference?.trim()
+      ? initialReference.trim()
+      : 'Choose Bible passage'
+
   /* --------------------------------------------------------------- render */
 
   return (
-    <section className={styles.card} aria-labelledby={`${formId}-heading`}>
+    <section
+      className={styles.card}
+      data-compact={choosing ? 'false' : 'true'}
+      aria-labelledby={`${formId}-heading`}
+    >
       <div className={styles.head}>
-        <h2 className={styles.heading} id={`${formId}-heading`}>
-          {passage ? passage.reference : 'Bible passage'}
-        </h2>
-        {passage ? (
-          <span className={styles.badge} title={passage.name}>
-            {shownAbbreviation}
-          </span>
-        ) : null}
-        <span className={styles.spacer} />
         {!notConfigured ? (
           <button
             type="button"
-            className="btn btn-ghost btn-sm"
+            id={`${formId}-heading`}
+            className={styles.trigger}
             aria-expanded={choosing}
             aria-controls={`${formId}-chooser`}
+            title={passage ? passage.name : 'Look up a Bible passage. Optional — you can write without one.'}
             onClick={() => setChoosing((open) => !open)}
           >
-            {passage ? 'Change passage' : 'Choose a passage'}
+            <span aria-hidden="true">📖</span>
+            {triggerLabel}
+          </button>
+        ) : (
+          <h2 className={styles.heading} id={`${formId}-heading`}>
+            Bible passage
+          </h2>
+        )}
+        {passage && !notConfigured ? (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => void clearPassage()}
+          >
+            Remove passage
           </button>
         ) : null}
       </div>
 
-      {/*
-        The progress line has a reserved row of its own, so appearing and
-        disappearing costs no layout. `role="status"` announces it without
-        stealing focus — a passage arriving must not move a screen reader out
-        of the section someone is writing in.
-      */}
-      <p className={styles.progress} role="status" aria-live="polite">
-        {phase === 'loading-translations' ? 'Loading translations…' : null}
-        {phase === 'loading-passage' ? 'Looking up the passage…' : null}
-      </p>
+      {phase !== 'idle' ? (
+        <p className={styles.progress} role="status" aria-live="polite">
+          {phase === 'loading-translations' ? 'Loading translations…' : null}
+          {phase === 'loading-passage' ? 'Looking up the passage…' : null}
+        </p>
+      ) : null}
 
       {passage ? (
         <>
-          {/*
-            A blockquote, not a field. Provider source material, visually and
-            structurally distinct from anything the person wrote, and with no
-            way to type into it.
-          */}
           <blockquote className={styles.passage} data-testid="scripture-text">
             {passage.content}
           </blockquote>
@@ -342,14 +365,6 @@ export function ScripturePassage({
               </span>
             ) : null}
           </footer>
-          {/*
-            The passage into the section it belongs in.
-
-            An explicit press, never automatic. Choosing a translation to read
-            is not the same act as putting words into a reflection, and the page
-            this hands to still asks before it displaces anything already
-            written there.
-          */}
           {onUsePassage ? (
             <div className={styles.useRow}>
               <button
@@ -365,16 +380,7 @@ export function ScripturePassage({
             </div>
           ) : null}
         </>
-      ) : (
-        !busy &&
-        !notConfigured && (
-          <p className={styles.empty}>
-            Choose a passage and its words come with it — the text, the reference
-            and the translation, ready to put into Content. It stays with this
-            reflection in the translation you chose.
-          </p>
-        )
-      )}
+      ) : null}
 
       {chosenIsUnavailable ? (
         <p className={styles.notice} role="status">

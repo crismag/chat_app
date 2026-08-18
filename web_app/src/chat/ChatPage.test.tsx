@@ -50,6 +50,8 @@ type Server = {
   /** What PATCH /conversations/:id was asked to store, in order. */
   patched: Record<string, unknown>[]
   reference: string
+  sections: typeof emptySections
+  title: string
 }
 
 function mockServer(server: Server) {
@@ -59,7 +61,45 @@ function mockServer(server: Server) {
     const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {}
     const ok = (value: unknown) => ({ ok: true, json: async () => value })
 
-    if (url.endsWith('/ai/status')) {
+    if (url.includes('/communities')) {
+      return ok({ communities: [] })
+    }
+    if (url.includes('/bible/translations')) {
+      return ok({
+        translations: [
+          {
+            id: 111,
+            abbreviation: 'NIV',
+            name: 'New International Version',
+            language: 'en',
+            languageName: 'English',
+          },
+        ],
+        defaultTranslationId: 111,
+      })
+    }
+    if (url.includes('/bible/passages')) {
+      const reference = new URL(url, 'http://test').searchParams.get('reference') ?? 'John 3:16'
+      return ok({
+        passage: {
+          provider: 'youversion',
+          translationId: 111,
+          abbreviation: 'NIV',
+          name: 'New International Version',
+          passageId: 'JHN.3.16',
+          reference,
+          content: 'For God so loved the world.',
+          retrievedAt: '2026-08-18T12:00:00.000Z',
+        },
+        verses: 1,
+      })
+    }
+    if (url.includes('/bible/reflections') && url.includes('/passage')) {
+      if (method === 'DELETE') return { ok: true, status: 204, json: async () => ({}) }
+      if (method === 'PUT') return ok({ passage: body })
+      return ok({ passage: null })
+    }
+    if (url.includes('/ai/status')) {
       /* No provider: a reply is not what this test is about. */
       return ok({ enabled: true, provider: 'none', capabilities: {} })
     }
@@ -70,7 +110,7 @@ function mockServer(server: Server) {
       return ok({
         id: 'c1',
         format: 'full',
-        title: 'A reflection',
+        title: server.title,
         scriptureReference: server.reference,
         publicationState: 'private',
         tags: [],
@@ -94,13 +134,17 @@ function mockServer(server: Server) {
       return ok({
         id: 'c1',
         format: 'full',
-        title: 'A reflection',
+        title: server.title,
         scriptureReference: server.reference,
         publicationState: 'private',
         tags: [],
         updatedAt: new Date().toISOString(),
         messages: [{ id: 'm1', role: 'user', content: 'Starting a reflection.' }],
-        sections: emptySections,
+        sections: server.sections,
+        condensed: {
+          verse: { type: 'verse', content: '', authorOrigin: 'user' },
+          reflection: { type: 'reflection', content: '', authorOrigin: 'user' },
+        },
       })
     }
     return ok({})
@@ -115,8 +159,11 @@ beforeEach(() => {
     createdWith: null,
     patched: [],
     reference: '',
+    sections: { ...emptySections },
+    title: 'A reflection',
   }
   vi.stubGlobal('fetch', mockServer(server))
+  server.create.settle()
 })
 
 afterEach(() => {
@@ -142,37 +189,34 @@ function type(field: HTMLElement, text: string) {
   }
 }
 
-test('a reference typed while the first message is creating the reflection survives whole', async () => {
+test('a title typed while the first message is creating the reflection survives whole', async () => {
+  server.create = deferred()
   renderPage()
 
   const composer = await screen.findByLabelText('Write your reflection')
   fireEvent.change(composer, { target: { value: 'Starting a reflection.' } })
   fireEvent.keyDown(composer, { key: 'Enter', ctrlKey: true })
 
-  /* The create request is now in flight and will not answer until we say so. */
   await waitFor(() => expect(server.createdWith).not.toBeNull())
 
-  const reference = screen.getByLabelText('Scripture reference')
-  type(reference, REFERENCE)
-  expect((reference as HTMLInputElement).value).toBe(REFERENCE)
+  const title = screen.getByLabelText('Reflection title')
+  type(title, REFERENCE)
+  expect((title as HTMLInputElement).value).toBe(REFERENCE)
 
-  /* Now the reflection comes into existence, under the author's hands. */
   server.create.settle()
 
   await waitFor(() =>
-    expect((screen.getByLabelText('Scripture reference') as HTMLInputElement).value).toBe(
-      REFERENCE,
-    ),
+    expect((screen.getByLabelText('Reflection title') as HTMLInputElement).value).toBe(REFERENCE),
   )
 
-  /* And it is what gets written down, not a fragment of it. */
-  fireEvent.blur(screen.getByLabelText('Scripture reference'))
+  fireEvent.blur(screen.getByLabelText('Reflection title'))
   await waitFor(() =>
-    expect(server.patched.some((body) => body['scriptureReference'] === REFERENCE)).toBe(true),
+    expect(server.patched.some((body) => body['title'] === REFERENCE)).toBe(true),
   )
 })
 
-test('the Send button path keeps a reference typed during creation', async () => {
+test('the Send button path keeps a title typed during creation', async () => {
+  server.create = deferred()
   renderPage()
 
   const composer = await screen.findByLabelText('Write your reflection')
@@ -181,28 +225,20 @@ test('the Send button path keeps a reference typed during creation', async () =>
 
   await waitFor(() => expect(server.createdWith).not.toBeNull())
 
-  type(screen.getByLabelText('Scripture reference'), REFERENCE)
+  type(screen.getByLabelText('Reflection title'), REFERENCE)
   server.create.settle()
 
   await waitFor(() =>
-    expect((screen.getByLabelText('Scripture reference') as HTMLInputElement).value).toBe(
-      REFERENCE,
-    ),
+    expect((screen.getByLabelText('Reflection title') as HTMLInputElement).value).toBe(REFERENCE),
   )
 
-  fireEvent.blur(screen.getByLabelText('Scripture reference'))
+  fireEvent.blur(screen.getByLabelText('Reflection title'))
   await waitFor(() =>
-    expect(server.patched.some((body) => body['scriptureReference'] === REFERENCE)).toBe(true),
+    expect(server.patched.some((body) => body['title'] === REFERENCE)).toBe(true),
   )
 })
 
 test('opening a different reflection still discards the drafts of the one left behind', async () => {
-  /*
-   * The other half of the same rule. `continuing` must not become a licence to
-   * carry one reflection's unsaved reference into another — which would be a
-   * worse bug than the one it fixes, because it would attribute a passage to a
-   * reflection nobody chose it for.
-   */
   renderPage()
 
   const composer = await screen.findByLabelText('Write your reflection')
@@ -210,33 +246,18 @@ test('opening a different reflection still discards the drafts of the one left b
   fireEvent.keyDown(composer, { key: 'Enter', ctrlKey: true })
   await waitFor(() => expect(server.createdWith).not.toBeNull())
   server.create.settle()
-  await waitFor(() => expect(screen.getByLabelText('Reflection title')).not.toBeDisabled())
+  await waitFor(() => expect(screen.getByLabelText('Reflection title')).toBeEnabled())
 
-  type(screen.getByLabelText('Scripture reference'), 'Jonah 2:2')
+  type(screen.getByLabelText('Reflection title'), 'Jonah 2:2')
 
-  /* A brand new blank reflection is a move away, so the draft goes with it. */
-  const fresh = screen.getByLabelText(/new reflection/i)
-  fireEvent.click(fresh)
+  fireEvent.click(screen.getByRole('button', { name: 'New reflection' }))
 
   await waitFor(() =>
-    expect((screen.getByLabelText('Scripture reference') as HTMLInputElement).value).toBe(''),
+    expect(screen.getByLabelText('Reflection title')).toHaveAttribute('placeholder', 'New reflection'),
   )
+  expect((screen.getByLabelText('Reflection title') as HTMLInputElement).value).toBe('')
 })
 
-/*
- * The other half of the same bug, and the half the first fix missed.
- *
- * `?new=1` asks for a blank reflection. Clearing that flag used to race two
- * other URL updates — `startNew` removing `c`, and `openConversation` adding it
- * — and one of the three wrote back a captured snapshot, so the flag kept
- * reappearing: `?new=1&c=…` → `?c=…` → `?new=1` → round again. Every lap
- * re-ran `startNew`, which clears the Scripture reference draft and pulls focus
- * into the composer. That is why the loss was not one wipe but a stutter, and
- * why a reference came back as "Psalm23" with a character gone from the middle.
- *
- * Nine trials in a browser lost characters nine times; `reference-race.mjs`
- * covers it there. This pins the invariant that made it possible.
- */
 test('?new=1 is acted on once and does not come back', async () => {
   render(
     <MemoryRouter initialEntries={['/?new=1']}>
@@ -244,15 +265,122 @@ test('?new=1 is acted on once and does not come back', async () => {
     </MemoryRouter>,
   )
 
-  const reference = await screen.findByLabelText('Scripture reference')
-  type(reference, 'Psalm 23:1')
+  const title = await screen.findByLabelText('Reflection title')
+  type(title, 'Quiet morning')
 
-  /*
-   * Long enough for a second lap to have happened. A loop cleared the field
-   * roughly once a second; this asserts nothing clears it at all.
-   */
   await new Promise((resolve) => setTimeout(resolve, 250))
-  expect((screen.getByLabelText('Scripture reference') as HTMLInputElement).value).toBe(
-    'Psalm 23:1',
+  expect((screen.getByLabelText('Reflection title') as HTMLInputElement).value).toBe(
+    'Quiet morning',
+  )
+})
+
+test('a brand-new reflection shows every C.H.A.T. field and a writable title', async () => {
+  renderPage()
+
+  expect(await screen.findByRole('heading', { name: /content/i })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: /heart/i })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: /application/i })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: /testimony/i })).toBeInTheDocument()
+  expect(screen.getByLabelText('Reflection title')).toBeEnabled()
+  expect(screen.getByLabelText('Tags')).toBeEnabled()
+  expect(screen.getByRole('button', { name: 'Choose Bible passage' })).toBeInTheDocument()
+  expect(screen.queryByLabelText('Scripture reference')).toBeNull()
+  expect(screen.queryByPlaceholderText('Reference')).toBeNull()
+  expect(screen.getByRole('button', { name: 'Suggest title' })).toBeDisabled()
+})
+
+test('writing Content does not require a Bible passage first', async () => {
+  renderPage()
+
+  const content = await screen.findByLabelText(/Content — the passage itself/i)
+  fireEvent.change(content, { target: { value: 'The vine is the source.' } })
+  expect((content as HTMLTextAreaElement).value).toBe('The vine is the source.')
+  expect(screen.getByRole('button', { name: 'Choose Bible passage' })).toBeInTheDocument()
+})
+
+test('a saved reflection hydrates its title, passage control and C.H.A.T. fields', async () => {
+  server.title = 'Abide'
+  server.reference = 'John 15:5'
+  server.sections = {
+    ...emptySections,
+    content: { type: 'content', content: 'He is the vine.', authorOrigin: 'user' },
+    heart: { type: 'heart', content: 'I need to remain.', authorOrigin: 'user' },
+    application: { type: 'application', content: 'Stay with the Word today.', authorOrigin: 'user' },
+    testimony: { type: 'testimony', content: 'You have kept me.', authorOrigin: 'user' },
+  }
+
+  render(
+    <MemoryRouter initialEntries={['/?c=c1']}>
+      <ChatPage />
+    </MemoryRouter>,
+  )
+
+  await waitFor(() =>
+    expect((screen.getByLabelText('Reflection title') as HTMLInputElement).value).toBe('Abide'),
+  )
+  expect(await screen.findByLabelText(/Content — the passage itself/i)).toHaveValue(
+    'He is the vine.',
+  )
+  expect(screen.getByLabelText(/Heart — What it means/i)).toHaveValue('I need to remain.')
+  expect(screen.getByLabelText(/Application — How will you respond/i)).toHaveValue(
+    'Stay with the Word today.',
+  )
+  expect(screen.getByLabelText(/Testimony — What do you believe/i)).toHaveValue(
+    'You have kept me.',
+  )
+  expect(screen.getByRole('button', { name: /John 15:5/i })).toBeInTheDocument()
+})
+
+test('Suggest title stays disabled until a C.H.A.T. field has text', async () => {
+  renderPage()
+
+  const suggest = await screen.findByRole('button', { name: 'Suggest title' })
+  expect(suggest).toBeDisabled()
+
+  fireEvent.change(screen.getByLabelText(/Heart — What it means/i), {
+    target: { value: 'This verse met me in the waiting.' },
+  })
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Suggest title' })).toBeEnabled())
+  expect(screen.getByLabelText('Reflection title')).toBeEnabled()
+})
+
+test('selecting a Bible passage updates the compact control and leaves C.H.A.T. writing alone', async () => {
+  renderPage()
+
+  const content = await screen.findByLabelText(/Content — the passage itself/i)
+  fireEvent.change(content, { target: { value: 'The vine is the source.' } })
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Choose Bible passage' }))
+  const passageField = await screen.findByPlaceholderText('John 3:16-18')
+  fireEvent.change(passageField, { target: { value: 'John 3:16' } })
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Load passage' })).toBeEnabled())
+  fireEvent.click(screen.getByRole('button', { name: 'Load passage' }))
+
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: /John 3:16 · NIV/i })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    ),
+  )
+  expect(screen.queryByPlaceholderText('John 3:16-18')).toBeNull()
+  expect(screen.getByLabelText(/Content — the passage itself/i)).toHaveValue(
+    'The vine is the source.',
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: /John 3:16 · NIV/i }))
+  expect(await screen.findByPlaceholderText('John 3:16-18')).toBeInTheDocument()
+
+  fireEvent.change(screen.getByPlaceholderText('John 3:16-18'), {
+    target: { value: 'Philippians 4:6-7' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Load passage' }))
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: /Philippians 4:6-7 · NIV/i })).toBeInTheDocument(),
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Remove passage' }))
+  expect(await screen.findByRole('button', { name: 'Choose Bible passage' })).toBeInTheDocument()
+  expect(screen.getByLabelText(/Content — the passage itself/i)).toHaveValue(
+    'The vine is the source.',
   )
 })
