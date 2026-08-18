@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { AUTHOR_ORIGINS } from '@chat/shared';
 import { ChatContentError } from './chat-content.ts';
 import { readMysqlConfig } from './config.ts';
 import { migrate } from './migrate.ts';
@@ -42,14 +43,16 @@ describe.skipIf(!config)('MySQL persistence', () => {
     return created;
   }
 
+  const own = (content: string) => ({ content, authorOrigin: AUTHOR_ORIGINS.USER });
+
   const full = {
-    context: 'John names the gift.',
-    heart: 'I received it.',
-    application: 'I will live openly.',
-    testimony: 'This is what God did.',
+    content: own('John names the gift.'),
+    heart: own('I received it.'),
+    application: own('I will live openly.'),
+    testimony: own('This is what God did.'),
   };
 
-  const short = { reflection: 'God so loved the world.' };
+  const short = { verse: own('John 3:16'), reflection: own('God so loved the world.') };
 
   it('creates users with public UUIDs distinct from internal ids', async () => {
     const a = await user();
@@ -164,7 +167,7 @@ describe.skipIf(!config)('MySQL persistence', () => {
       db.createReflection({
         userId: created.id,
         chatType: 'FULL',
-        chatContent: { reflection: 'not a full payload' },
+        chatContent: { reflection: own('not a full payload') },
       }),
     ).rejects.toBeInstanceOf(ChatContentError);
   });

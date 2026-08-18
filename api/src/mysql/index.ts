@@ -7,3 +7,5 @@ export { hashPassword, verifyPassword } from './passwords.ts';
 export { hashSessionToken } from './tokens.ts';
 export { IDENTITY_PROVIDERS, CHAT_TYPES, AI_USAGE_FEATURES } from './constants.ts';
 export { FORBIDDEN_CENTRAL_TABLES, FORBIDDEN_USAGE_COLUMNS } from './privacy.ts';
+export { ReflectionService, ReflectionServiceError } from '../reflections/service.ts';
+export type { Reflection, ReflectionInput, SectionInput } from '../reflections/service.ts';
