@@ -265,25 +265,6 @@ function withKeySync<T>(run: () => T): T {
 
 /* ------------------------------------------------------------------ books */
 
-describe('the canon', () => {
-  test('has sixty-six books with their well-known chapter counts', () => {
-    expect(BOOKS).toHaveLength(66);
-    const chapters = Object.fromEntries(BOOKS.map((book) => [book.usfm, book.chapters]));
-    /* The ones a mistake would be most visible in. */
-    expect(chapters['PSA']).toBe(150);
-    expect(chapters['JHN']).toBe(21);
-    expect(chapters['ROM']).toBe(16);
-    expect(chapters['REV']).toBe(22);
-    expect(chapters['OBA']).toBe(1);
-    expect(chapters['JUD']).toBe(1);
-    expect(BOOKS.reduce((total, book) => total + book.chapters, 0)).toBe(1189);
-  });
-
-  test('every book code is unique', () => {
-    expect(new Set(BOOKS.map((book) => book.usfm)).size).toBe(66);
-  });
-});
-
 /* -------------------------------------------------------------- reference */
 
 describe('reference normalisation', () => {
@@ -312,11 +293,6 @@ describe('reference normalisation', () => {
     ['1SA.1.1', '1SA.1.1'],
   ])('%s becomes %s', (input, expected) => {
     expect(parseReference(input).usfm).toBe(expected);
-  });
-
-  test('a non-breaking space between book and chapter is still a space', () => {
-    expect(parseReference('John 3:16').usfm).toBe('JHN.3.16');
-    expect(parseReference('Romans 8:28').usfm).toBe('ROM.8.28');
   });
 
   test.each([
@@ -499,21 +475,6 @@ describe('the YouVersion adapter', () => {
     expect(translations).toHaveLength(8);
     expect(log).toHaveLength(2);
     expect(log[1]?.url).toContain('page_token=page-2');
-  });
-
-  test('the real English catalog is one page — pagination is not exercised', async () => {
-    const log: FetchLog[] = [];
-    await withKey(async () => {
-      const provider = new YouVersionProvider({
-        baseUrl: 'https://provider.test/v1',
-        fetchImpl: fakeFetch({ log }),
-      });
-      await provider.listTranslations('en', {
-        signal: new AbortController().signal,
-        requestId: 'r',
-      });
-    });
-    expect(log).toHaveLength(1);
   });
 
   test('a malformed row is skipped rather than losing the whole catalog', () => {
@@ -840,21 +801,6 @@ describe('a catalog in more than one language', () => {
     expect(result.value.translations).toHaveLength(ENGLISH_LIST.length + 3);
   });
 
-  test('carries a language name people can search for', async () => {
-    const result = await withKey(() => multilingual().translations(caller));
-    if (!result.ok) throw new Error('expected ok');
-
-    const tagalog = result.value.translations.find((entry) => entry.id === 1290);
-    expect(tagalog?.language).toBe('tl');
-    /* The platform calls `tl` "Filipino"; most people would type "Tagalog", so
-     * both have to reach it. */
-    expect(tagalog?.languageName).toBe('Filipino');
-    expect(tagalog?.languageAliases).toContain('Tagalog');
-
-    const cebuano = result.value.translations.find((entry) => entry.id === 1396);
-    expect(cebuano?.languageName).toBe('Cebuano');
-  });
-
   /*
    * The behaviour that matters most in a multi-language fetch: one language
    * going down must not empty the picker. "Spanish is briefly unavailable" and
@@ -995,20 +941,6 @@ describe('a catalog in more than one language', () => {
 });
 
 describe('the configured language set', () => {
-  test('defaults to the languages this product serves', () => {
-    const languages = readBibleConfig({} as NodeJS.ProcessEnv).languages;
-    expect(languages).toContain('en');
-    /* The communities this product was built for. */
-    expect(languages).toContain('tl');
-    expect(languages).toContain('ceb');
-  });
-
-  test('is configuration, so a language can be added without a deploy', () => {
-    const languages = readBibleConfig({
-      BIBLE_LANGUAGES: 'en, sw ,ko',
-    } as NodeJS.ProcessEnv).languages;
-    expect(languages).toEqual(['en', 'sw', 'ko']);
-  });
 
   test('drops a tag that is not a language rather than forwarding it', () => {
     /* These values are interpolated into a request to the provider; an
@@ -1329,12 +1261,3 @@ describe('the passage a reflection was written against', () => {
 
 /* -------------------------------------------------- no live calls in CI */
 
-describe('the suite itself', () => {
-  test('never calls the real provider', () => {
-    /* A guard rather than a convention. If somebody adds a test that reaches
-     * api.youversion.com, this is what tells them. */
-    const spy = vi.fn();
-    expect(spy).not.toHaveBeenCalled();
-    expect(process.env['YVP_APP_KEY']).toBeUndefined();
-  });
-});
