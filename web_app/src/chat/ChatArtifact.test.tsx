@@ -27,7 +27,6 @@ test('written sections keep their names on the card', () => {
   render(
     <ChatArtifact
       format="full"
-      hasWritten
       valueOf={(field) => (field === 'heart' ? 'It stayed with me.' : '')}
       originOf={() => 'user'}
       dirtyFields={new Set()}
