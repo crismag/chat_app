@@ -10,7 +10,7 @@
  */
 
 import { describe, expect, test } from 'vitest'
-import { editDistance, fold, searchTranslations, similarity } from './search.ts'
+import { searchTranslations } from './search.ts'
 import type { BibleTranslation } from '@chat/shared'
 
 function entry(

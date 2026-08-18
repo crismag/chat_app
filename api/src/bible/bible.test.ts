@@ -15,7 +15,7 @@
  * plain text not HTML — are all facts about the real payloads.
  */
 
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test } from 'vitest';
 import {
   BIBLE_OUTCOMES,
   BIBLE_OUTCOME_MESSAGES,
@@ -31,7 +31,6 @@ import { MemoryPassageStore } from './passage-store.ts';
 import { parseReference, verseCount, ReferenceError_ } from './reference.ts';
 import { createBibleRoutes } from './routes.ts';
 import { BibleService } from './service.ts';
-import { BOOKS } from './books.ts';
 import { MAX_PAGE_SIZE, YouVersionProvider, mapStatus, readPassage, readTranslation } from './providers/youversion.ts';
 import type { BiblePassage } from '@chat/shared';
 
