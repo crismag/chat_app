@@ -138,6 +138,44 @@ so local development does not require Hostinger. When `MYSQL_HOST` is set, the
 API applies migrations on boot. Application routes are not switched onto this
 store in the foundation phase.
 
+### The target is MariaDB, not MySQL 8
+
+The environment variables are named `MYSQL_*` and the driver is `mysql2`, so it
+is easy to read this as a MySQL 8 deployment. It is not. The server is
+**MariaDB 11.8.8**, and the difference is not cosmetic.
+
+**`JSON` is not a type on this server.** MariaDB accepts the keyword and stores
+a `LONGTEXT` with a `json_valid()` check. Verified against the hosted database
+after migration — every column the schema declares as `JSON` reports back as
+`longtext`:
+
+| column | declared | stored as |
+| --- | --- | --- |
+| `reflections.chat_content` | `JSON` | `longtext` + `json_valid(chat_content)` |
+| `reflection_revisions.chat_content` | `JSON` | `longtext` + `json_valid(chat_content)` |
+| `reflection_images.design_config` | `JSON` | `longtext` + `json_valid(design_config)` |
+| `user_identities.provider_data` | `JSON` | `longtext` + `json_valid(provider_data)` |
+| `user_settings.settings` | `JSON` | `longtext` + `json_valid(settings)` |
+
+What follows from that, and what to avoid assuming:
+
+- There is no binary JSON representation, so no partial in-place update and no
+  MySQL 8 performance characteristics. Every write rewrites the whole document.
+- There is no functional index on a JSON path. Anything that needs to be
+  queried or sorted belongs in its own column, not inside `chat_content`.
+- `JSON_EXTRACT` and `->` / `->>` do work; `JSON_TABLE`, `JSON_OVERLAPS` and
+  `JSON_VALUE` differ or are absent. None are used today — keep it that way
+  without checking MariaDB's manual rather than MySQL's.
+- The collation is `utf8mb4_unicode_ci` throughout. MySQL 8's default
+  `utf8mb4_0900_ai_ci` does not exist here, so never copy a `CREATE TABLE` that
+  names it.
+
+The migrations themselves are portable — plain InnoDB tables, foreign keys and
+ordinary indexes — so a local MySQL will accept them. That is exactly the trap:
+it will accept them and behave differently. **Develop and test against MariaDB
+11.8** (`docker run mariadb:11.8`), and if CI ever runs these tests, pin the
+same image rather than the `mysql:8` default.
+
 **Privacy boundary:** the central database stores users, identities, profiles,
 settings, sessions, reflections, revisions, generated-image records, and
 **non-content** AI usage metadata. It does **not** store AI conversation
