@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router'
+import { ApiError } from '../shared/api/client.ts'
 import { useAuth } from './useAuth.ts'
 import styles from './AuthPage.module.css'
 
@@ -40,12 +41,49 @@ const LETTERS = [
   },
 ] as const
 
+/**
+ * Which field a failure belongs to.
+ *
+ * Only one of them is attributable. A 409 is the email — that address is
+ * taken, and nothing about the password is in question. A failed sign-in is
+ * deliberately *not* attributable: the server answers "Invalid email or
+ * password." without saying which half was wrong, and marking one field
+ * invalid would give away exactly what that wording withholds. So a failure
+ * with no field marks both, which is the truthful reading of it.
+ */
+type ErrorField = 'email' | null
+
+function fieldOf(caught: unknown): ErrorField {
+  return caught instanceof ApiError && caught.status === 409 ? 'email' : null
+}
+
 export function AuthPage() {
   const { user, ready, login, register } = useAuth()
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<{ message: string; field: ErrorField } | null>(null)
+  /*
+   * In flight. The submit button was previously always enabled, so a second
+   * press on a slow network sent a second registration — which came back 409,
+   * telling someone the account they had just successfully created already
+   * existed.
+   */
+  const [pending, setPending] = useState(false)
+
+  const errorId = 'auth-error'
+  const emailRef = useRef<HTMLInputElement>(null)
+  const alertRef = useRef<HTMLParagraphElement>(null)
+
+  /*
+   * Take the caret to the problem. An announcement alone leaves a keyboard or
+   * screen-reader user where they were, with no idea what to correct.
+   */
+  useEffect(() => {
+    if (!error) return
+    if (error.field === 'email') emailRef.current?.focus()
+    else alertRef.current?.focus()
+  }, [error])
 
   if (ready && user) {
     return <Navigate to="/" replace />
@@ -53,6 +91,13 @@ export function AuthPage() {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
+    /*
+     * The guard, as well as the disabled attribute. `disabled` stops the
+     * pointer; this stops everything else — a repeated Enter, a form submitted
+     * programmatically, a double event before React has re-rendered.
+     */
+    if (pending) return
+    setPending(true)
     setError(null)
     try {
       if (mode === 'login') {
@@ -61,9 +106,18 @@ export function AuthPage() {
         await register(email, password)
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Unable to continue')
+      setError({
+        message: caught instanceof Error ? caught.message : 'Unable to continue',
+        field: fieldOf(caught),
+      })
+    } finally {
+      setPending(false)
     }
   }
+
+  /** A field is implicated when the failure names it, or names neither. */
+  const implicated = (field: 'email' | 'password') =>
+    error !== null && (error.field === null || error.field === field)
 
   return (
     <div className={styles.page}>
@@ -109,13 +163,19 @@ export function AuthPage() {
               Email
             </label>
             <input
+              ref={emailRef}
               id="email"
               className="input"
               type="email"
               autoComplete="email"
               placeholder="you@example.com"
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              aria-invalid={implicated('email') || undefined}
+              aria-describedby={implicated('email') ? errorId : undefined}
+              onChange={(event) => {
+                setEmail(event.target.value)
+                setError(null)
+              }}
               required
             />
           </div>
@@ -132,19 +192,36 @@ export function AuthPage() {
               placeholder={mode === 'login' ? 'Your password' : 'At least 8 characters'}
               value={password}
               minLength={8}
-              onChange={(event) => setPassword(event.target.value)}
+              aria-invalid={implicated('password') || undefined}
+              aria-describedby={implicated('password') ? errorId : undefined}
+              onChange={(event) => {
+                setPassword(event.target.value)
+                setError(null)
+              }}
               required
             />
           </div>
 
           {error ? (
-            <p className={styles.error} role="alert">
-              {error}
+            <p
+              ref={alertRef}
+              id={errorId}
+              className={styles.error}
+              role="alert"
+              tabIndex={-1}
+            >
+              {error.message}
             </p>
           ) : null}
 
-          <button type="submit" className="btn btn-primary">
-            {mode === 'login' ? 'Sign in' : 'Create account'}
+          <button type="submit" className="btn btn-primary" disabled={pending}>
+            {pending
+              ? mode === 'login'
+                ? 'Signing in…'
+                : 'Creating account…'
+              : mode === 'login'
+                ? 'Sign in'
+                : 'Create account'}
           </button>
         </form>
 
