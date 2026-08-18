@@ -12,11 +12,18 @@ matters. Re-run the scripts before trusting a line item.
 
 A later follow-through on 2026-08-17 changed some of the product-surface
 findings below: unknown URLs now render a 404 inside the shell; the two
-primary landmarks have distinct names; Community left the primary navigation;
-section names returned to the card; Create no longer exposes Studio's
-built-in templates or drawing chrome; and the Send-button Scripture-reference
-path is covered by a unit test as well as `reference-race.mjs`. The rest of
-this document is still the 2026-08-16 browser tour.
+primary landmarks have distinct names; section names returned to the card;
+Create no longer exposes Studio's built-in templates or drawing chrome; and
+the Send-button Scripture-reference path is covered by a unit test as well as
+`reference-race.mjs`.
+
+A further follow-through the same day restored Community to the primary
+navigation because a published entry can now be opened: audiences,
+membership, `GET /api/publications`, a gallery of cards, and
+`/community/publications/:id`. The **Community** section below still describes
+the 2026-08-16 listing; treat that verdict as historical.
+
+The rest of this document is still the 2026-08-16 browser tour.
 
 The other documents in this directory describe intent. This one is the
 counterweight, and it is deliberately unflattering. Where it disagrees with
@@ -231,7 +238,10 @@ the count, and opening a result back into the correct reflection.
 
 ## Community
 
-**Verdict: not shippable. It is a database listing with a heading over it.**
+**Verdict (2026-08-16 tour): not shippable. It was a database listing with a
+heading over it.** That listing is gone. The page is now Shared / Public /
+Communities with openable publication cards. Re-run `community.mjs` before
+trusting a line item below.
 
 - **Blocker — nothing is clickable.**
   `web_app/src/community/CommunityPage.tsx` L68–75 renders each entry as two

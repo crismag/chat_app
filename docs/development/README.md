@@ -38,7 +38,7 @@ If implementation reveals that a documented assumption is wrong, update the rele
 
 ## Current status
 
-Well past scaffolding. A React/Vite web app and a Hono API, sharing domain types; email/password authentication with server-side sessions; SQLite persistence; the four C.H.A.T. sections as the page; a Gemini-backed assistance seam; a YouVersion passage connector; and a Create Studio square-card integration with an optional host-owned generated-background seam. Community remains incomplete and is out of the primary navigation until a published entry can be opened.
+Well past scaffolding. A React/Vite web app and a Hono API, sharing domain types; email/password authentication with server-side sessions; SQLite persistence; the four C.H.A.T. sections as the page; a Gemini-backed assistance seam; a YouVersion passage connector; a Create Studio square-card integration with an optional host-owned generated-background seam; and a Community feed with document-scoped publications, membership, and a server-side visibility predicate. Create remains a square-card foundation rather than the finished layout/style product. Phase 8 (Capacitor) is not started.
 
 Phase-by-phase status is in [`MVP_PLAN.md`](MVP_PLAN.md); an unsparing page-by-page account is in [`PRODUCT_READINESS.md`](PRODUCT_READINESS.md).
 
