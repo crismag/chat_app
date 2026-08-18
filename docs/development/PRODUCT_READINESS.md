@@ -284,7 +284,7 @@ foundation, not the finished Create product.**
 - `/open-source-licenses` is independently reachable and bundles Create Studio
   and application notices for offline use.
 - **Remaining:** visual-template breadth, overflow handling, multi-page work,
-  uploaded/generated assets, mobile packaging and full device-level UX review.
+  uploaded/generated assets, and full device-level UX review on signed binaries.
 
 ---
 

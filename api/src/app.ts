@@ -3,7 +3,8 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { cors } from 'hono/cors';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import { SESSION_TTL_MS } from './db.ts';
+import { sessionCookieOptions } from './auth/session-cookie.ts';
+import { webOrigins } from './http/origins.ts';
 import {
   AUTHOR_ORIGINS,
   CHAT_FORMATS,
@@ -129,22 +130,6 @@ type SectionType = (typeof SECTION_TYPES)[number];
 const AUTHOR_ORIGIN_VALUES = Object.values(AUTHOR_ORIGINS) as readonly AuthorOrigin[];
 
 /**
- * The session cookie's options.
- *
- * `secure` is on everywhere but development, because without it the browser
- * will send the session token over plain HTTP — which is exactly the situation
- * a session cookie exists to survive. It is off locally only because there is
- * no certificate on localhost and the cookie would otherwise never be set.
- */
-const sessionCookie = {
-  httpOnly: true,
-  sameSite: 'Lax',
-  path: '/',
-  secure: process.env.NODE_ENV === 'production',
-  maxAge: Math.floor(SESSION_TTL_MS / 1000),
-} as const;
-
-/**
  * `store` accepts either backing. Tests hand in an in-memory SQLite database so
  * each one gets a clean schema; the server hands in a file.
  *
@@ -201,7 +186,7 @@ export function createApp(
   app.use(
     '/api/*',
     cors({
-      origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+      origin: webOrigins(),
       allowMethods: ['GET', 'HEAD', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
       credentials: true,
     }),
@@ -466,7 +451,7 @@ export function createApp(
     store.usersByEmail.set(email, user.id);
     const token = randomUUID();
     store.sessions.set(token, { token, userId: user.id });
-    setCookie(c, SESSION_COOKIE, token, sessionCookie);
+    setCookie(c, SESSION_COOKIE, token, sessionCookieOptions(c.req.header('origin')));
     return c.json({ id: user.id, email: user.email }, 201);
   });
 
@@ -480,7 +465,7 @@ export function createApp(
     }
     const token = randomUUID();
     store.sessions.set(token, { token, userId: user.id });
-    setCookie(c, SESSION_COOKIE, token, sessionCookie);
+    setCookie(c, SESSION_COOKIE, token, sessionCookieOptions(c.req.header('origin')));
     return c.json({ id: user.id, email: user.email });
   });
 

@@ -18,6 +18,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { CHAT_FORMATS, audienceLabel } from '@chat/shared'
 import { ApiError } from '../shared/api/client.ts'
+import { shareWithPlatform } from '../shared/native/share.ts'
 import { SECTIONS } from '../shared/ui/ReflectionCard.tsx'
 import { fetchPublication, setEncouraged, setSaved, type Publication } from './api.ts'
 import styles from './CommunityPage.module.css'
@@ -206,8 +207,12 @@ export function PublicationPage() {
             type="button"
             className={styles.action}
             onClick={() => {
-              void navigator.clipboard?.writeText(publication.shareUrl ?? '')
-              setNotice('Public link copied.')
+              void shareWithPlatform({
+                title: publication.title,
+                url: publication.shareUrl,
+              }).then((result) => {
+                setNotice(result === 'copied' ? 'Public link copied.' : 'Opened the share sheet.')
+              })
             }}
           >
             Copy public link

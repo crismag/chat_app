@@ -33,8 +33,8 @@ chat_app/
 └── README.md
 ```
 
-`android/` and `ios/` do not exist yet; they arrive in the mobile packaging
-phase. Everything else above is present.
+`android/` and `ios/` are the Capacitor hosts; see [`MOBILE.md`](./MOBILE.md).
+Everything else above is present.
 
 ### Why not `mobile/android` and `mobile/ios`?
 
@@ -210,6 +210,11 @@ Not required for MVP:
 - biometrics.
 
 If Capacitor WebViews later need help persisting the session cookie, add a small native secure-storage adapter around this same session model. Do not introduce a second auth protocol.
+
+**Phase 8.** Packaged WebViews enable CapacitorCookies and CapacitorHttp. Login
+from those origins sets `SameSite=None; Secure` on `chat_session`. Live-reload
+against Vite keeps the original Lax cookie because `/api` is still first-party
+through the proxy.
 
 ## Privacy boundary
 

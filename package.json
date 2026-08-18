@@ -20,10 +20,24 @@
     "notices:check": "node scripts/notices.mjs --check",
     "notices:artifact": "node scripts/check-notice-artifact.mjs",
     "check:create-studio-package": "node scripts/check-create-studio-package.mjs",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "cap:sync": "npm run build -w web_app && npx cap sync",
+    "cap:android": "npm run cap:sync && npx cap open android",
+    "cap:ios": "npm run cap:sync && npx cap open ios"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.0",
     "concurrently": "^9.2.1",
     "selenium-webdriver": "^4.47.0"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/filesystem": "^8.1.2",
+    "@capacitor/ios": "^8.5.0",
+    "@capacitor/keyboard": "^8.0.5",
+    "@capacitor/share": "^8.0.1",
+    "@capacitor/status-bar": "^8.0.3"
   }
 }

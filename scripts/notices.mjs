@@ -9,6 +9,12 @@ const appPackages = [
   { packageName: 'react', name: 'React', repository: 'https://github.com/facebook/react' },
   { packageName: 'react-dom', name: 'React DOM', repository: 'https://github.com/facebook/react' },
   { packageName: 'react-router', name: 'React Router', repository: 'https://github.com/remix-run/react-router' },
+  { packageName: '@capacitor/core', name: 'Capacitor', repository: 'https://github.com/ionic-team/capacitor' },
+  { packageName: '@capacitor/app', name: 'Capacitor App', repository: 'https://github.com/ionic-team/capacitor-plugins' },
+  { packageName: '@capacitor/keyboard', name: 'Capacitor Keyboard', repository: 'https://github.com/ionic-team/capacitor-plugins' },
+  { packageName: '@capacitor/status-bar', name: 'Capacitor Status Bar', repository: 'https://github.com/ionic-team/capacitor-plugins' },
+  { packageName: '@capacitor/share', name: 'Capacitor Share', repository: 'https://github.com/ionic-team/capacitor-plugins' },
+  { packageName: '@capacitor/filesystem', name: 'Capacitor Filesystem', repository: 'https://github.com/ionic-team/capacitor-plugins' },
 ]
 
 const packages = [...studio.packages]

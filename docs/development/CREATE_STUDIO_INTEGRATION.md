@@ -86,8 +86,8 @@ off until C.H.A.T. maps those layouts itself.
 combines it with C.H.A.T.'s shipped React dependencies. CI checks the generated
 Markdown/JSON records and confirms notice text is present in the production web
 bundle. `/open-source-licenses` is bundled, offline-capable, publicly reachable,
-and linked from the account menu. A future Capacitor wrapper must package this
-same web build and retain the route.
+and linked from the account menu. The Capacitor wrapper packages this same web
+build and keeps the route.
 
 ## Manual verification
 

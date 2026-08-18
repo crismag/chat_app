@@ -10,10 +10,12 @@ import { CreatePage } from '../create/CreatePage.tsx'
 import { ProfilePage } from '../profile/ProfilePage.tsx'
 import { OpenSourceLicencesPage } from '../licenses/OpenSourceLicencesPage.tsx'
 import { NotFoundPage } from '../shared/ui/NotFoundPage.tsx'
+import { DeepLinks } from '../shared/native/DeepLinks.tsx'
 
 export function App() {
   return (
     <AuthProvider>
+      <DeepLinks />
       <Routes>
         <Route path="/login" element={<AuthPage />} />
         <Route path="/open-source-licenses" element={<OpenSourceLicencesPage />} />

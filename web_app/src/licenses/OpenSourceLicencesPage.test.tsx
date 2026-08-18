@@ -8,5 +8,6 @@ test('bundles Create Studio and application notices without a network request', 
   expect(screen.getByRole('heading', { name: 'Open Source Licences' })).toBeInTheDocument()
   expect(screen.getByRole('heading', { name: 'Fabric.js' })).toBeInTheDocument()
   expect(screen.getByRole('heading', { name: 'React' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Capacitor' })).toBeInTheDocument()
   expect(screen.getByText(/remain available without a network connection/i)).toBeInTheDocument()
 })
