@@ -1,4 +1,5 @@
 import { Link } from 'react-router'
+import { ChatLetters, ChatWordmark } from '../shared/ui/ChatLetters.tsx'
 import { LEGAL_PAGES } from './pages.ts'
 import styles from './WelcomePage.module.css'
 
@@ -19,33 +20,6 @@ import styles from './WelcomePage.module.css'
  * Outside the shell, like About and the documents, so it needs no account and
  * asks for none.
  */
-
-const LETTERS = [
-  {
-    letter: 'C',
-    word: 'Content',
-    blurb: 'The passage itself — the verse, its reference and its translation.',
-    tone: 'content',
-  },
-  {
-    letter: 'H',
-    word: 'Heart',
-    blurb: 'What it means to you, and how it touched, convicted or encouraged you.',
-    tone: 'heart',
-  },
-  {
-    letter: 'A',
-    word: 'Application',
-    blurb: 'What you will actually do about it.',
-    tone: 'application',
-  },
-  {
-    letter: 'T',
-    word: 'Testimony',
-    blurb: 'The conviction, prayer or declaration you want to keep.',
-    tone: 'testimony',
-  },
-] as const
 
 /*
  * Four claims, each of which the application has to actually keep. Nothing
@@ -76,12 +50,7 @@ export function WelcomePage() {
     <div className={styles.page}>
       <main className={styles.inner} id="main">
         <header className={styles.banner}>
-          <h1 className={styles.wordmark}>
-            <span className={styles.content}>C.</span>
-            <span className={styles.heart}>H.</span>
-            <span className={styles.application}>A.</span>
-            <span className={styles.testimony}>T.</span>
-          </h1>
+          <ChatWordmark as="h1" size="banner" />
           <p className={styles.lede}>
             Keep the conversation that changed your mind. A private place to reflect on
             Scripture — Content, Heart, Application, Testimony — and keep what you write.
@@ -104,17 +73,7 @@ export function WelcomePage() {
           <h2 className="sr-only" id="letters-heading">
             What the four letters mean
           </h2>
-          <div className={styles.letters}>
-            {LETTERS.map(({ letter, word, blurb, tone }) => (
-              <article className={`${styles.letter} ${styles[tone]}`} key={letter}>
-                <span className={styles.letterMark} aria-hidden="true">
-                  {letter}
-                </span>
-                <span className={styles.letterWord}>{word}</span>
-                <p className={styles.letterBlurb}>{blurb}</p>
-              </article>
-            ))}
-          </div>
+          <ChatLetters layout="grid" />
         </section>
 
         <section aria-labelledby="promises-heading">

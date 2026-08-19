@@ -1,0 +1,118 @@
+/*
+ * The four letters, wherever they are being explained.
+ *
+ * One set of styles for the sign-in page, the welcome page and About, because
+ * three copies of this drifted apart once already — the login screen had the
+ * corrected wording for Content while the others still described commentary,
+ * and each had its own idea of how big the mark was.
+ */
+
+.wordmark {
+  display: flex;
+  margin: 0;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  font-size: clamp(2rem, 1.4rem + 2.6vw, 3.25rem);
+}
+
+/* The banner size: this is the whole page, not a heading on one. */
+.wordmark[data-size='banner'] {
+  justify-content: center;
+  font-size: clamp(2.75rem, 9vw, 5rem);
+  line-height: 1.05;
+}
+
+.content {
+  color: var(--content);
+}
+
+.heart {
+  color: var(--heart);
+}
+
+.application {
+  color: var(--application);
+}
+
+.testimony {
+  color: var(--testimony);
+}
+
+/* --- the four, explained ------------------------------------------------ */
+
+.letters {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+/*
+ * Side by side once there is room for it. On the sign-in page this is a
+ * column beside the form; on a page of its own it would be a very tall list
+ * of four short lines, so it becomes a grid instead.
+ */
+.letters[data-layout='grid'] {
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: var(--space-4);
+}
+
+.letterRow {
+  display: grid;
+  grid-template-columns: 2rem 1fr;
+  gap: var(--space-3);
+  align-items: start;
+}
+
+/*
+ * The mark carries the letter's colour on its own soft ground. Not colour
+ * alone: the letter itself is the label, and the word is beside it.
+ */
+.letterMark {
+  display: grid;
+  place-items: center;
+  inline-size: 2rem;
+  block-size: 2rem;
+  border-radius: var(--radius-md);
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.letterMark.content {
+  background: var(--content-soft);
+  color: var(--content);
+}
+
+.letterMark.heart {
+  background: var(--heart-soft);
+  color: var(--heart);
+}
+
+.letterMark.application {
+  background: var(--application-soft);
+  color: var(--application);
+}
+
+.letterMark.testimony {
+  background: var(--testimony-soft);
+  color: var(--testimony);
+}
+
+.letterBody {
+  margin: 0;
+  display: grid;
+  gap: 0.1rem;
+}
+
+.letterWord {
+  font-size: var(--text-base);
+  color: var(--ink);
+}
+
+.letterBlurb {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  line-height: var(--leading-snug, 1.45);
+}

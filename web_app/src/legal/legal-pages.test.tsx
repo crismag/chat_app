@@ -10,6 +10,7 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { App } from '../app/App.tsx'
+import { CHAT_LETTERS } from '../shared/ui/ChatLetters.tsx'
 import { LEGAL_PAGES } from './pages.ts'
 import { Markdown, parseDocument } from './markdown.tsx'
 
@@ -47,10 +48,30 @@ test.each(LEGAL_PAGES.map((page) => [page.slug, page.label]))(
 
 test('About is where the documents are linked, and needs no account either', async () => {
   renderAt('/about')
-  expect(await screen.findByRole('heading', { name: 'About Reflections' })).toBeInTheDocument()
+  /* The name, in its four colours, exactly as the sign-in page shows it. */
+  expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('C.H.A.T.')
   expect(screen.queryByRole('heading', { name: 'Sign in' })).toBeNull()
   for (const { slug, label } of LEGAL_PAGES) {
     expect(screen.getByRole('link', { name: label })).toHaveAttribute('href', `/${slug}`)
+  }
+})
+
+/*
+ * The four letters were explained only on the sign-in page — seen, therefore,
+ * only by somebody who had already decided to make an account. They are on the
+ * pages a stranger actually lands on now, from one definition rather than
+ * three copies that had already drifted apart.
+ */
+test('About and Welcome both explain the four letters', async () => {
+  for (const path of ['/about', '/welcome']) {
+    cleanup()
+    renderAt(path)
+    for (const { letter, word, blurb } of CHAT_LETTERS) {
+      const term = (await screen.findAllByText(letter)).find((node) => node.tagName === 'DT')
+      expect(term).toBeDefined()
+      expect(screen.getByText(word)).toBeInTheDocument()
+      expect(screen.getByText(blurb)).toBeInTheDocument()
+    }
   }
 })
 

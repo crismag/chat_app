@@ -23,15 +23,6 @@
   max-width: 34rem;
 }
 
-.wordmark {
-  display: flex;
-  font-family: var(--font-serif);
-  font-size: clamp(2rem, 1.4rem + 2.6vw, 3.25rem);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  line-height: 1;
-}
-
 .content {
   color: var(--content);
 }
@@ -51,68 +42,10 @@
   max-width: 20ch;
 }
 
-.letters {
-  display: grid;
-  gap: var(--space-3);
-  margin: 0;
-}
-
-.letterRow {
-  display: grid;
-  grid-template-columns: 2rem 1fr;
-  gap: var(--space-3);
-  align-items: start;
-}
-
-.letterMark {
-  display: grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: var(--radius-md);
-  font-family: var(--font-serif);
-  font-size: 1.05rem;
-  font-weight: 700;
-}
-
 /*
  * Each letter sits on its own tinted chip. The same four colours run through
  * the rest of the app, so this doubles as the legend for them.
  */
-.letterMark.content {
-  background: var(--content-soft);
-  color: var(--content);
-}
-.letterMark.heart {
-  background: var(--heart-soft);
-  color: var(--heart);
-}
-.letterMark.application {
-  background: var(--application-soft);
-  color: var(--application);
-}
-.letterMark.testimony {
-  background: var(--testimony-soft);
-  color: var(--testimony);
-}
-
-.letterRow dd {
-  margin: 0;
-  display: grid;
-  gap: 0.1rem;
-}
-
-.letterRow dd strong {
-  font-size: var(--text-base);
-  color: var(--ink);
-}
-
-.letterRow dd span {
-  font-size: var(--text-sm);
-  color: var(--muted);
-  line-height: var(--leading-snug);
-}
-
 .panel {
   order: 1;
   display: grid;

@@ -31,24 +31,6 @@
   padding-block: clamp(var(--space-5), 6vw, var(--space-8, 4rem));
 }
 
-/*
- * The wordmark. The four letters are the product, so they are the largest
- * thing on the page and each keeps the colour it has everywhere else — a
- * reader who has used the app for a week should recognise this instantly.
- */
-.wordmark {
-  margin: 0;
-  font-family: var(--font-serif);
-  font-size: clamp(2.75rem, 9vw, 5rem);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  line-height: 1.05;
-}
-
-.wordmark span {
-  white-space: nowrap;
-}
-
 .lede {
   margin: 0;
   max-inline-size: 34rem;
@@ -65,60 +47,20 @@
   margin-block-start: var(--space-2);
 }
 
-/* --- the four letters ---------------------------------------------------- */
-
-.letters {
-  display: grid;
-  gap: var(--space-3);
-  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
-  margin: 0;
-  padding-block: var(--space-5);
-}
-
-/*
- * The rail carries the letter's own colour, exactly as it does beside the
- * fields in the editor. Somebody who has written one reflection should
- * recognise these four stripes before they read a word of this page.
- */
-.letter {
-  display: grid;
-  gap: 0.25rem;
-  padding: var(--space-4);
-  border-left: 3px solid currentColor;
-  border-radius: 0 var(--radius-md) var(--radius-md) 0;
-  background: var(--surface);
-}
-
-.letterMark {
-  font-family: var(--font-serif);
-  font-size: 1.6rem;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.letterWord {
-  font-weight: 650;
-  color: var(--ink);
-}
-
-.letterBlurb {
-  margin: 0;
-  /* The card carries the letter's colour for its rail and mark, not its text. */
-  font-size: var(--text-sm);
-  line-height: 1.5;
-  color: var(--ink-muted, var(--muted));
-}
-
 /* --- the promises -------------------------------------------------------- */
 
+/*
+ * Set apart from the letters above them, which are a different kind of claim:
+ * those describe the format, these describe what the product does with it.
+ */
 .promises {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-4);
   grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-  margin: 0;
-  padding: 0;
+  margin-block-start: var(--space-5);
+  padding: var(--space-5) 0 0;
+  border-top: 1px solid var(--line);
   list-style: none;
-  padding-block: var(--space-4);
 }
 
 .promise {
@@ -180,22 +122,3 @@
   color: var(--muted);
 }
 
-/*
- * The four colours, the same four everywhere else in the application. They are
- * the only decoration on this page that carries meaning.
- */
-.content {
-  color: var(--content);
-}
-
-.heart {
-  color: var(--heart);
-}
-
-.application {
-  color: var(--application);
-}
-
-.testimony {
-  color: var(--testimony);
-}

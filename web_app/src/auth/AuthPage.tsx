@@ -2,45 +2,9 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Navigate, useSearchParams } from 'react-router'
 import { ACCOUNT_TYPES } from '@chat/shared'
 import { ApiError } from '../shared/api/client.ts'
+import { ChatLetters, ChatWordmark } from '../shared/ui/ChatLetters.tsx'
 import { useAuth } from './useAuth.ts'
 import styles from './AuthPage.module.css'
-
-/*
- * The four letters, as the first thing anyone reads about this.
- *
- * C's blurb used to say "what the passage is saying, and what is happening
- * around it" — the commentary framing the section was renamed away from. In
- * roughly thirty real reflections the C section is the verse, usually with its
- * reference and translation, and frequently nothing else; see
- * `docs/examples/REAL_CHAT_SAMPLES.md`. Explanation, where it appears at all,
- * appears under Heart, which is where H's blurb now admits it.
- */
-const LETTERS = [
-  {
-    letter: 'C',
-    word: 'Content',
-    blurb: 'The passage itself — the verse, its reference and its translation.',
-    tone: 'content',
-  },
-  {
-    letter: 'H',
-    word: 'Heart',
-    blurb: 'What it means to you, and how it touched, convicted or encouraged you.',
-    tone: 'heart',
-  },
-  {
-    letter: 'A',
-    word: 'Application',
-    blurb: 'What you will actually do about it.',
-    tone: 'application',
-  },
-  {
-    letter: 'T',
-    word: 'Testimony',
-    blurb: 'The conviction, prayer or declaration you want to keep.',
-    tone: 'testimony',
-  },
-] as const
 
 /**
  * Which field a failure belongs to.
@@ -165,26 +129,11 @@ export function AuthPage() {
         room to say so without getting in the way later.
       */}
       <aside className={styles.aside}>
-        <p className={styles.wordmark}>
-          <span className={styles.content}>C.</span>
-          <span className={styles.heart}>H.</span>
-          <span className={styles.application}>A.</span>
-          <span className={styles.testimony}>T.</span>
-        </p>
+        <ChatWordmark />
         <h2 className={styles.asideTitle}>
           Keep the conversation that changed your mind.
         </h2>
-        <dl className={styles.letters}>
-          {LETTERS.map(({ letter, word, blurb, tone }) => (
-            <div key={letter} className={styles.letterRow}>
-              <dt className={`${styles.letterMark} ${styles[tone]}`}>{letter}</dt>
-              <dd>
-                <strong>{word}</strong>
-                <span>{blurb}</span>
-              </dd>
-            </div>
-          ))}
-        </dl>
+        <ChatLetters />
       </aside>
 
       <section className={styles.panel}>
