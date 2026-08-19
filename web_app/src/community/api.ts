@@ -190,6 +190,28 @@ export function setSaved(
   })
 }
 
+/**
+ * Out of one reader's sight. Not a report: no author is told, no moderator is
+ * involved, and it is reversible.
+ */
+export function hidePublicationForMe(
+  id: string,
+  hidden: boolean,
+): Promise<{ hiddenForYou: boolean }> {
+  return api(`/publications/${id}/hide-for-me`, {
+    method: 'POST',
+    body: JSON.stringify({ hidden }),
+  })
+}
+
+/** The same, for everything one person shares. */
+export function muteAuthorOf(id: string, muted: boolean): Promise<{ muted: boolean }> {
+  return api(`/publications/${id}/mute-author`, {
+    method: 'POST',
+    body: JSON.stringify({ muted }),
+  })
+}
+
 export function reportPublication(
   id: string,
   reason: string,

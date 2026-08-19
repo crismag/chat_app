@@ -42,6 +42,14 @@ export interface AuthUser {
   /** Kept after registration: it is what this person has been called so far. */
   guestName: string | null;
   emailVerified: boolean;
+  /**
+   * When the account was made.
+   *
+   * Carried because the outward limits are tighter for an account's first day,
+   * and an age that is never populated means every account is treated as new
+   * forever — which is not a safe default, it is a broken one.
+   */
+  createdAt: string | null;
 }
 
 export interface AuthStore {
@@ -230,6 +238,7 @@ export class MysqlAuthStore implements AuthStore {
       email: email === undefined ? await this.db.getLocalUsername(userId) : email,
       guestName: user.guestName,
       emailVerified: user.emailVerifiedAt !== null,
+      createdAt: user.createdAt,
     };
   }
 
@@ -461,6 +470,7 @@ export class SqliteAuthStore implements AuthStore {
       email: found.email,
       guestName: found.guestName,
       emailVerified: found.emailVerifiedAt !== null,
+      createdAt: found.createdAt,
     };
   }
 

@@ -140,42 +140,49 @@ describe('the ceilings', () => {
   test('a new account is held to less than an established one', () => {
     const fresh = limits();
     let allowed = 0;
-    for (let attempt = 0; attempt < 6; attempt += 1) {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      clock += 60_000;
       if (fresh.take(OUTWARD_ACTIONS.COMMUNITY_CREATE, who('new', 60_000)).allowed) allowed += 1;
     }
-    expect(allowed).toBe(2);
+    expect(allowed).toBe(5);
 
     const established = limits();
     allowed = 0;
-    for (let attempt = 0; attempt < 6; attempt += 1) {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      clock += 60_000;
       if (established.take(OUTWARD_ACTIONS.COMMUNITY_CREATE, who('old')).allowed) allowed += 1;
     }
-    expect(allowed).toBe(5);
+    expect(allowed).toBe(15);
   });
 
   test('an account of unknown age is treated as new, which is the safer answer', () => {
     const unknown = limits();
     let allowed = 0;
-    for (let attempt = 0; attempt < 6; attempt += 1) {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      clock += 60_000;
       if (unknown.take(OUTWARD_ACTIONS.COMMUNITY_CREATE, who('unknown', null)).allowed) allowed += 1;
     }
-    expect(allowed).toBe(2);
+    expect(allowed).toBe(5);
   });
 
   test('one account holding a button down does not spend everybody else’s allowance', () => {
     const shared = limits();
-    for (let attempt = 0; attempt < 40; attempt += 1) {
-      shared.take(OUTWARD_ACTIONS.PUBLISH, who('loud'));
+    for (let attempt = 0; attempt < 300; attempt += 1) {
+      clock += 60_000;
+      shared.take(OUTWARD_ACTIONS.REACT, who('loud'));
     }
-    expect(shared.take(OUTWARD_ACTIONS.PUBLISH, who('loud')).allowed).toBe(false);
+    expect(shared.take(OUTWARD_ACTIONS.REACT, who('loud')).allowed).toBe(false);
     /* Same address, different person: a household is not one person. */
-    expect(shared.take(OUTWARD_ACTIONS.PUBLISH, who('quiet')).allowed).toBe(true);
+    expect(shared.take(OUTWARD_ACTIONS.REACT, who('quiet')).allowed).toBe(true);
   });
 
   test('a refusal says how long to wait, and reporting stays generous', () => {
     const one = limits();
-    for (let attempt = 0; attempt < 40; attempt += 1) one.take(OUTWARD_ACTIONS.PUBLISH, who('a'));
-    const refused = one.take(OUTWARD_ACTIONS.PUBLISH, who('a'));
+    for (let attempt = 0; attempt < 15; attempt += 1) {
+      clock += 60_000;
+      one.take(OUTWARD_ACTIONS.COMMUNITY_CREATE, who('a'));
+    }
+    const refused = one.take(OUTWARD_ACTIONS.COMMUNITY_CREATE, who('a'));
     expect(refused.allowed).toBe(false);
     if (!refused.allowed) expect(refused.retryAfterSeconds).toBeGreaterThan(0);
 

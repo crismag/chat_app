@@ -47,6 +47,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
+import type { ShareHistory, WindowCount } from './share-limits.ts';
 import {
   COMMUNITY_ROLES,
   MEMBERSHIP_STATES,
@@ -300,6 +301,55 @@ function migrate(db: DatabaseSync): void {
       PRIMARY KEY (publicationId, userId)
     );
 
+    /*
+     * Every share that has happened, whether or not it still exists.
+     *
+     * Nothing deletes from this table. If the limits counted live
+     * publications, then share, unshare, share would cost nothing and the
+     * ceiling would be on how much is visible rather than on how much somebody
+     * is doing -- which is precisely the evasion a rate limit is for.
+     *
+     * It holds no content. A reflection id, a destination and a time: enough
+     * to answer how much and how widely, and nothing anybody wrote.
+     */
+    /*
+     * Personal controls, which are not moderation.
+     *
+     * Hiding something and muting somebody change what one reader sees and
+     * nothing else: no report is filed, no author is told, no moderator has to
+     * agree. That separation is the point. Most of what people want is simply
+     * not to see a thing again, and routing that through an enforcement
+     * process turns every irritation into a case somebody has to judge -- and
+     * leaves the reader waiting for a verdict to get what they could have had
+     * immediately.
+     */
+    CREATE TABLE IF NOT EXISTS publication_hides (
+      publicationId TEXT NOT NULL REFERENCES publications(id) ON DELETE CASCADE,
+      userId TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      PRIMARY KEY (publicationId, userId)
+    );
+
+    CREATE TABLE IF NOT EXISTS author_mutes (
+      userId TEXT NOT NULL,
+      mutedUserId TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      PRIMARY KEY (userId, mutedUserId)
+    );
+
+    CREATE TABLE IF NOT EXISTS share_events (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      conversationId TEXT NOT NULL,
+      audience TEXT NOT NULL,
+      communityId TEXT,
+      createdAt INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_share_events_user ON share_events(userId, createdAt);
+    CREATE INDEX IF NOT EXISTS idx_share_events_reflection
+      ON share_events(conversationId, createdAt);
+
     CREATE TABLE IF NOT EXISTS publication_reports (
       id TEXT PRIMARY KEY,
       publicationId TEXT NOT NULL REFERENCES publications(id) ON DELETE CASCADE,
@@ -369,6 +419,26 @@ function migrate(db: DatabaseSync): void {
  */
 const VISIBLE_TO = `
   p.deletedAt IS NULL
+  /*
+   * The reader's own choices, applied in the same statement as the
+   * authorisation. Hiding and muting are theirs alone: nothing here is visible
+   * to the author, and neither ever reaches anybody else's feed.
+   *
+   * Their own writing is exempt from the mute -- muting yourself by muting
+   * somebody is not a thing anybody means to do -- and a publication they
+   * hid stays hidden even from a direct link, which is what hiding means.
+   */
+  AND NOT EXISTS (
+    SELECT 1 FROM publication_hides AS ph
+     WHERE ph.publicationId = p.id AND ph.userId = ?1
+  )
+  AND (
+    p.authorUserId = ?1
+    OR NOT EXISTS (
+      SELECT 1 FROM author_mutes AS am
+       WHERE am.userId = ?1 AND am.mutedUserId = p.authorUserId
+    )
+  )
   AND (
     p.authorUserId = ?1
     OR (
@@ -710,6 +780,135 @@ export class CommunityStore {
     return this.db
       .prepare('DELETE FROM publications WHERE conversationId = ? AND authorUserId = ?')
       .run(conversationId, authorUserId).changes as number;
+  }
+
+  /* -------------------------------------------------- personal controls */
+
+  /** Out of this reader's sight, immediately, with nobody's permission. */
+  hidePublicationForViewer(publicationId: string, userId: string, hidden: boolean): void {
+    if (!hidden) {
+      this.db
+        .prepare('DELETE FROM publication_hides WHERE publicationId = ? AND userId = ?')
+        .run(publicationId, userId);
+      return;
+    }
+    this.db
+      .prepare(
+        `INSERT INTO publication_hides (publicationId, userId, createdAt) VALUES (?, ?, ?)
+         ON CONFLICT(publicationId, userId) DO NOTHING`,
+      )
+      .run(publicationId, userId, new Date().toISOString());
+  }
+
+  /** The same, for everything one author shares. Reversible, and private. */
+  muteAuthor(userId: string, mutedUserId: string, muted: boolean): void {
+    if (userId === mutedUserId) return;
+    if (!muted) {
+      this.db
+        .prepare('DELETE FROM author_mutes WHERE userId = ? AND mutedUserId = ?')
+        .run(userId, mutedUserId);
+      return;
+    }
+    this.db
+      .prepare(
+        `INSERT INTO author_mutes (userId, mutedUserId, createdAt) VALUES (?, ?, ?)
+         ON CONFLICT(userId, mutedUserId) DO NOTHING`,
+      )
+      .run(userId, mutedUserId, new Date().toISOString());
+  }
+
+  /** Who wrote it, for a mute. Never served to anybody as part of a view. */
+  authorOf(publicationId: string): string | null {
+    const row = this.db
+      .prepare('SELECT authorUserId FROM publications WHERE id = ?')
+      .get(publicationId) as Row | undefined;
+    return row ? String(row['authorUserId']) : null;
+  }
+
+  /* ------------------------------------------------------ share history */
+
+  /** Written on every successful share. Never removed. */
+  recordShare(input: {
+    userId: string;
+    conversationId: string;
+    audience: string;
+    communityId: string | null;
+    at?: number;
+  }): void {
+    this.db
+      .prepare(
+        `INSERT INTO share_events (id, userId, conversationId, audience, communityId, createdAt)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        randomUUID(),
+        input.userId,
+        input.conversationId,
+        input.audience,
+        input.communityId,
+        input.at ?? Date.now(),
+      );
+  }
+
+  /**
+   * Everything the sharing ceilings need, in one read.
+   *
+   * Assembled here so the rule itself stays a rule: no database, no clock of
+   * its own, and testable by handing it numbers.
+   */
+  shareHistory(input: {
+    userId: string;
+    conversationId: string;
+    communityId: string | null;
+    now: number;
+  }): ShareHistory {
+    const hour = input.now - 60 * 60 * 1000;
+    const day = input.now - 24 * 60 * 60 * 1000;
+
+    const window = (sql: string, params: unknown[]): WindowCount => {
+      const row = this.db.prepare(sql).get(...(params as never[])) as Row | undefined;
+      return {
+        count: Number(row?.['n'] ?? 0),
+        oldestAt: row?.['oldest'] == null ? null : Number(row['oldest']),
+      };
+    };
+
+    const counted = (extra: string, params: unknown[]) =>
+      window(
+        `SELECT COUNT(*) AS n, MIN(createdAt) AS oldest FROM share_events
+          WHERE userId = ? AND createdAt >= ? ${extra}`,
+        params,
+      );
+
+    const reflectionCommunities = this.db
+      .prepare(
+        `SELECT DISTINCT communityId, MIN(createdAt) AS oldest FROM share_events
+          WHERE conversationId = ? AND userId = ? AND audience = 'community'
+            AND communityId IS NOT NULL AND createdAt >= ?
+          GROUP BY communityId`,
+      )
+      .all(input.conversationId, input.userId, day) as Row[];
+
+    return {
+      publicHour: counted("AND audience = 'public'", [input.userId, hour]),
+      publicDay: counted("AND audience = 'public'", [input.userId, day]),
+      communitiesHour: counted("AND audience = 'community'", [input.userId, hour]),
+      communitiesDay: counted("AND audience = 'community'", [input.userId, day]),
+      thisCommunityHour: input.communityId
+        ? counted("AND audience = 'community' AND communityId = ?", [
+            input.userId,
+            hour,
+            input.communityId,
+          ])
+        : { count: 0, oldestAt: null },
+      communitiesForReflectionDay: {
+        communityIds: reflectionCommunities.map((row) => String(row['communityId'])),
+        oldestAt: reflectionCommunities.length
+          ? Math.min(...reflectionCommunities.map((row) => Number(row['oldest'])))
+          : null,
+      },
+      everythingDay: counted("AND audience IN ('public', 'community')", [input.userId, day]),
+    };
   }
 
   /** How many owners a community has, so the last one cannot be demoted away. */

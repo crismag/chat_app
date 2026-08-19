@@ -42,6 +42,7 @@ import {
 } from '@chat/shared'
 import { ReflectionCard, SECTIONS } from '../shared/ui/ReflectionCard.tsx'
 import { GlobeIcon, LockIcon, CommunityIcon } from '../shared/ui/icons.tsx'
+import { ReportDialog } from './ReportDialog.tsx'
 import type { Publication, ReportReason } from './api.ts'
 import styles from './CommunityPage.module.css'
 
@@ -119,6 +120,8 @@ export function PublicationCard({
   onEncourage,
   onSave,
   onReport,
+  onHideForMe,
+  onMuteAuthor,
   onHide,
   onShare,
   onDelete,
@@ -128,7 +131,10 @@ export function PublicationCard({
   reportReasons: ReportReason[]
   onEncourage: (next: boolean) => void
   onSave: (next: boolean) => void
-  onReport: (reason: string) => void
+  onReport: (reason: string, note: string) => Promise<void>
+  /** Out of this reader's sight. Not a report, and nobody is told. */
+  onHideForMe: () => void
+  onMuteAuthor: () => void
   onHide: (next: boolean) => void
   onShare: () => void
   onDelete: () => void
@@ -306,10 +312,39 @@ export function PublicationCard({
                             : 'Hide from the community'}
                         </button>
                       ) : null}
+                      {/*
+                        Two personal controls above the report, on purpose.
+                        Most of what somebody wants is not to see a thing
+                        again, and that should not have to become a case
+                        anybody judges — or a wait for a verdict.
+                      */}
                       <button
                         type="button"
                         role="menuitem"
-                        onClick={() => setReporting((open) => !open)}
+                        onClick={() => {
+                          setMenuOpen(false)
+                          onHideForMe()
+                        }}
+                      >
+                        Hide this for me
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setMenuOpen(false)
+                          onMuteAuthor()
+                        }}
+                      >
+                        Mute this author
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setMenuOpen(false)
+                          setReporting(true)
+                        }}
                       >
                         Report
                       </button>
@@ -321,29 +356,11 @@ export function PublicationCard({
           </div>
 
           {reporting ? (
-            <div className={styles.report}>
-              <p className={styles.reportLead}>
-                Why are you reporting this? Reports are reviewed before any action —
-                reporting does not remove anything for anyone.
-              </p>
-              <ul className={styles.reasons}>
-                {reportReasons.map((reason) => (
-                  <li key={reason.id}>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => {
-                        setReporting(false)
-                        setMenuOpen(false)
-                        onReport(reason.id)
-                      }}
-                    >
-                      {reason.label}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <ReportDialog
+              reasons={reportReasons}
+              onClose={() => setReporting(false)}
+              onSubmit={(reason, note) => onReport(reason, note)}
+            />
           ) : null}
         </>
       }

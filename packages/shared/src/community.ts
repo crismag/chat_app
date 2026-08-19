@@ -345,15 +345,50 @@ export type ReportState = (typeof REPORT_STATES)[keyof typeof REPORT_STATES];
  */
 export const PUBLICATION_REPORT_REASONS = [
   { id: 'spam', label: 'Spam or advertising' },
-  { id: 'harassment', label: 'Harassment or hateful content' },
+  { id: 'scam', label: 'Scam or suspicious link' },
+  { id: 'harassment', label: 'Harassment or bullying' },
+  { id: 'hate', label: 'Hate or abusive content' },
   { id: 'sexual', label: 'Sexual or inappropriate content' },
-  { id: 'harm', label: 'Threat or encouragement of harm' },
+  { id: 'harm', label: 'Threats or dangerous content' },
   { id: 'private_information', label: 'Reveals private information' },
   { id: 'impersonation', label: 'Impersonation' },
   { id: 'not_a_reflection', label: 'Not a genuine C.H.A.T. reflection' },
   { id: 'copyright', label: 'Copyright or ownership' },
   { id: 'other', label: 'Something else' },
 ] as const;
+
+/**
+ * What is deliberately not on that list, and why.
+ *
+ * There is no "I disagree with this", no "false teaching", no "bad theology",
+ * no "wrong interpretation" and no denominational category. This application
+ * is for people writing about Scripture; strong disagreement about what a
+ * passage means is the ordinary substance of that, not an infraction, and a
+ * report button that offers to adjudicate it would turn moderation into a
+ * doctrinal court and every disagreement into a case.
+ *
+ * The line the categories above draw is between conduct and content: what
+ * somebody does to another person, or to the platform, rather than what they
+ * believe about a text.
+ */
+export const NOT_REPORTABLE = [
+  'disagreement with an interpretation',
+  'doctrine or denomination',
+  'a testimony somebody finds unlikely',
+  'a political opinion',
+] as const;
+
+/**
+ * Whether this report can be submitted as written.
+ *
+ * "Something else" needs a sentence — a category that means "none of these"
+ * with no explanation is a report nobody can act on, and asking for one is
+ * also a small brake on reporting somebody in a temper.
+ */
+export function reportIsSubmittable(reason: string, note: string): boolean {
+  if (!isReportReason(reason)) return false;
+  return reason !== 'other' || note.trim().length >= 10;
+}
 
 export type PublicationReportReason =
   (typeof PUBLICATION_REPORT_REASONS)[number]['id'];

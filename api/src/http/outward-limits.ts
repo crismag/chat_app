@@ -24,9 +24,16 @@
 
 import { DAY_MS, MINUTE_MS, SlidingWindowRateLimiter } from '../ai/rate-limit.ts';
 
-/** The outward actions. Private writing is deliberately not among them. */
+/*
+ * The outward actions. Private writing is deliberately not among them.
+ *
+ * Publishing is not here either, and that is deliberate rather than an
+ * oversight: distribution has its own ceilings, in `share-limits.ts`, which
+ * know the difference between five reflections into one community and one
+ * reflection into five. A second, coarser count on top of those would refuse
+ * people for reasons nobody could explain to them.
+ */
 export const OUTWARD_ACTIONS = {
-  PUBLISH: 'publish',
   COMMUNITY_CREATE: 'community_create',
   COMMUNITY_JOIN: 'community_join',
   REACT: 'react',
@@ -43,9 +50,12 @@ export type OutwardAction = (typeof OUTWARD_ACTIONS)[keyof typeof OUTWARD_ACTION
  * unusual; somebody who publishes two hundred is not a person.
  */
 const PER_DAY: Record<OutwardAction, { established: number; fresh: number }> = {
-  [OUTWARD_ACTIONS.PUBLISH]: { established: 40, fresh: 10 },
-  /* Communities are cheap to make and expensive to clean up. */
-  [OUTWARD_ACTIONS.COMMUNITY_CREATE]: { established: 5, fresh: 2 },
+  /*
+   * Communities are cheap to make and expensive to clean up — but somebody
+   * setting up their church's groups on the day they join is doing something
+   * ordinary, and two would have refused them. Bounded, not stingy.
+   */
+  [OUTWARD_ACTIONS.COMMUNITY_CREATE]: { established: 15, fresh: 5 },
   [OUTWARD_ACTIONS.COMMUNITY_JOIN]: { established: 30, fresh: 10 },
   [OUTWARD_ACTIONS.REACT]: { established: 300, fresh: 100 },
   /*

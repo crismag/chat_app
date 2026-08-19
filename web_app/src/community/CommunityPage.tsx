@@ -51,6 +51,8 @@ import {
   fetchCommunities,
   fetchFeed,
   inviteToCommunity,
+  hidePublicationForMe,
+  muteAuthorOf,
   reportPublication,
   setEncouraged,
   setHidden,
@@ -228,6 +230,11 @@ export function CommunityPage() {
    */
   const replace = useCallback((id: string, change: (item: Publication) => Publication) => {
     setItems((current) => current.map((item) => (item.id === id ? change(item) : item)))
+  }, [])
+
+  /* Gone from this reader's view at once, rather than on the next load. */
+  const remove = useCallback((id: string) => {
+    setItems((current) => current.filter((item) => item.id !== id))
   }, [])
 
   const act = useCallback(
@@ -410,10 +417,23 @@ export function CommunityPage() {
                     return result.message
                   })
                 }
-                onReport={(reason) =>
+                onReport={async (reason, note) => {
+                  /* The dialog shows its own confirmation, so no notice here. */
+                  await reportPublication(publication.id, reason, note)
+                }}
+                onHideForMe={() =>
                   void act(async () => {
-                    const result = await reportPublication(publication.id, reason)
-                    return result.message
+                    await hidePublicationForMe(publication.id, true)
+                    /* Out of sight immediately; the server agrees on the next read. */
+                    remove(publication.id)
+                    return 'Hidden for you. Nobody else sees any difference.'
+                  })
+                }
+                onMuteAuthor={() =>
+                  void act(async () => {
+                    await muteAuthorOf(publication.id, true)
+                    remove(publication.id)
+                    return 'Muted. You will not see what they share; they are not told.'
                   })
                 }
                 onHide={(next) =>

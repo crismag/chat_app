@@ -1,0 +1,73 @@
+/*
+ * The pause between choosing a reason and sending a report.
+ *
+ * A modal rather than a row of buttons, because a report is an allegation
+ * about another person, usually made in a moment of irritation, and the moment
+ * is worth having.
+ */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--ink, #1b1b1f) 45%, transparent);
+}
+
+.dialog {
+  width: min(30rem, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 1.5rem;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: 0 1.5rem 3rem color-mix(in srgb, var(--ink, #1b1b1f) 25%, transparent);
+}
+
+.title {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.lead {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.reasons {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  border: 0;
+}
+
+.reason {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+
+.reason:hover {
+  background: var(--surface-2);
+}
+
+.hint {
+  margin: 0.35rem 0 0;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  margin-top: 1rem;
+}

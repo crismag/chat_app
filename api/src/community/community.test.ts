@@ -22,10 +22,26 @@ import { cookieHeader } from '../http/set-cookie.ts';
 type App = ReturnType<typeof createApp>;
 
 let app: App;
+let store: SqliteStore;
 
 beforeEach(() => {
-  app = createApp(new SqliteStore());
+  store = new SqliteStore();
+  app = createApp(store);
 });
+
+/*
+ * Backdate an account, because some ceilings only apply to a new one.
+ *
+ * A registered account is minutes old in a test and days old in the cases
+ * worth testing — the cross-posting rule, for instance, is deliberately behind
+ * the new-account rule, so with a fresh account it can never be the reason
+ * anybody is refused.
+ */
+function ageAccount(email: string, days: number): void {
+  store.db
+    .prepare('UPDATE users SET createdAt = ? WHERE email = ?')
+    .run(new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString(), email);
+}
 
 /* ------------------------------------------------------------- utilities */
 
@@ -1046,5 +1062,232 @@ describe('sharing is not giving away', () => {
     const mine = await call<{ id: string }>(member, `/api/conversations/${reflection}`);
     expect(mine.status).toBe(200);
     expect(mine.body.id).toBe(reflection);
+  });
+});
+
+/*
+ * Distribution is limited; writing is not.
+ *
+ * The two tests that matter here are the evasion and the survival: unsharing
+ * must not refund a share, and somebody who has reached a ceiling must still
+ * be able to write. Everything else about the numbers is tested against the
+ * rule itself in share-limits.test.ts, where it does not need a database.
+ */
+describe('sharing limits', () => {
+  test('unsharing and resharing does not refund the share', async () => {
+    const cookie = await register('evade@example.com');
+    ageAccount('evade@example.com', 30);
+    const id = await makeCommunity(cookie, 'One room', 'private');
+
+    /* Five into one community in an hour is the ceiling. */
+    const published: string[] = [];
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const reflection = await writeReflection(cookie, `Reflection ${attempt}`);
+      const shared = await publish(cookie, reflection, AUDIENCES.COMMUNITY, { communityId: id });
+      expect(shared.status).toBe(201);
+      published.push(shared.body.id);
+    }
+
+    const sixth = await writeReflection(cookie, 'One too many');
+    const refused = await publish(cookie, sixth, AUDIENCES.COMMUNITY, { communityId: id });
+    expect(refused.status).toBe(429);
+
+    /*
+     * Deleting a publication removes it from the community. It does not give
+     * back the share — otherwise share, unshare, share would be free forever
+     * and the ceiling would only ever have limited what is visible.
+     */
+    await call(cookie, `/api/publications/${published[0]}`, { method: 'DELETE' });
+    const again = await publish(cookie, sixth, AUDIENCES.COMMUNITY, { communityId: id });
+    expect(again.status).toBe(429);
+  });
+
+  test('one reflection cannot be carpet-bombed across communities', async () => {
+    /*
+     * Six communities, made by somebody else, because creating them is itself
+     * limited — this test is about where one reflection may go, not about how
+     * many rooms one person may build in an afternoon.
+     */
+    const hosts = [
+      await register('crosspost-host-a@example.com'),
+      await register('crosspost-host-b@example.com'),
+    ];
+    const cookie = await register('crossposter@example.com');
+    ageAccount('crossposter@example.com', 30);
+    const communities: string[] = [];
+    for (let index = 0; index < 6; index += 1) {
+      const id = await makeCommunity(hosts[index % 2]!, `Circle ${index}`, 'public');
+      await call(cookie, `/api/communities/${id}/join`, { method: 'POST' });
+      communities.push(id);
+    }
+    const reflection = await writeReflection(cookie, 'Everywhere at once');
+
+    for (let index = 0; index < 5; index += 1) {
+      const shared = await publish(cookie, reflection, AUDIENCES.COMMUNITY, {
+        communityId: communities[index],
+      });
+      expect(shared.status).toBe(201);
+    }
+
+    const refused = await call<{ refusal: string; error: string }>(cookie, '/api/publications', {
+      method: 'POST',
+      body: JSON.stringify({
+        conversationId: reflection,
+        audience: AUDIENCES.COMMUNITY,
+        communityId: communities[5],
+      }),
+    });
+    expect(refused.status).toBe(429);
+    expect(refused.body.refusal).toBe('reflection_in_too_many_communities');
+    /* And it names the honest alternative rather than only refusing. */
+    expect(refused.body.error).toMatch(/share it publicly instead/i);
+
+    /* A different reflection is not held to that reflection's history. */
+    const another = await writeReflection(cookie, 'Something else');
+    const allowed = await publish(cookie, another, AUDIENCES.COMMUNITY, {
+      communityId: communities[5],
+    });
+    expect(allowed.status).toBe(201);
+  });
+
+  test('reaching a limit stops distribution and nothing else', async () => {
+    const cookie = await register('still-writing@example.com');
+    ageAccount('still-writing@example.com', 30);
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const reflection = await writeReflection(cookie, `Public ${attempt}`);
+      expect((await publish(cookie, reflection, AUDIENCES.PUBLIC)).status).toBe(201);
+    }
+    const blocked = await writeReflection(cookie, 'Sixth');
+    expect((await publish(cookie, blocked, AUDIENCES.PUBLIC)).status).toBe(429);
+
+    /*
+     * A social-platform problem must not become a private-writing problem.
+     * Writing, editing and keeping a reflection all carry on untouched.
+     */
+    const written = await call(cookie, `/api/conversations/${blocked}/sections`, {
+      method: 'PATCH',
+      body: JSON.stringify({ type: 'heart', content: 'Still writing, regardless.' }),
+    });
+    expect(written.status).toBe(200);
+    const created = await call(cookie, '/api/conversations', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'A new one' }),
+    });
+    expect(created.status).toBe(201);
+  });
+});
+
+/*
+ * A new account's first day, which is a different ceiling from the others and
+ * has a different thing to say. It is also the one that must never read as an
+ * accusation: somebody who has just joined and shared five times is far more
+ * likely to be enthusiastic than automated.
+ */
+describe('a new account’s first day', () => {
+  test('gets a few shares, and is told it is temporary and not about their writing', async () => {
+    const cookie = await register('brand-new@example.com');
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const reflection = await writeReflection(cookie, `Early ${attempt}`);
+      expect((await publish(cookie, reflection, AUDIENCES.PUBLIC)).status).toBe(201);
+    }
+
+    const reflection = await writeReflection(cookie, 'One more');
+    const refused = await call<{ refusal: string; error: string }>(cookie, '/api/publications', {
+      method: 'POST',
+      body: JSON.stringify({ conversationId: reflection, audience: AUDIENCES.PUBLIC }),
+    });
+    expect(refused.status).toBe(429);
+    expect(refused.body.refusal).toBe('new_account');
+    expect(refused.body.error).toMatch(/eases off after your first day/i);
+    expect(refused.body.error).toMatch(/everything you write stays yours/i);
+  });
+});
+
+/*
+ * Personal controls are not moderation, and the difference is the whole point:
+ * a reader gets what they want immediately, nobody is accused of anything, and
+ * no moderator has to agree first.
+ */
+describe('hide and mute', () => {
+  async function twoPeopleAndAPublication() {
+    const author = await register('author-hide@example.com');
+    const reader = await register('reader-hide@example.com');
+    const reflection = await writeReflection(author, 'Something shared');
+    const shared = await publish(author, reflection, AUDIENCES.PUBLIC);
+    return { author, reader, publicationId: shared.body.id };
+  }
+
+  test('hiding takes a publication out of one reader’s sight and nobody else’s', async () => {
+    const { author, reader, publicationId } = await twoPeopleAndAPublication();
+
+    const hidden = await call(reader, `/api/publications/${publicationId}/hide-for-me`, {
+      method: 'POST',
+      body: JSON.stringify({ hidden: true }),
+    });
+    expect(hidden.status).toBe(200);
+
+    /* Gone for them, including by direct link — that is what hiding means. */
+    expect((await call(reader, `/api/publications/${publicationId}`)).status).toBe(404);
+    const feed = await call<{ items: Publication[] }>(reader, '/api/publications?scope=public');
+    expect(feed.body.items.map((item) => item.id)).not.toContain(publicationId);
+
+    /* Untouched for everybody else, and for its author. */
+    expect((await call(author, `/api/publications/${publicationId}`)).status).toBe(200);
+    const third = await register('third-hide@example.com');
+    expect((await call(third, `/api/publications/${publicationId}`)).status).toBe(200);
+  });
+
+  test('and it is reversible, because it was never a punishment', async () => {
+    const { reader, publicationId } = await twoPeopleAndAPublication();
+    await call(reader, `/api/publications/${publicationId}/hide-for-me`, {
+      method: 'POST',
+      body: JSON.stringify({ hidden: true }),
+    });
+    await call(reader, `/api/publications/${publicationId}/hide-for-me`, {
+      method: 'POST',
+      body: JSON.stringify({ hidden: false }),
+    });
+    expect((await call(reader, `/api/publications/${publicationId}`)).status).toBe(200);
+  });
+
+  test('muting an author hides what they share from that reader alone', async () => {
+    const { author, reader, publicationId } = await twoPeopleAndAPublication();
+    const muted = await call(reader, `/api/publications/${publicationId}/mute-author`, {
+      method: 'POST',
+      body: JSON.stringify({ muted: true }),
+    });
+    expect(muted.status).toBe(200);
+
+    /* Everything of theirs, not only the one that prompted it. */
+    const second = await writeReflection(author, 'Another one');
+    const alsoShared = await publish(author, second, AUDIENCES.PUBLIC);
+    expect((await call(reader, `/api/publications/${alsoShared.body.id}`)).status).toBe(404);
+
+    /* The author notices nothing: their own work is exactly where it was. */
+    expect((await call(author, `/api/publications/${alsoShared.body.id}`)).status).toBe(200);
+  });
+});
+
+describe('reporting', () => {
+  test('“Something else” needs a sentence somebody can act on', async () => {
+    const author = await register('reported@example.com');
+    const reader = await register('reporter@example.com');
+    const reflection = await writeReflection(author, 'Shared publicly');
+    const shared = await publish(author, reflection, AUDIENCES.PUBLIC);
+
+    const empty = await call(reader, `/api/publications/${shared.body.id}/report`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: 'other', detail: '' }),
+    });
+    expect(empty.status).toBe(400);
+
+    const explained = await call(reader, `/api/publications/${shared.body.id}/report`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: 'other', detail: 'It links to a phishing page.' }),
+    });
+    expect(explained.status).toBe(201);
+
+    /* And a report is an allegation: nothing about the publication changed. */
+    expect((await call(reader, `/api/publications/${shared.body.id}`)).status).toBe(200);
   });
 });

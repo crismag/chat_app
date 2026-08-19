@@ -70,6 +70,7 @@ import {
   isBanned,
   isPending,
   isReportReason,
+  reportIsSubmittable,
   parseHashtags,
   readCommunityRole,
   readCommunitySettings,
@@ -78,6 +79,7 @@ import {
   type MembershipState,
   type ReflectionVisibility,
 } from '@chat/shared';
+import { decideShare } from './share-limits.ts';
 import { addressOf } from '../http/address.ts';
 import { CAPABILITIES, isEnabled, unavailableReason, type Capability } from '../http/capabilities.ts';
 import { OUTWARD_ACTIONS, OutwardLimits, type OutwardAction } from '../http/outward-limits.ts';
@@ -894,10 +896,6 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
       const off = switchedOff(c, CAPABILITIES.COMMUNITY_SHARING);
       if (off) return off;
     }
-    if (audience !== AUDIENCES.ONLY_ME) {
-      const limited = meter(c, OUTWARD_ACTIONS.PUBLISH, user);
-      if (limited) return limited;
-    }
 
     const source = reflection(user.id, conversationId);
     if (!source) return c.json({ error: 'Reflection not found.' }, 404);
@@ -933,6 +931,39 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
       shareVisibility = community.settings.reflectionVisibility;
     }
     if (audience === AUDIENCES.ONLY_ME) shareVisibility = REFLECTION_VISIBILITY.MEMBERS;
+
+    /*
+     * How much this person may distribute, from what they have already
+     * distributed — counted from a log that survives unsharing, so share,
+     * unshare, share is not a way round it.
+     *
+     * `only_me` passes untouched: it reaches nobody, so it is not
+     * distribution, and a person who has hit a ceiling can still keep writing
+     * and keep their reflection exactly as it is.
+     */
+    if (audience !== AUDIENCES.ONLY_ME) {
+      const created = user.createdAt ? Date.parse(user.createdAt) : NaN;
+      const now = Date.now();
+      const decision = decideShare(
+        db.shareHistory({ userId: user.id, conversationId, communityId, now }),
+        {
+          audience: audience === AUDIENCES.PUBLIC ? 'public' : 'community',
+          communityId,
+          accountAgeMs: Number.isFinite(created) ? now - created : null,
+        },
+        now,
+      );
+      if (!decision.allowed) {
+        return c.json(
+          {
+            error: decision.message,
+            refusal: decision.refusal,
+            retryAfterSeconds: decision.retryAfterSeconds,
+          },
+          429,
+        );
+      }
+    }
 
     /*
      * The same gate the reflection editor's publish button passes. A
@@ -1003,6 +1034,14 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
       },
       source,
     );
+
+    /*
+     * Written after the share succeeded, and never removed. This is what the
+     * ceilings are counted from, which is why unsharing does not refund one.
+     */
+    if (audience !== AUDIENCES.ONLY_ME) {
+      db.recordShare({ userId: user.id, conversationId, audience, communityId });
+    }
 
     const view = db.publication(user.id, id);
     if (!view) return c.json({ error: 'Publication could not be read back.' }, 500);
@@ -1081,6 +1120,57 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     });
   });
 
+  /*
+   * Out of my sight, please. Not a report, and not a moderation decision.
+   *
+   * It takes effect on the next request because the reader's own filters live
+   * inside the same statement that authorises the read — there is nothing to
+   * wait for and nobody to agree. The author is not told, and nothing about
+   * the publication changes for anybody else.
+   */
+  app.post('/publications/:id/hide-for-me', async (c) => {
+    const { user, store: db, response } = await guard(c);
+    if (!user || !db) return response;
+
+    const id = c.req.param('id');
+    const body = await c.req.json<{ hidden?: boolean }>().catch(() => ({}) as { hidden?: boolean });
+    const hidden = body.hidden !== false;
+
+    /*
+     * Reachable first: you cannot hide what you were not entitled to see.
+     *
+     * Only when hiding, though. Something already hidden is by construction
+     * unreadable to this person — that is what hiding did — so requiring it to
+     * be readable in order to un-hide it would make the decision permanent,
+     * which is the one thing a personal control must not be.
+     */
+    if (hidden && !db.publication(user.id, id)) {
+      return c.json({ error: 'Publication not found.' }, 404);
+    }
+    db.hidePublicationForViewer(id, user.id, hidden);
+    return c.json({ id, hiddenForYou: hidden });
+  });
+
+  /** The same, for everything one person shares. Also nobody else's business. */
+  app.post('/publications/:id/mute-author', async (c) => {
+    const { user, store: db, response } = await guard(c);
+    if (!user || !db) return response;
+
+    const id = c.req.param('id');
+    const view = db.publication(user.id, id);
+    if (!view) return c.json({ error: 'Publication not found.' }, 404);
+    if (view.isAuthor) {
+      return c.json({ error: 'That is your own reflection.' }, 400);
+    }
+
+    const author = db.authorOf(id);
+    if (!author) return c.json({ error: 'Publication not found.' }, 404);
+    const body = await c.req.json<{ muted?: boolean }>().catch(() => ({}) as { muted?: boolean });
+    const muted = body.muted !== false;
+    db.muteAuthor(user.id, author, muted);
+    return c.json({ muted });
+  });
+
   app.post('/publications/:id/report', async (c) => {
     const { user, store: db, response } = await guard(c);
     if (!user || !db) return response;
@@ -1096,6 +1186,17 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
       .catch(() => ({}) as { reason?: string; detail?: string });
     if (!isReportReason(body.reason)) {
       return c.json({ error: 'Choose a reason for the report.', field: 'reason' }, 400);
+    }
+    /*
+     * "Something else" needs a sentence. A report that says only "none of
+     * these" cannot be acted on by anybody, and asking for the sentence is
+     * also a small brake on reporting somebody in a temper.
+     */
+    if (!reportIsSubmittable(body.reason, String(body.detail ?? ''))) {
+      return c.json(
+        { error: 'Tell us what is wrong, in a sentence or two.', field: 'detail' },
+        400,
+      );
     }
 
     db.addReport({

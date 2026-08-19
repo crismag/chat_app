@@ -318,7 +318,10 @@ export function createApp(
    */
   const registeredUser = async (c: Context) => {
     const user = await currentUser(c);
-    return user?.email ? { id: user.id, email: user.email } : null;
+    /* `createdAt` travels: the distribution limits are tighter on day one. */
+    return user?.email
+      ? { id: user.id, email: user.email, createdAt: user.createdAt }
+      : null;
   };
 
   app.get('/api/health', async (c) => {
