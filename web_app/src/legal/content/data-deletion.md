@@ -18,7 +18,7 @@ Just ask.
 
 Use the **Delete Account** option in Reflections, if available, or contact:
 
-**[privacy/support email]**
+**chat_app@crishub.com**
 
 Tell us which Reflections account you want deleted. We may ask you to verify that the account is actually yours.
 

@@ -326,7 +326,7 @@ Questions about these Terms may be sent to:
 
 **Reflections**  
 Operated by: **[Legal name / business name]**  
-Email: **[support/legal email]**  
+Email: **chat_app@crishub.com**  
 Website: **reflections.crishub.com**
 
 ---

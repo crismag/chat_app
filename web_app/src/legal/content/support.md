@@ -14,7 +14,7 @@ But you've found the right page.
 
 For problems with your account, reflections, Bible passages, sharing, AI features, or something that appears to have spontaneously combusted:
 
-**[support email]**
+**chat_app@crishub.com**
 
 Tell us:
 
@@ -107,7 +107,7 @@ Please allow a reasonable amount of time before concluding that your message has
 
 # Still Need Help?
 
-**[support email]**
+**chat_app@crishub.com**
 
 Send it.
 
