@@ -12,6 +12,7 @@ import { OpenSourceLicencesPage } from '../licenses/OpenSourceLicencesPage.tsx'
 import { AboutPage } from '../legal/AboutPage.tsx'
 import { PrivacyPage } from '../legal/PrivacyPage.tsx'
 import { TermsPage } from '../legal/TermsPage.tsx'
+import { DisclaimerPage } from '../legal/DisclaimerPage.tsx'
 import { DataDeletionPage } from '../legal/DataDeletionPage.tsx'
 import { SupportPage } from '../legal/SupportPage.tsx'
 import { NotFoundPage } from '../shared/ui/NotFoundPage.tsx'
@@ -37,6 +38,7 @@ export function App() {
         <Route path="/about" element={<AboutPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/terms" element={<TermsPage />} />
+        <Route path="/disclaimer" element={<DisclaimerPage />} />
         <Route path="/data-deletion" element={<DataDeletionPage />} />
         <Route path="/support" element={<SupportPage />} />
         <Route element={<AppShell />}>

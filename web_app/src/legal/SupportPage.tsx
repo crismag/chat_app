@@ -1,12 +1,5 @@
-import { ContentPending, DocumentPage } from './DocumentPage.tsx'
-import { legalPage } from './pages.ts'
-
-const META = legalPage('support')
+import { DocumentPage } from './DocumentPage.tsx'
 
 export function SupportPage() {
-  return (
-    <DocumentPage title={META.title} updated="not yet published">
-      <ContentPending page={META.title} />
-    </DocumentPage>
-  )
+  return <DocumentPage slug="support" />
 }

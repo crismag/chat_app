@@ -58,6 +58,18 @@
   line-height: var(--leading-snug);
 }
 
+/*
+ * The section breaks. Unstyled, an <hr> inside this flex column collapsed to a
+ * few pixels wide and read as a stray dot between sections.
+ */
+.body hr {
+  inline-size: 100%;
+  block-size: 0;
+  margin: var(--space-2) 0;
+  border: 0;
+  border-block-start: 1px solid var(--line);
+}
+
 .body p,
 .body li {
   margin: 0;
@@ -114,5 +126,29 @@
 
 .linkSummary {
   color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+/*
+ * The way to the other documents, at the foot of each one.
+ *
+ * Wraps rather than scrolls, and every target is a full-height tap area: this
+ * is the last thing on a long page, which is exactly where a cramped row of
+ * links is most annoying to hit.
+ */
+.docNav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin-block-start: var(--space-5);
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--line);
+}
+
+.docNav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  color: var(--accent);
   font-size: var(--text-sm);
 }

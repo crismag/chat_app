@@ -16,22 +16,22 @@ export function AboutPage() {
         <Link className={styles.back} to="/">
           ← Back to C.H.A.T.
         </Link>
-        <h1>About C.H.A.T.</h1>
-        <p className={styles.updated}>Content · Heart · Application · Testimony</p>
+        <h1>About Reflections</h1>
+        <p className={styles.updated}>C.H.A.T. — Content · Heart · Application · Testimony</p>
       </header>
 
       <div className={styles.body}>
         <p>
-          C.H.A.T. is a private-first place to talk through Scripture, keep what
-          you write, and turn it into something you can look at again. Every
-          reflection is private unless you choose to publish that one.
+          Reflections is a private-first place to talk through Scripture, keep
+          what you write, and turn it into something you can look at again.
+          Every reflection is private unless you choose to publish that one.
         </p>
 
         <h2>Policies and help</h2>
         <ul className={styles.links}>
-          {LEGAL_PAGES.map(({ slug, title, summary }) => (
+          {LEGAL_PAGES.map(({ slug, label, summary }) => (
             <li className={styles.linkRow} key={slug}>
-              <Link to={`/${slug}`}>{title}</Link>
+              <Link to={`/${slug}`}>{label}</Link>
               <span className={styles.linkSummary}>{summary}</span>
             </li>
           ))}
