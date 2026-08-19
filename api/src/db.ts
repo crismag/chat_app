@@ -203,6 +203,12 @@ function migrate(db: DatabaseSync): void {
 
   renameContextSectionToContent(db);
   renamePublicationStateToVisibility(db);
+  /*
+   * Order matters, and it cost a production database to learn it. Removing the
+   * foreign key comes FIRST, because rebuilding the table it points AT is what
+   * fires it.
+   */
+  dropConversationUserForeignKey(db);
   upgradeUsersToAccounts(db);
   /* Sessions predate installations; an old database has the two-column one. */
   addColumn(db, 'sessions', 'installationId', 'TEXT');
@@ -227,6 +233,21 @@ function upgradeUsersToAccounts(db: DatabaseSync): void {
   const columns = db.prepare('PRAGMA table_info(users)').all() as { name: string }[];
   if (columns.some((column) => column.name === 'accountType')) return;
 
+  /*
+   * Foreign keys OFF, and this is not a formality.
+   *
+   * `DROP TABLE` with foreign keys enabled behaves as though every row were
+   * deleted first, so each child with `ON DELETE CASCADE` fires -- and dropping
+   * `users` in order to rebuild it therefore deleted every session and, where
+   * the old constraint still stood, every reflection. That is what this
+   * migration did to the live database on its first run: the rebuild was
+   * intended to be invisible, and instead it emptied two tables.
+   *
+   * Turned off outside the transaction, because the pragma is a no-op inside
+   * one, and `foreign_key_check` afterwards is what proves the rebuild left
+   * nothing dangling.
+   */
+  db.exec('PRAGMA foreign_keys = OFF');
   db.exec('BEGIN');
   try {
     db.exec(`
@@ -256,8 +277,83 @@ function upgradeUsersToAccounts(db: DatabaseSync): void {
     db.exec('COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');
+    db.exec('PRAGMA foreign_keys = ON');
     throw error;
   }
+  db.exec('PRAGMA foreign_keys = ON');
+  assertNothingDangling(db, 'Rebuilding users');
+}
+
+/**
+ * After any rebuild that ran with foreign keys disabled.
+ *
+ * Disabling them is the only way to replace a table other tables point at, and
+ * the price is that nothing is checked while they are off. This is where that
+ * is paid back: a rebuild that orphaned a row fails loudly here rather than
+ * leaving a database that reads fine until somebody opens the wrong page.
+ */
+function assertNothingDangling(db: DatabaseSync, what: string): void {
+  const broken = db.prepare('PRAGMA foreign_key_check').all() as unknown[];
+  if (broken.length > 0) {
+    throw new Error(`${what} left ${broken.length} rows that no longer resolve.`);
+  }
+}
+
+/**
+ * The login wall, as it was actually written: a foreign key.
+ *
+ * `conversations.userId` used to be `NOT NULL REFERENCES users(id)`, and while
+ * accounts and reflections lived in the same file that was merely tidy. It is
+ * now false: accounts are in MariaDB, a guest is a user there, and a
+ * reflection written by one has an owner SQLite has never heard of. The
+ * constraint fails on the insert, which is the whole feature refusing to work.
+ *
+ * `CREATE TABLE IF NOT EXISTS` cannot fix this and neither can `ALTER TABLE`,
+ * so the table is rebuilt. Foreign keys are disabled around the rebuild --
+ * messages and sections point at this table and would be broken by the drop --
+ * and `foreign_key_check` afterwards is what proves nothing was.
+ *
+ * Missed once already: the test fixture for the old shape was written without
+ * the constraint, so the suite could not see the thing that broke in
+ * production. It has one now.
+ */
+function dropConversationUserForeignKey(db: DatabaseSync): void {
+  const columns = db.prepare('PRAGMA table_info(conversations)').all() as { name: string }[];
+  if (!columns.some((column) => column.name === 'userId')) return;
+  const keys = db.prepare('PRAGMA foreign_key_list(conversations)').all() as { table: string }[];
+  if (!keys.some((key) => key.table === 'users')) return;
+
+  /* Outside the transaction: this pragma is a no-op inside one. */
+  db.exec('PRAGMA foreign_keys = OFF');
+  db.exec('BEGIN');
+  try {
+    db.exec(`
+      CREATE TABLE conversations_rebuilt (
+        id TEXT PRIMARY KEY,
+        userId TEXT NOT NULL,
+        format TEXT NOT NULL DEFAULT 'full',
+        title TEXT NOT NULL,
+        scriptureReference TEXT,
+        visibility TEXT NOT NULL,
+        tags TEXT NOT NULL DEFAULT '[]',
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+      INSERT INTO conversations_rebuilt
+        (id, userId, format, title, scriptureReference, visibility, tags, createdAt, updatedAt)
+        SELECT id, userId, format, title, scriptureReference, visibility, tags, createdAt, updatedAt
+          FROM conversations;
+      DROP TABLE conversations;
+      ALTER TABLE conversations_rebuilt RENAME TO conversations;
+    `);
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    db.exec('PRAGMA foreign_keys = ON');
+    throw error;
+  }
+  db.exec('PRAGMA foreign_keys = ON');
+  assertNothingDangling(db, 'Rebuilding conversations');
 }
 
 /**
