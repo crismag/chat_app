@@ -10,21 +10,9 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { OriginMark, SaveToggle } from './FieldMarks.tsx'
+import { SaveToggle } from './FieldMarks.tsx'
 
 afterEach(cleanup)
-
-describe('provenance', () => {
-  test('says whose words these are without printing it', () => {
-    render(<OriginMark origin="ai_assisted" />)
-    expect(screen.getByRole('img', { name: 'AI assisted' })).toBeInTheDocument()
-  })
-
-  test('and stays readable to anything reading the page rather than seeing it', () => {
-    const { container } = render(<OriginMark origin="user" />)
-    expect(container.querySelector('.sr-only')?.textContent).toBe('Your words')
-  })
-})
 
 describe('the save toggle', () => {
   test('is one control that states which state it is in', () => {

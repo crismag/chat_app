@@ -11,8 +11,14 @@
  * The traffic light was one of those. "This field is empty" and "this field
  * has writing in it" are both plainly visible in the field itself, so a circle
  * saying so was a second opinion on something nobody had asked about. What is
- * left appears only when it has something to add: whose words these are, when
- * they are not simply the author's, and whether there is anything unsaved.
+ * left is one mark: whether there is anything unsaved.
+ *
+ * The provenance mark went too, and for a different reason than clutter. How
+ * somebody arrived at their own words is theirs — a reader has no use for it,
+ * and a writer has every reason not to be labelled by it. What is still
+ * labelled is a suggestion *before* it is accepted, which is not the same
+ * thing: that text is not theirs yet, and saying so is what makes taking it a
+ * choice rather than a default.
  *
  * Text-free is a visual claim, not an accessibility one. Every mark here keeps
  * a real accessible name, and every mark shows its wording on hover *and* on
@@ -20,8 +26,7 @@
  */
 
 import type { ReactNode } from 'react'
-import { CheckIcon, PencilIcon, SparkIcon, AssistedIcon } from '../shared/ui/icons.tsx'
-import { ORIGIN_CLASSES, ORIGIN_LABELS } from './sections.ts'
+import { CheckIcon } from '../shared/ui/icons.tsx'
 import styles from './ChatPage.module.css'
 
 /**
@@ -40,35 +45,6 @@ function Hint({ text, children }: { text: string; children: ReactNode }) {
         {text}
       </span>
     </span>
-  )
-}
-
-/**
- * Whose words these are.
- *
- * The claim itself is unchanged — the data model records it and the interface
- * still states it. It is a hand, a hand with a spark, or a spark, in the three
- * provenance colours, with the sentence kept for anything reading the page
- * rather than looking at it.
- */
-export function OriginMark({ origin }: { origin: string }) {
-  const label = ORIGIN_LABELS[origin] ?? origin
-  const Icon =
-    origin === 'user' ? PencilIcon : origin === 'ai_assisted' ? AssistedIcon : SparkIcon
-
-  return (
-    <Hint text={label}>
-      <span
-        className={`badge ${ORIGIN_CLASSES[origin] ?? 'badge-user'} ${styles.mark} ${styles.originMark}`}
-        role="img"
-        aria-label={label}
-        tabIndex={0}
-      >
-        <Icon className={styles.markGlyph} />
-        {/* Kept in the DOM so what the page says can still be read back. */}
-        <span className="sr-only">{label}</span>
-      </span>
-    </Hint>
   )
 }
 

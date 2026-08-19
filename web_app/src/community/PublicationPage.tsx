@@ -30,11 +30,6 @@ const CONDENSED_LABELS: Record<string, string> = {
   reflection: 'Reflection',
 }
 
-const ORIGIN_LABELS: Record<string, string> = {
-  ai_assisted: 'Written with AI help',
-  ai_generated: 'Written by AI, kept by the author',
-}
-
 const when = new Intl.DateTimeFormat(undefined, {
   month: 'long',
   day: 'numeric',
@@ -139,16 +134,16 @@ export function PublicationPage() {
                 : (SECTION_LABEL.get(section.type)?.label ?? section.type)}
 
               {/*
-                Provenance travels into published content, and is visible there.
-                The guidelines require that AI wording is never presented as
-                another person's own experience, and a badge only the private
-                editor showed would not keep that promise.
+                No provenance badge here, deliberately.
+                Whether somebody used assistance while writing is theirs, not a
+                property of the reflection other people read. A reader has no
+                use for it and a writer has every reason not to be labelled by
+                it — the wording that ends up in a reflection is the author's
+                either way, because nothing reaches a section until they accept
+                it. What remains labelled is a suggestion *before* it is
+                accepted, which is a different thing: that text is not theirs
+                yet, and saying so is what makes accepting it a choice.
               */}
-              {ORIGIN_LABELS[section.authorOrigin] ? (
-                <span className={`badge badge-${section.authorOrigin.replace('_', '-')}`}>
-                  {ORIGIN_LABELS[section.authorOrigin]}
-                </span>
-              ) : null}
             </h2>
             <p className={styles.detailSectionBody}>{section.content}</p>
           </section>

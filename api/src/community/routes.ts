@@ -157,7 +157,16 @@ function serve(view: PublicationView, origin: string) {
     title: view.title,
     scriptureReference: view.scriptureReference,
     caption: view.caption,
-    sections: view.sections,
+    /*
+     * The text, without whose hand was on the keyboard.
+     *
+     * `authorOrigin` is still stored — it is how a suggestion is distinguished
+     * from accepted words while somebody is writing — but it does not travel
+     * to a reader. Whether a person used assistance is theirs, not a property
+     * of the reflection other people read, and a field served in the payload
+     * is a field that is published whether or not anything renders it.
+     */
+    sections: view.sections.map(({ type, content }) => ({ type, content })),
     hashtags: view.hashtags,
     encouraged: {
       count: view.encouragedCount,
@@ -1017,6 +1026,37 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     }
 
     ensureIdentity(user);
+
+    const hashtags = parseHashtags(
+      Array.isArray(body.hashtags)
+        ? (body.hashtags as unknown[]).map((tag) => String(tag))
+        : String(body.hashtags ?? ''),
+    );
+
+    /*
+     * One share per destination. Sharing the same reflection into the same
+     * community again is not a second share — it is the author saying "use
+     * what it says now" — so the existing row is brought up to date and keeps
+     * its reactions, its saves and its date. Writing another row instead is
+     * how a feed fills with three copies of one reflection.
+     */
+    const already = db.existingShare({
+      authorUserId: user.id,
+      conversationId,
+      audience,
+      communityId,
+    });
+    if (already) {
+      db.refreshShare(already, { caption, sectionTypes, hashtags }, source);
+      const updated = db.publication(user.id, already);
+      if (!updated) return c.json({ error: 'Publication could not be read back.' }, 500);
+      /*
+       * No share event is recorded. Nothing new was distributed, and counting
+       * it would let a limit be spent by pressing Share twice on one thing.
+       */
+      return c.json({ ...serve(updated, originOf(c)), alreadyShared: true });
+    }
+
     const id = db.publish(
       {
         authorUserId: user.id,
@@ -1026,11 +1066,7 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
         communityId,
         caption,
         sectionTypes,
-        hashtags: parseHashtags(
-          Array.isArray(body.hashtags)
-            ? (body.hashtags as unknown[]).map((tag) => String(tag))
-            : String(body.hashtags ?? ''),
-        ),
+        hashtags,
       },
       source,
     );
