@@ -639,3 +639,84 @@
     scroll-behavior: auto;
   }
 }
+
+/* --- creating one, and finding one ------------------------------------- */
+
+.presets {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.preset {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.preset[data-selected='true'] {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+
+.preset > span {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.presetDetail {
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.directory {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+/*
+ * Waiting people, under the community they are waiting for. Not a separate
+ * page: a decision nobody sees is a decision nobody makes.
+ */
+.joinRequests {
+  grid-column: 1 / -1;
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.joinRequestsHeading {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 650;
+}
+
+.joinRequestList {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.joinRequestRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.joinRequestActions {
+  display: flex;
+  gap: var(--space-2);
+}

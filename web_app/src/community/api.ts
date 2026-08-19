@@ -66,6 +66,8 @@ export type FeedResponse = {
   reportReasons: ReportReason[]
 }
 
+import type { CommunityPreset, CommunitySettings } from '@chat/shared'
+
 export type CommunitySummary = {
   id: string
   name: string
@@ -111,10 +113,46 @@ export function fetchCommunities(): Promise<CommunitiesResponse> {
 export function createCommunity(input: {
   name: string
   description: string
+  /** Public or Private — the two things somebody chooses. */
+  preset: CommunityPreset
+  /** Anything they changed from the preset's defaults. */
+  settings?: Partial<CommunitySettings>
 }): Promise<CommunitySummary> {
   return api<CommunitySummary>('/communities', {
     method: 'POST',
     body: JSON.stringify(input),
+  })
+}
+
+/** Communities that chose to be findable. Names only — never their contents. */
+export function discoverCommunities(query: string): Promise<{
+  communities: (CommunitySummary & {
+    settings: CommunitySettings
+    state: string | null
+  })[]
+}> {
+  return api(`/communities/discover?q=${encodeURIComponent(query)}`)
+}
+
+/** Join, or ask to — the community's own settings decide which happens. */
+export function joinCommunity(communityId: string): Promise<{ state: string }> {
+  return api(`/communities/${communityId}/join`, { method: 'POST' })
+}
+
+export function fetchJoinRequests(communityId: string): Promise<{
+  requests: { userId: string; handle: string | null; displayName: string | null; requestedAt: string }[]
+}> {
+  return api(`/communities/${communityId}/join-requests`)
+}
+
+export function decideJoinRequest(
+  communityId: string,
+  userId: string,
+  decision: 'approve' | 'decline',
+): Promise<{ state: string }> {
+  return api(`/communities/${communityId}/join-requests/${userId}`, {
+    method: 'POST',
+    body: JSON.stringify({ decision }),
   })
 }
 

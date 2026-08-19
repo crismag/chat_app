@@ -11,6 +11,7 @@ import {
   AI_ACTIONS,
   AI_CHAT_NOTICE,
   AI_DISCLOSURE,
+  ACCOUNT_TYPES,
   AI_OUTCOMES,
   AI_UNAVAILABLE_MESSAGE,
   AUTHOR_ORIGINS,
@@ -50,7 +51,6 @@ import {
   FormatSheet,
   Sheet,
   ShareSheet,
-  SignInToShare,
   TitleSuggestionSheet,
   type ShareAudience,
 } from './ChatSheets.tsx'
@@ -1904,13 +1904,20 @@ export function ChatPage() {
         </Sheet>
       ) : null}
 
-      {shareOpen && detail && !user ? (
-        <SignInToShare reflectionId={detail.id} onClose={() => setShareOpen(false)} />
-      ) : null}
-
-      {shareOpen && detail && user ? (
+      {/*
+        One sheet, whoever is asking.
+        A guest used to get a sign-in page instead of the share sheet, which
+        also took away the one destination they were always entitled to:
+        handing the reflection to another app is an export, it creates no
+        record here, and it needs nobody's name on it. So the sheet is the
+        same, and the two destinations that put an author beside the writing —
+        Public and a community — send them to sign in rather than disappearing.
+      */}
+      {shareOpen && detail ? (
         <ShareSheet
           communities={communities}
+          reflectionId={detail.id}
+          canPublish={Boolean(user && user.accountType === ACCOUNT_TYPES.REGISTERED)}
           currentlyShared={detail.visibility === 'shared'}
           onShareExternally={shareToAnotherApp}
           validation={validation}

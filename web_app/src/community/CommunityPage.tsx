@@ -28,6 +28,14 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  APPROVAL_POLICY,
+  COMMUNITY_PRESETS,
+  REFLECTION_VISIBILITY,
+  type ApprovalPolicy,
+  type CommunityPreset,
+  type ReflectionVisibility,
+} from '@chat/shared'
 import { ApiError } from '../shared/api/client.ts'
 import { shareWithPlatform } from '../shared/native/share.ts'
 import { ReflectionCardSkeleton } from '../shared/ui/ReflectionCard.tsx'
@@ -35,7 +43,11 @@ import { PublicationCard } from './PublicationCard.tsx'
 import {
   acceptInvitation,
   createCommunity,
+  decideJoinRequest,
   deletePublication,
+  discoverCommunities,
+  fetchJoinRequests,
+  joinCommunity,
   fetchCommunities,
   fetchFeed,
   inviteToCommunity,
@@ -474,6 +486,16 @@ function CommunitiesPanel({
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  /*
+   * Two choices, then the follow-ups only where they change anything.
+   *
+   * Public needs nothing else asked: open, findable, readable. Private has two
+   * real questions — who can read what is shared, and who decides on requests
+   * — and both have a default, so somebody who does not care can ignore them.
+   */
+  const [preset, setPreset] = useState<CommunityPreset>(COMMUNITY_PRESETS.PRIVATE)
+  const [visibility, setVisibility] = useState<ReflectionVisibility>(REFLECTION_VISIBILITY.MEMBERS)
+  const [approvals, setApprovals] = useState<ApprovalPolicy>(APPROVAL_POLICY.OWNER_ADMIN)
   const [invitingTo, setInvitingTo] = useState<string | null>(null)
   const [email, setEmail] = useState('')
   const [problem, setProblem] = useState<string | null>(null)
@@ -516,6 +538,13 @@ function CommunitiesPanel({
         </section>
       ) : null}
 
+      {/*
+        Finding one, which is not the same as being able to read it.
+        A discoverable private group appears here with what it is for and a
+        way to ask; nothing anybody wrote inside it is listed until they are in.
+      */}
+      <CommunityDirectory onNotice={onNotice} onFailure={onFailure} onChanged={onChanged} />
+
       <section>
         <div className={styles.sectionHead}>
           <h2 className={styles.sectionHeading}>My communities</h2>
@@ -534,7 +563,14 @@ function CommunitiesPanel({
             onSubmit={(event) => {
               event.preventDefault()
               setProblem(null)
-              void createCommunity({ name, description })
+              void createCommunity({
+                name,
+                description,
+                preset,
+                ...(preset === COMMUNITY_PRESETS.PRIVATE
+                  ? { settings: { reflectionVisibility: visibility, approvalPolicy: approvals } }
+                  : {}),
+              })
                 .then((community) => {
                   setCreating(false)
                   setName('')
@@ -570,9 +606,84 @@ function CommunitiesPanel({
               onChange={(event) => setDescription(event.target.value)}
               placeholder="A place for our Sunday team to share what we are reading."
             />
+            <fieldset className={styles.presets}>
+              <legend className="label">What kind of community is this?</legend>
+              <label className={styles.preset} data-selected={preset === COMMUNITY_PRESETS.PUBLIC}>
+                <input
+                  type="radio"
+                  name="preset"
+                  checked={preset === COMMUNITY_PRESETS.PUBLIC}
+                  onChange={() => setPreset(COMMUNITY_PRESETS.PUBLIC)}
+                />
+                <span>
+                  <strong>Public</strong>
+                  <span className={styles.presetDetail}>
+                    Anyone can find it and join. Reflections shared here can be read publicly.
+                  </span>
+                </span>
+              </label>
+              <label className={styles.preset} data-selected={preset === COMMUNITY_PRESETS.PRIVATE}>
+                <input
+                  type="radio"
+                  name="preset"
+                  checked={preset === COMMUNITY_PRESETS.PRIVATE}
+                  onChange={() => setPreset(COMMUNITY_PRESETS.PRIVATE)}
+                />
+                <span>
+                  <strong>Private</strong>
+                  <span className={styles.presetDetail}>
+                    People can find it and ask to join; you decide. Choose whether what is
+                    shared here is for members only.
+                  </span>
+                </span>
+              </label>
+            </fieldset>
+
+            {/*
+              Asked only where the answer changes something, and each with a
+              default — creating a community should not be a settings screen.
+            */}
+            {preset === COMMUNITY_PRESETS.PRIVATE ? (
+              <>
+                <label className="label" htmlFor="community-visibility">
+                  Who can read shared reflections?
+                </label>
+                <select
+                  id="community-visibility"
+                  className="input"
+                  value={visibility}
+                  onChange={(event) =>
+                    setVisibility(event.target.value as ReflectionVisibility)
+                  }
+                >
+                  <option value={REFLECTION_VISIBILITY.MEMBERS}>Members only</option>
+                  <option value={REFLECTION_VISIBILITY.PUBLIC}>Anyone</option>
+                </select>
+
+                <label className="label" htmlFor="community-approvals">
+                  Who can approve membership requests?
+                </label>
+                <select
+                  id="community-approvals"
+                  className="input"
+                  value={approvals}
+                  onChange={(event) => setApprovals(event.target.value as ApprovalPolicy)}
+                >
+                  <option value={APPROVAL_POLICY.OWNER_ADMIN}>You and your admins</option>
+                  <option value={APPROVAL_POLICY.MEMBERS}>Any member</option>
+                </select>
+                {approvals === APPROVAL_POLICY.MEMBERS ? (
+                  <p className="hint">
+                    One approved member can then let in everybody they know. Most communities
+                    keep this with the owner and admins.
+                  </p>
+                ) : null}
+              </>
+            ) : null}
+
             <p className="hint">
-              Communities are private and by invitation. Nobody can find this or ask to
-              join — you invite the people who belong in it.
+              Every member of a community may share reflections in it. Ownership is
+              responsibility for the space, not the only voice in it.
             </p>
             {problem ? (
               <p className={styles.problem} role="alert">
@@ -618,6 +729,15 @@ function CommunitiesPanel({
                   >
                     Invite
                   </button>
+                )}
+
+                {/* Only for the people who may decide, and only when somebody is waiting. */}
+                {community.role === 'member' ? null : (
+                  <JoinRequests
+                    communityId={community.id}
+                    onNotice={onNotice}
+                    onFailure={onFailure}
+                  />
                 )}
 
                 {invitingTo === community.id ? (
@@ -668,6 +788,203 @@ function CommunitiesPanel({
           </ul>
         )}
       </section>
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------- discovery */
+
+/**
+ * Communities somebody could ask to be part of.
+ *
+ * Discoverability and readability are different things, and this is the first
+ * place that shows it: a private group that chose to be findable is listed
+ * here with its name and what it is for, and a stranger sees nothing that was
+ * written inside it. Joining an open one is immediate; asking a private one
+ * says so and then waits.
+ */
+function CommunityDirectory({
+  onNotice,
+  onFailure,
+  onChanged,
+}: {
+  onNotice: (message: string) => void
+  onFailure: (failure: Failure) => void
+  onChanged: () => void
+}) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<Awaited<ReturnType<typeof discoverCommunities>> | null>(
+    null,
+  )
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    void discoverCommunities(query)
+      .then((found) => {
+        if (!cancelled) setResults(found)
+      })
+      .catch((caught: unknown) => onFailure(describe(caught)))
+    return () => {
+      cancelled = true
+    }
+  }, [open, query, onFailure])
+
+  return (
+    <section className={styles.directory}>
+      <div className={styles.sectionHead}>
+        <h2 className={styles.sectionHeading}>Find a community</h2>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          onClick={() => setOpen((value) => !value)}
+        >
+          {open ? 'Close' : 'Browse'}
+        </button>
+      </div>
+
+      {open ? (
+        <>
+          <label className="sr-only" htmlFor="community-search">
+            Search communities
+          </label>
+          <input
+            id="community-search"
+            className="input"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search by name"
+          />
+
+          {results && results.communities.length === 0 ? (
+            <p className={styles.communityBody}>
+              Nothing matches that yet. Communities appear here only if they chose to be
+              findable.
+            </p>
+          ) : null}
+
+          <ul className={styles.communityList}>
+            {(results?.communities ?? []).map((community) => (
+              <li key={community.id} className={styles.communityRow}>
+                <div>
+                  <h3 className={styles.communityName}>{community.name}</h3>
+                  <p className={styles.communityBody}>
+                    {community.description || 'No description yet.'}
+                  </p>
+                  <p className={styles.communityMeta}>
+                    {community.settings.joinPolicy === 'open'
+                      ? 'Anyone can join'
+                      : 'Ask to join'}
+                    {' · '}
+                    {community.settings.reflectionVisibility === 'public'
+                      ? 'Reflections readable by anyone'
+                      : 'Reflections for members only'}
+                    {` · ${community.memberCount} ${community.memberCount === 1 ? 'member' : 'members'}`}
+                  </p>
+                </div>
+                {community.state === 'active' ? (
+                  <span className={styles.communityMeta}>You are in this one</span>
+                ) : community.state === 'pending' ? (
+                  <span className={styles.communityMeta}>Waiting on a decision</span>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => {
+                      void joinCommunity(community.id)
+                        .then((result) => {
+                          onNotice(
+                            result.state === 'active'
+                              ? `You have joined ${community.name}.`
+                              : `Asked to join ${community.name}. Someone there will decide.`,
+                          )
+                          onChanged()
+                          setResults(null)
+                          void discoverCommunities(query).then(setResults)
+                        })
+                        .catch((caught: unknown) => onFailure(describe(caught)))
+                    }}
+                  >
+                    {community.settings.joinPolicy === 'open' ? 'Join' : 'Ask to join'}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </section>
+  )
+}
+
+/**
+ * People waiting on a decision, shown to whoever may make it.
+ *
+ * Approving is not moderation dressed up: it decides who is in a space where
+ * everything shared is readable by members, so it defaults to the owner and
+ * admins. Where a community has opened it to members, this appears for them
+ * too — the server decides that, and a 403 here simply renders nothing.
+ */
+function JoinRequests({
+  communityId,
+  onNotice,
+  onFailure,
+}: {
+  communityId: string
+  onNotice: (message: string) => void
+  onFailure: (failure: Failure) => void
+}) {
+  const [requests, setRequests] = useState<
+    Awaited<ReturnType<typeof fetchJoinRequests>>['requests']
+  >([])
+
+  const refresh = useCallback(() => {
+    void fetchJoinRequests(communityId)
+      .then((found) => setRequests(found.requests))
+      /* Not permitted to see them is not an error worth showing anybody. */
+      .catch(() => setRequests([]))
+  }, [communityId])
+
+  useEffect(refresh, [refresh])
+
+  if (requests.length === 0) return null
+
+  return (
+    <div className={styles.joinRequests}>
+      <h4 className={styles.joinRequestsHeading}>
+        {requests.length === 1 ? 'One person is asking to join' : `${requests.length} people are asking to join`}
+      </h4>
+      <ul className={styles.joinRequestList}>
+        {requests.map((request) => (
+          <li key={request.userId} className={styles.joinRequestRow}>
+            <span>{request.displayName ?? request.handle ?? 'A C.H.A.T. writer'}</span>
+            <span className={styles.joinRequestActions}>
+              {(['approve', 'decline'] as const).map((decision) => (
+                <button
+                  key={decision}
+                  type="button"
+                  className={decision === 'approve' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm'}
+                  onClick={() => {
+                    void decideJoinRequest(communityId, request.userId, decision)
+                      .then(() => {
+                        onNotice(
+                          decision === 'approve'
+                            ? 'They are in.'
+                            : 'Declined. They can ask again later.',
+                        )
+                        refresh()
+                      })
+                      .catch((caught: unknown) => onFailure(describe(caught)))
+                  }}
+                >
+                  {decision === 'approve' ? 'Approve' : 'Decline'}
+                </button>
+              ))}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
