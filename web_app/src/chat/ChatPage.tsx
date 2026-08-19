@@ -42,6 +42,7 @@ import {
 } from '../shared/ui/icons.tsx'
 import { shareWithPlatform } from '../shared/native/share.ts'
 import { ChatArtifact } from './ChatArtifact.tsx'
+import { MoreMenu } from './MoreMenu.tsx'
 import { ChatHelper } from './ChatHelper.tsx'
 import {
   DeleteSheet,
@@ -1362,7 +1363,6 @@ export function ChatPage() {
    * and every other value is a sentence the person can read, rather than a
    * greyed-out control with no explanation attached to it.
    */
-  const suggestReasonId = 'suggest-title-reason'
   const suggestTitleReason: string | null = !hasReflectionText
     ? 'Write something first. A title is drawn from what you have written.'
     : !ai.enabled
@@ -1412,8 +1412,23 @@ export function ChatPage() {
     clarification,
     error: assistError,
     undoable,
-    onAsk: (field) => requestAssist(field, 'questions'),
-    onImprove: (field) => requestAssist(field, 'improve'),
+    /*
+     * Asking about a section also tells the conversation which section it is.
+     *
+     * The Reflect panel already has a scoped mode; it was only ever reachable
+     * through a "Discuss in chat" button on every field. Setting it here is
+     * what lets those buttons go: choosing an assistance action *is* saying
+     * which section is being worked on, so the helper stops having to be told
+     * again in a second control.
+     */
+    onAsk: (field) => {
+      setDiscussing(field)
+      requestAssist(field, 'questions')
+    },
+    onImprove: (field) => {
+      setDiscussing(field)
+      requestAssist(field, 'improve')
+    },
     onAccept: () => void acceptImprovement(),
     onDiscard: () => {
       /* Discard leaves the author's words exactly as they were. */
@@ -1598,58 +1613,26 @@ export function ChatPage() {
                   if (event.key === 'Escape') setTitleDraft(null)
                 }}
               />
-              <input
-                className={styles.tagsInput}
-                value={
-                  tagsDraft ??
-                  (detail?.tags ?? []).map((item) => item.label).join(', ')
-                }
-                placeholder="Tags"
-                aria-label="Tags"
-                onChange={(event) => setTagsDraft(event.target.value)}
-                onBlur={() => {
-                  if (tagsDraft === null) return
-                  const next = parseHashtags(tagsDraft)
-                  const previous = (detail?.tags ?? []).map((item) => item.tag).join(',')
-                  const upcoming = next.map((item) => item.tag).join(',')
-                  if (upcoming === previous) {
-                    setTagsDraft(null)
-                    return
-                  }
-                  void (async () => {
-                    const id = await ensureConversation()
-                    const ok = await patchConversation({ tags: next.map((item) => item.label) }, id)
-                    if (ok) setTagsDraft(null)
-                  })()
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') event.currentTarget.blur()
-                  if (event.key === 'Escape') setTagsDraft(null)
-                }}
-              />
             </div>
 
             {/*
-              An assist, not a gate. The field beside it stays exactly as
-              editable as it was; this is for the moment when nothing comes to
-              mind. When it cannot work it says why, rather than sitting there
-              live and quietly doing nothing.
+              An assist, not a gate, and it appears when it can actually help.
+              It used to sit here permanently greyed on an empty page, saying
+              "Suggest title" to somebody who had written nothing to suggest a
+              title from. It is in the ⋯ menu the rest of the time, where its
+              reason is still attached to it.
             */}
-            <button
-              type="button"
-              className={styles.suggestButton}
-              disabled={suggestTitleReason !== null || suggesting}
-              title={suggestTitleReason ?? undefined}
-              aria-describedby={suggestTitleReason ? suggestReasonId : undefined}
-              onClick={() => void suggestTitle()}
-            >
-              <SparkIcon className={styles.tinyIcon} />
-              {suggesting ? 'Thinking…' : 'Suggest title'}
-            </button>
-            {suggestTitleReason ? (
-              <span className="sr-only" id={suggestReasonId}>
-                {suggestTitleReason}
-              </span>
+            {suggestTitleReason === null || suggesting ? (
+              <button
+                type="button"
+                className={styles.suggestButton}
+                disabled={suggesting}
+                onClick={() => void suggestTitle()}
+              >
+                <SparkIcon className={styles.tinyIcon} />
+                {suggesting ? 'Thinking…' : 'Suggest'}
+                <span className="sr-only"> a title for this reflection</span>
+              </button>
             ) : null}
           </div>
 
@@ -1660,34 +1643,33 @@ export function ChatPage() {
               nothing.
             */}
             {detail ? (
-              <>
-                <span className={styles.saveState} data-status={saveStatus} role="status">
-                  {saveLabel}
-                </span>
-                {saveState.status === 'failed' ? (
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => void saveAll()}
-                  >
-                    Try again
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    disabled={!hasUnsaved}
-                    onClick={() => void saveAll()}
-                  >
-                    Save
-                  </button>
-                )}
-              </>
+              <span className={styles.saveState} data-status={saveStatus} role="status">
+                {saveLabel}
+              </span>
             ) : null}
 
+            {/*
+              Save appears when there is something unsaved, and stays while it
+              is failing. A permanently greyed Save button beside a line that
+              already says "Saved" was two controls reporting one fact.
+            */}
+            {detail && (hasUnsaved || saveState.status === 'failed') ? (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => void saveAll()}
+              >
+                {saveState.status === 'failed' ? 'Try again' : 'Save'}
+              </button>
+            ) : null}
+
+            {/*
+              Who can see this, kept beside the control that changes it. Not
+              redundant with anything: nothing else on the page says whether a
+              reflection has been shared.
+            */}
             {detail ? (
               <span className={styles.privacy}>
-                {/* The two words the whole product uses for this. */}
                 {detail.visibility === 'shared' ? (
                   <>
                     <GlobeIcon className={styles.tinyIcon} />
@@ -1712,15 +1694,42 @@ export function ChatPage() {
               Share
             </button>
 
-            <button
-              type="button"
-              className={styles.iconButton}
-              disabled={!detail}
-              aria-label="Delete this reflection"
-              onClick={() => setDeleteOpen(true)}
-            >
-              <TrashIcon className={styles.smallIcon} />
-            </button>
+            {/* Everything else that can be done to a reflection, behind one press. */}
+            <MoreMenu
+              label="More actions for this reflection"
+              items={[
+                {
+                  label: 'Suggest a title',
+                  reason: suggestTitleReason ?? (suggesting ? 'Thinking…' : null),
+                  onSelect: () => void suggestTitle(),
+                },
+                {
+                  label: 'Suggest from conversation',
+                  reason: hasChatMessages
+                    ? busyAction !== null
+                      ? 'Waiting for the last request to come back.'
+                      : null
+                    : 'There is no conversation to read yet.',
+                  onSelect: () => void runAi(AI_ACTIONS.EXTRACT_CHAT),
+                },
+                {
+                  label: 'Create visual',
+                  reason: detail ? null : 'Write something first.',
+                  onSelect: () => {
+                    void leaveSafely().then((ok) => {
+                      if (ok) navigate(`/create?c=${activeId ?? ''}`)
+                    })
+                  },
+                },
+                {
+                  label: 'Delete this reflection',
+                  danger: true,
+                  icon: <TrashIcon className={styles.tinyIcon} />,
+                  reason: detail ? null : 'There is nothing here to delete yet.',
+                  onSelect: () => setDeleteOpen(true),
+                },
+              ]}
+            />
 
             {isNarrow ? (
               <button
@@ -1736,6 +1745,12 @@ export function ChatPage() {
           </div>
         </div>
 
+        {/*
+          Format, tags and how far this has got — one line, at the size of
+          metadata. These were three separate rows of full-height controls
+          above the writing, which is a lot of furniture to walk past on the
+          way to a blank Content field.
+        */}
         <div className={styles.artifactMeta}>
           <button
             type="button"
@@ -1751,8 +1766,35 @@ export function ChatPage() {
             }}
           >
             {format === CHAT_FORMATS.CONDENSED ? 'Condensed C.H.A.T.' : 'Full C.H.A.T.'}
-            <span className={styles.formatChange}>Change</span>
+            <span className={styles.formatChange} aria-hidden="true">▾</span>
           </button>
+
+          <input
+            className={styles.tagsInput}
+            value={tagsDraft ?? (detail?.tags ?? []).map((item) => item.label).join(', ')}
+            placeholder="Tags"
+            aria-label="Tags"
+            onChange={(event) => setTagsDraft(event.target.value)}
+            onBlur={() => {
+              if (tagsDraft === null) return
+              const next = parseHashtags(tagsDraft)
+              const previous = (detail?.tags ?? []).map((item) => item.tag).join(',')
+              const upcoming = next.map((item) => item.tag).join(',')
+              if (upcoming === previous) {
+                setTagsDraft(null)
+                return
+              }
+              void (async () => {
+                const id = await ensureConversation()
+                const ok = await patchConversation({ tags: next.map((item) => item.label) }, id)
+                if (ok) setTagsDraft(null)
+              })()
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.currentTarget.blur()
+              if (event.key === 'Escape') setTagsDraft(null)
+            }}
+          />
 
           <p className={styles.progress}>
             <span className={styles.progressText}>
@@ -1764,14 +1806,13 @@ export function ChatPage() {
                 style={{ inlineSize: `${(written / fields.length) * 100}%` }}
               />
             </span>
+            {liveValidation ? (
+              <span className={styles.combined} data-status={liveValidation.combined.status}>
+                {liveValidation.combined.length} / {liveValidation.combined.recommended}
+                <span className="sr-only"> characters together</span>
+              </span>
+            ) : null}
           </p>
-
-          {liveValidation ? (
-            <span className={styles.combined} data-status={liveValidation.combined.status}>
-              {liveValidation.combined.length} / {liveValidation.combined.recommended}{' '}
-              characters together
-            </span>
-          ) : null}
         </div>
 
         {error ? (
@@ -1807,33 +1848,6 @@ export function ChatPage() {
           />
         </div>
 
-        {detail ? (
-          <div className={styles.artifactFoot}>
-            {hasChatMessages ? (
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                disabled={busyAction !== null}
-                onClick={() => void runAi(AI_ACTIONS.EXTRACT_CHAT)}
-              >
-                {busyAction === AI_ACTIONS.EXTRACT_CHAT
-                  ? 'Reading the conversation…'
-                  : 'Suggest from conversation'}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => {
-                void leaveSafely().then((ok) => {
-                  if (ok) navigate(`/create?c=${activeId ?? ''}`)
-                })
-              }}
-            >
-              Create visual
-            </button>
-          </div>
-        ) : null}
       </div>
 
       {/* The conversation, beside the work rather than in front of it. */}

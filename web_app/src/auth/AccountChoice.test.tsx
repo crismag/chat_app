@@ -88,6 +88,25 @@ test('a refused save asks how it should be kept, and keeps it', async () => {
   expect(saveAttempts).toBe(2)
 })
 
+/*
+ * A page can have several writes in flight at once — a section, a title, a tag.
+ * All of them are refused, and one question answers all of them; the ones that
+ * arrived while it was open must not be left hanging forever.
+ */
+test('one question answers every request waiting on it', async () => {
+  renderProvider()
+  const first = api<{ id: string }>('/conversations', { method: 'POST', body: '{}' })
+  const second = api<{ id: string }>('/conversations', { method: 'POST', body: '{}' })
+
+  await screen.findByRole('dialog')
+  expect(screen.getAllByRole('dialog')).toHaveLength(1)
+  fireEvent.click(screen.getByRole('button', { name: /Continue as guest/i }))
+
+  await expect(first).resolves.toMatchObject({ id: 'c1' })
+  await expect(second).resolves.toMatchObject({ id: 'c1' })
+  expect(guestCalls).toBe(1)
+})
+
 test('closing the question creates nobody, and the action fails honestly', async () => {
   renderProvider()
   const saved = api('/conversations', { method: 'POST', body: '{}' })

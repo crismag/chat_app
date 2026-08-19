@@ -2,16 +2,21 @@
  * The small marks that sit under a field: how far it has got, whose words are
  * in it, and whether it is written down.
  *
- * All three used to be sentences on the face of the card — "Not yet",
+ * All of these used to be sentences on the face of the card — "Not yet",
  * "Written", "Your words", "Unsaved", and a Save button beside them. Four
  * fields' worth of that is a page of labels around a page of writing, and the
- * writing is the point. Each one is a mark now.
+ * writing is the point. Each one became a mark; then the marks that reported
+ * nothing went too.
+ *
+ * The traffic light was one of those. "This field is empty" and "this field
+ * has writing in it" are both plainly visible in the field itself, so a circle
+ * saying so was a second opinion on something nobody had asked about. What is
+ * left appears only when it has something to add: whose words these are, when
+ * they are not simply the author's, and whether there is anything unsaved.
  *
  * Text-free is a visual claim, not an accessibility one. Every mark here keeps
  * a real accessible name, and every mark shows its wording on hover *and* on
- * keyboard focus rather than only to a mouse. Nothing is carried by hue alone
- * either: the traffic light changes shape — hollow, half, solid — because
- * roughly one man in twelve cannot separate its red from its green.
+ * keyboard focus rather than only to a mouse.
  */
 
 import type { ReactNode } from 'react'
@@ -35,67 +40,6 @@ function Hint({ text, children }: { text: string; children: ReactNode }) {
         {text}
       </span>
     </span>
-  )
-}
-
-/** Where a field has got to. Three states, three shapes, three colours. */
-export type FieldStatus = 'empty' | 'long' | 'written'
-
-const STATUS_GLYPHS: Record<FieldStatus, ReactNode> = {
-  /* Hollow: nothing in it yet. */
-  empty: <circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" strokeWidth="2" />,
-  /* Half: written, and past the length this format suggests. */
-  long: (
-    <>
-      <circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" strokeWidth="2" />
-      <path d="M8 1.5a6.5 6.5 0 0 0 0 13z" fill="currentColor" />
-    </>
-  ),
-  /* Solid, with a check cut out of it: written, and within its length. */
-  written: (
-    <>
-      <circle cx="8" cy="8" r="6.5" fill="currentColor" />
-      <path
-        d="m5.2 8.3 2 2.1 3.6-4"
-        fill="none"
-        stroke="var(--surface)"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </>
-  ),
-}
-
-/**
- * The traffic light.
- *
- * It also names its section, which is what makes dropping the C/H/A/T heading
- * safe: the section's name is one focus or one hover away rather than printed
- * on the card forever.
- */
-export function StatusLight({ name, status }: { name: string; status: FieldStatus }) {
-  const label = {
-    empty: `${name} — nothing written yet`,
-    long: `${name} — written, and longer than suggested`,
-    written: `${name} — written`,
-  }[status]
-
-  return (
-    <Hint text={label}>
-      <span
-        className={styles.mark}
-        data-status={status}
-        role="img"
-        aria-label={label}
-        /* Focusable so the wording is reachable without a pointer. */
-        tabIndex={0}
-      >
-        <svg className={styles.markGlyph} viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-          {STATUS_GLYPHS[status]}
-        </svg>
-      </span>
-    </Hint>
   )
 }
 

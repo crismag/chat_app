@@ -10,38 +10,9 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { OriginMark, SaveToggle, StatusLight } from './FieldMarks.tsx'
+import { OriginMark, SaveToggle } from './FieldMarks.tsx'
 
 afterEach(cleanup)
-
-describe('the traffic light', () => {
-  test('names its section and its state, and shows no text', () => {
-    const { container } = render(<StatusLight name="Heart" status="empty" />)
-    const light = screen.getByRole('img', { name: 'Heart — nothing written yet' })
-
-    expect(light).toBeInTheDocument()
-    /* The tooltip is the only text, and it is hidden from the reader of names. */
-    expect(container.querySelector('span[aria-hidden="true"]')?.textContent).toBe(
-      'Heart — nothing written yet',
-    )
-    expect(light.textContent).toBe('')
-  })
-
-  test('is reachable by keyboard, so its wording is not mouse-only', () => {
-    render(<StatusLight name="Heart" status="written" />)
-    expect(screen.getByRole('img', { name: 'Heart — written' })).toHaveAttribute('tabindex', '0')
-  })
-
-  test('changes shape as well as colour', () => {
-    const shapeOf = (status: 'empty' | 'long' | 'written') => {
-      const { container } = render(<StatusLight name="Heart" status={status} />)
-      return container.querySelector('svg')!.innerHTML
-    }
-
-    const shapes = [shapeOf('empty'), shapeOf('long'), shapeOf('written')]
-    expect(new Set(shapes).size).toBe(3)
-  })
-})
 
 describe('provenance', () => {
   test('says whose words these are without printing it', () => {

@@ -107,7 +107,8 @@ export function ChatHelper({
   const fields = fieldsFor(format)
 
   const scoped = discussing && isGuidanceSection(discussing) ? discussing : null
-  const scopedName = scoped ? (fields.find((meta) => meta.type === scoped)?.name ?? scoped) : null
+  const scopedMeta = scoped ? fields.find((meta) => meta.type === scoped) : undefined
+  const scopedName = scoped ? (scopedMeta?.name ?? scoped) : null
 
   const nameOf = (field: FieldType) =>
     fields.find((meta) => meta.type === field)?.name ?? field
@@ -239,13 +240,19 @@ export function ChatHelper({
         {scopedName ? (
           <p className={styles.scopeBanner}>
             <span className={styles.scopeLabel}>
-              Discussing: <strong>{scopedName}</strong>
+              Working with:{' '}
+              {scopedMeta ? (
+                <span className={`${styles.scopeLetter} ${styles[scopedMeta.type] ?? ''}`} aria-hidden="true">
+                  {scopedMeta.letter}
+                </span>
+              ) : null}
+              <strong>{scopedName}</strong>
             </span>
             <button
               type="button"
               className={styles.scopeDismiss}
               onClick={onStopDiscussing}
-              aria-label={`Stop discussing ${scopedName}`}
+              aria-label={`Stop working with ${scopedName}`}
             >
               ×
             </button>

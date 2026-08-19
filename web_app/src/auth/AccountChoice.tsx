@@ -24,7 +24,16 @@ import styles from './AccountChoice.module.css'
  */
 type Pending = {
   creationSource: CreationSource
-  resolve: (resolved: boolean) => void
+  /*
+   * Every request that was refused while this question was open.
+   *
+   * A page can have several writes in flight — a section, a title, a tag — and
+   * all of them come back needing an account. One question is asked, and all
+   * of them are answered by it. Keeping a single resolver here instead meant
+   * the earlier requests were dropped on the floor and their promises never
+   * settled, which the caller sees as a save that simply never finishes.
+   */
+  waiting: ((resolved: boolean) => void)[]
 }
 
 function isCreationSource(value: string): value is CreationSource {
@@ -47,12 +56,14 @@ export function AccountChoiceProvider({ children }: { children?: ReactNode }) {
   const handler = useCallback(
     (creationSource: string) =>
       new Promise<boolean>((resolve) => {
-        setPending({
-          creationSource: isCreationSource(creationSource)
-            ? creationSource
-            : CREATION_SOURCES.OTHER_PERSISTENT_ACTION,
-          resolve,
-        })
+        const source = isCreationSource(creationSource)
+          ? creationSource
+          : CREATION_SOURCES.OTHER_PERSISTENT_ACTION
+        setPending((current) =>
+          current
+            ? { ...current, waiting: [...current.waiting, resolve] }
+            : { creationSource: source, waiting: [resolve] },
+        )
       }),
     [],
   )
@@ -66,7 +77,7 @@ export function AccountChoiceProvider({ children }: { children?: ReactNode }) {
         <AccountChoice
           creationSource={pending.creationSource}
           onSettled={(resolved) => {
-            pending.resolve(resolved)
+            for (const resolve of pending.waiting) resolve(resolved)
             setPending(null)
           }}
         />

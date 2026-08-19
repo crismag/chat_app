@@ -11,7 +11,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { AI_GUIDANCE_NOTICE } from '@chat/shared'
-import { FieldAssist } from './FieldAssist.tsx'
+import { AssistMenu, AssistResults, type FieldAssistProps } from './FieldAssist.tsx'
 import { isGuidanceSection } from './sections.ts'
 import type { AssistState } from './types.ts'
 
@@ -35,35 +35,49 @@ const idle: AssistState = {
   onUndo: () => {},
 }
 
-function renderAssist(overrides: Partial<Parameters<typeof FieldAssist>[0]> = {}) {
+/*
+ * The trigger and the results are two components now — the control sits in the
+ * section's heading and a result opens under the textarea it is about — so
+ * both are rendered here, exactly as the section renders them.
+ */
+function renderAssist(overrides: Partial<FieldAssistProps> = {}) {
   const handlers = {
     onAsk: vi.fn(),
     onImprove: vi.fn(),
+    onDiscuss: vi.fn(),
     onAccept: vi.fn(),
     onDiscard: vi.fn(),
     onDismissGuidance: vi.fn(),
     onUndo: vi.fn(),
   }
+  const props: FieldAssistProps = {
+    field: 'heart',
+    name: 'Heart',
+    available: idle.available,
+    unavailableReason: idle.unavailableReason,
+    hasText: true,
+    busy: null,
+    guidance: null,
+    improvement: null,
+    clarification: null,
+    error: null,
+    undoable: false,
+    ...handlers,
+    ...overrides,
+  }
   render(
     <MemoryRouter>
-      <FieldAssist
-        field="heart"
-        name="Heart"
-        available={idle.available}
-        unavailableReason={idle.unavailableReason}
-        hasText
-        busy={null}
-        guidance={null}
-        improvement={null}
-        clarification={null}
-        error={null}
-        undoable={false}
-        {...handlers}
-        {...overrides}
-      />
+      <AssistMenu {...props} />
+      <AssistResults {...props} />
     </MemoryRouter>,
   )
   return handlers
+}
+
+/** The actions live behind one press now; this is that press. */
+function openAssist() {
+  fireEvent.click(screen.getByRole('button', { name: /Assistance for Heart/i }))
+  return screen.getByRole('menu', { name: /Assistance for Heart/i })
 }
 
 describe('only the four C.H.A.T. sections can be asked about', () => {
@@ -131,8 +145,8 @@ describe('improved wording', () => {
 
   test('undo is offered after accepting, so the original stays recoverable', () => {
     const handlers = renderAssist({ undoable: true })
-    const undo = screen.getByRole('button', { name: /Undo — put my words back/ })
-    fireEvent.click(undo)
+    openAssist()
+    fireEvent.click(screen.getByRole('menuitem', { name: /Undo — put my words back/ }))
     expect(handlers.onUndo).toHaveBeenCalledOnce()
   })
 
@@ -146,23 +160,41 @@ describe('improved wording', () => {
 })
 
 describe('the controls explain themselves', () => {
-  test('both actions are ordinary buttons, reachable by name', () => {
+  /*
+   * One control per section instead of three. What matters is that the three
+   * actions are all still reachable and still named — consolidating their
+   * presentation was the point; losing one of them would not be.
+   */
+  test('all three actions are behind one named control', () => {
     renderAssist()
-    expect(screen.getByRole('button', { name: /Ask me questions/ })).toBeEnabled()
-    expect(screen.getByRole('button', { name: /Improve wording/ })).toBeEnabled()
+    /* Named, because a sparkle is not a word. */
+    openAssist()
+    expect(screen.getByRole('menuitem', { name: 'Ask me questions' })).toBeEnabled()
+    expect(screen.getByRole('menuitem', { name: 'Improve wording' })).toBeEnabled()
+    expect(screen.getByRole('menuitem', { name: 'Discuss in Reflect' })).toBeEnabled()
   })
 
-  test('a request in flight disables both, so nothing is sent twice', () => {
+  test('choosing an action runs it and closes the menu', () => {
+    const handlers = renderAssist()
+    openAssist()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Improve wording' }))
+    expect(handlers.onImprove).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  test('a request in flight disables what would send a second one', () => {
     renderAssist({ busy: 'questions' })
-    expect(screen.getByRole('button', { name: /Thinking…/ })).toBeDisabled()
-    expect(screen.getByRole('button', { name: /Improve wording/ })).toBeDisabled()
+    openAssist()
+    expect(screen.getByRole('menuitem', { name: 'Ask me questions' })).toBeDisabled()
+    expect(screen.getByRole('menuitem', { name: 'Improve wording' })).toBeDisabled()
     /* Loading is announced, not merely implied by a label changing. */
     expect(screen.getByRole('status')).toHaveTextContent(/Asking for questions about Heart/)
   })
 
   test('with nothing written, Improve wording is disabled and says why', () => {
     renderAssist({ hasText: false })
-    const improve = screen.getByRole('button', { name: /Improve wording/ })
+    openAssist()
+    const improve = screen.getByRole('menuitem', { name: 'Improve wording' })
     expect(improve).toBeDisabled()
     /*
      * The reason is attached to the control, not only to a tooltip a mouse can
@@ -181,7 +213,8 @@ describe('the controls explain themselves', () => {
       available: false,
       unavailableReason: 'AI assistance is switched off for this server.',
     })
-    const ask = screen.getByRole('button', { name: /Ask me questions/ })
+    openAssist()
+    const ask = screen.getByRole('menuitem', { name: 'Ask me questions' })
     expect(ask).toBeDisabled()
     expect(document.getElementById(ask.getAttribute('aria-describedby')!)).toHaveTextContent(
       /switched off for this server/,

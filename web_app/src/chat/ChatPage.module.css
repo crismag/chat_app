@@ -9,14 +9,38 @@
  *   centre  the C.H.A.T. itself, written in place, never clamped or previewed
  *   right   the reflection chat, a fixed helper column
  *
- * The centre is the only region that grows. Both flanks are fixed, so widening
- * the window widens the writing rather than the furniture.
+ * The centre is the only region that grows — up to a point. Both flanks are
+ * fixed, so widening the window widens the writing rather than the furniture,
+ * and the whole workspace is capped and centred so that on a large display the
+ * result is a comfortable measure with margins rather than a 900px line of
+ * text nobody can read across.
  */
 
 .workspace {
   display: grid;
   gap: var(--space-4);
   grid-template-columns: minmax(0, 1fr);
+}
+
+/*
+ * The workspace is wider than the rest of the application, on purpose.
+ *
+ * Every other page is a column of text and lives inside `--shell-max` (1180px)
+ * because that is a comfortable measure to read. This page is three columns,
+ * and inside 1180 the middle one — the writing — was squeezed to under 400px
+ * while the flanks took the rest. So it steps outside its container, up to
+ * ~1400px, and no further: past that the editor is already at the top of the
+ * width a paragraph should be read across.
+ *
+ * The negative margin is symmetric, so it stays centred and never overflows
+ * the viewport: the `min()` cannot exceed the space actually available.
+ */
+@media (min-width: 1240px) {
+  .workspace {
+    --workspace-max: 87.5rem;
+    inline-size: min(var(--workspace-max), 100vw - 2 * var(--gutter));
+    margin-inline: calc((min(var(--workspace-max), 100vw - 2 * var(--gutter)) - 100%) / -2);
+  }
 }
 
 @media (min-width: 900px) {
@@ -45,7 +69,7 @@
      * at. The editor is the thing being made; the helper does not get to
      * squeeze it.
      */
-    grid-template-columns: 14rem minmax(0, 1fr) 21rem;
+    grid-template-columns: 15rem minmax(0, 1fr) 21rem;
   }
 
   .workspace[data-collapsed='true'] {
@@ -82,25 +106,32 @@
   }
 }
 
-@media (min-width: 1400px) {
+@media (min-width: 1280px) {
+  /*
+   * 256 + 384, leaving the editor around 620px at this width — the bottom of
+   * the range it wants, and the point below which the helper does not grow.
+   */
   .workspace {
-    /* 400px — the bottom of the range the brief asked for, once there is room. */
-    grid-template-columns: 15rem minmax(0, 1fr) 25rem;
+    grid-template-columns: 16rem minmax(0, 1fr) 24rem;
   }
 
   .workspace[data-collapsed='true'] {
-    grid-template-columns: 3.5rem minmax(0, 1fr) 25rem;
+    grid-template-columns: 3.5rem minmax(0, 1fr) 24rem;
   }
 }
 
-@media (min-width: 1700px) {
-  /* And the top of it, where the editor loses nothing by giving it up. */
+@media (min-width: 1440px) {
+  /*
+   * The shape everything above is aiming at: 256 / ~660 / 432. The helper
+   * takes the last of the growth because the editor is at a good measure by
+   * here, and a conversation in a 320px ribbon was the older complaint.
+   */
   .workspace {
-    grid-template-columns: 15rem minmax(0, 1fr) 27.5rem;
+    grid-template-columns: 16rem minmax(0, 1fr) 27rem;
   }
 
   .workspace[data-collapsed='true'] {
-    grid-template-columns: 3.5rem minmax(0, 1fr) 27.5rem;
+    grid-template-columns: 3.5rem minmax(0, 1fr) 27rem;
   }
 }
 
@@ -385,43 +416,57 @@
  * The name of the thing gets a whole line to itself before the controls take
  * any of it. A title clipped to "The week I coul" by a row of buttons is the
  * artifact apologising to the furniture.
+ *
+ * Tightened: this and the row under it were ~140px of header above the first
+ * word anybody came here to write, which on a laptop is most of the first
+ * section pushed below the fold.
  */
 .artifactHead {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: var(--space-2) var(--space-3);
+  gap: var(--space-1) var(--space-2);
   flex: none;
-  padding: var(--space-4) var(--space-5) var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-2);
 }
 
 /*
- * The name takes the whole first line. A title is a field of arbitrary length
- * and the controls beside it are not, so sharing a row means the title is
- * always the one that loses — clipped to "The week I coul" by a Share button.
+ * The name and the controls share a line when there is room for both.
+ *
+ * This used to be `flex: 1 1 100%` — the title always taking a whole row of
+ * its own, because a title is of arbitrary length and a Share button is not,
+ * and sharing meant the title was the one that got clipped. At 20rem it shares
+ * when it fits and takes its own line when it does not, which on a desktop is
+ * a whole row of header given back.
  */
 .artifactHeadMain {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
-  flex: 1 1 100%;
+  flex: 1 1 20rem;
 }
 
 .artifactHeadSide {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--space-2);
-  flex: 1 1 auto;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  flex: 0 1 auto;
 }
 
+/*
+ * Passage above title: the order a reflection is described in, and two short
+ * lines rather than two full rows of controls.
+ */
 .identity {
   display: grid;
-  gap: 0.1rem;
+  gap: 0;
   min-width: 0;
-  flex: 1 1 auto;
+  /* Enough that "New reflection" is never clipped to "New refle". */
+  flex: 1 1 12rem;
 }
 
 /*
@@ -476,8 +521,14 @@
  */
 .referenceInput,
 .titleInput,
+/*
+ * On the metadata line beside the format, so it stops taking a row of its own.
+ * Bounded, because tags are short and an input greedy for the whole line would
+ * push the progress off the end of it.
+ */
 .tagsInput {
-  width: 100%;
+  inline-size: min(14rem, 40%);
+  flex: 0 1 auto;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -546,7 +597,12 @@
  * and unmistakably unavailable when it cannot do anything — the reason travels
  * with it, as a tooltip and as text a screen reader can reach.
  */
+/*
+ * Short, and never at the title's expense: a title is the field of arbitrary
+ * length on this line, so it is the one that gets the room.
+ */
 .suggestButton {
+  flex: none;
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
@@ -678,14 +734,23 @@
   opacity: 0.45;
 }
 
+/*
+ * Format, tags and progress on one line, at the size of metadata rather than
+ * of controls. Each of these had a row of its own.
+ */
 .artifactMeta {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--space-3);
+  gap: var(--space-2);
   flex: none;
-  padding: 0 var(--space-5) var(--space-3);
+  padding: 0 var(--space-4) var(--space-2);
   border-bottom: 1px solid var(--line);
+}
+
+/* Pushed to the end of the metadata line, where it reads as a summary. */
+.artifactMeta .progress {
+  margin-inline-start: auto;
 }
 
 .formatButton {
@@ -718,6 +783,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  margin: 0;
 }
 
 .progressText {
@@ -744,7 +810,7 @@
 .combined {
   font-size: var(--text-xs);
   color: var(--muted);
-  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
 }
 
 .combined[data-status='extended'] {
@@ -774,15 +840,48 @@
 
 /* --- A field of the artifact ------------------------------------------- */
 
+/*
+ * A section, and as little else as possible.
+ *
+ * The colour rail down the left already separates one section from the next,
+ * so the full card around it was doing that job twice — a border inside a
+ * bordered panel, with padding on both. What is left is the rail, a thin
+ * divider, and the words. The gain is roughly a section and a half of extra
+ * height on a laptop, which is the difference between seeing your Content
+ * while writing your Application and not.
+ */
 .field {
   display: grid;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--line);
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
   border-left: 3px solid var(--line-strong);
-  border-radius: var(--radius-md);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
   background: var(--surface);
   transition: border-color var(--fast) var(--ease);
+}
+
+.field + .field {
+  border-top: 1px solid var(--line);
+}
+
+/*
+ * The heading line: identity on the left, and on the right only what has
+ * something to report. It is a flex row so the marks sit against the edge of
+ * the writing rather than under it.
+ */
+.fieldHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 1.75rem;
+}
+
+.fieldHeadMarks {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: none;
 }
 
 .fieldHeading {
@@ -1038,11 +1137,43 @@
   opacity: 0.45;
 }
 
+/*
+ * The count, as loud as it needs to be and no louder.
+ *
+ * `silent` is invisible rather than absent: it is still in the page for a
+ * screen reader, and it appears the moment the section has focus — so the
+ * person actually writing can always see it, and the other three sections
+ * stop reciting numbers at them.
+ */
 .counter {
-  padding-inline: var(--space-2);
+  padding-inline: var(--space-1);
   font-size: var(--text-xs);
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+  transition: opacity var(--fast) var(--ease);
+}
+
+.counter[data-tone='silent'] {
+  opacity: 0;
+}
+
+.counter[data-tone='quiet'] {
+  opacity: 0.55;
+}
+
+.counter[data-tone='near'] {
+  opacity: 1;
+  color: var(--ink-muted, var(--muted));
+}
+
+.counter[data-tone='over'] {
+  opacity: 1;
+  font-weight: 650;
+}
+
+/* Whoever is writing here can always see how far they have got. */
+.field:focus-within .counter {
+  opacity: 1;
 }
 
 .counter[data-status='extended'] {
@@ -2449,11 +2580,13 @@
     flex: 1 1 10rem;
   }
 
+  /*
+   * Not on a phone. It took a whole row of a header that is already the
+   * tallest thing between somebody and the first field, to offer a convenience
+   * that is still in the ⋯ menu two inches away.
+   */
   .suggestButton {
-    flex: 1 1 100%;
-    justify-content: center;
-    align-self: stretch;
-    margin-bottom: 0;
+    display: none;
   }
 
   .artifactHeadSide {
@@ -2505,4 +2638,125 @@
   color: var(--muted);
   font-size: var(--text-xs);
   line-height: var(--leading-body);
+}
+
+
+/* --- Contextual assistance, and the rest of the actions ----------------- */
+
+/*
+ * One mark per section instead of three buttons per section.
+ *
+ * "Ask me questions", "Improve wording" and "Discuss in chat", rendered four
+ * times, was twelve persistent controls on a page for writing — and on an
+ * empty reflection, more interface than content. The actions are all still
+ * here; they are behind a press, which is what progressive disclosure buys.
+ */
+.assistMenu,
+.moreMenu {
+  position: relative;
+  display: inline-flex;
+}
+
+.assistTrigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* A real target on a phone, whatever the icon inside it measures. */
+  inline-size: 1.9rem;
+  block-size: 1.9rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease);
+}
+
+.assistTrigger:hover,
+.assistTrigger:focus-visible,
+.field:focus-within .assistTrigger {
+  color: var(--accent);
+  border-color: var(--line);
+}
+
+.assistTrigger[data-busy='true'] {
+  color: var(--accent);
+  animation: assistPulse 1.4s var(--ease) infinite;
+}
+
+@keyframes assistPulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistTrigger[data-busy='true'] {
+    animation: none;
+  }
+}
+
+.assistPopover,
+.morePopover {
+  position: absolute;
+  z-index: 30;
+  inset-inline-end: 0;
+  inset-block-start: calc(100% + 0.25rem);
+  display: grid;
+  min-inline-size: 13rem;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md, 0 0.75rem 1.5rem rgb(0 0 0 / 12%));
+}
+
+.assistItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.45rem 0.6rem;
+  border: none;
+  border-radius: var(--radius-sm, 0.35rem);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: start;
+  cursor: pointer;
+}
+
+.assistItem:hover:not(:disabled),
+.assistItem:focus-visible:not(:disabled) {
+  background: var(--surface-2);
+}
+
+/*
+ * Disabled and still readable. An item that says why it cannot be used is
+ * information; one that has silently vanished is a mystery.
+ */
+.assistItem:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.assistItemDanger {
+  color: var(--danger);
+}
+
+/* The section's letter, carried into the conversation's scope banner. */
+.scopeLetter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 1.15rem;
+  block-size: 1.15rem;
+  margin-inline-end: 0.35rem;
+  border-radius: var(--radius-sm, 0.35rem);
+  background: var(--surface-2);
+  font-size: 0.7rem;
+  font-weight: 700;
 }
