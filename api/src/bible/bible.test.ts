@@ -33,6 +33,7 @@ import { createBibleRoutes } from './routes.ts';
 import { BibleService } from './service.ts';
 import { MAX_PAGE_SIZE, YouVersionProvider, mapStatus, readPassage, readTranslation } from './providers/youversion.ts';
 import type { BiblePassage } from '@chat/shared';
+import { cookieHeader } from '../http/set-cookie.ts';
 
 /* ------------------------------------------------------------- fixtures */
 
@@ -1199,7 +1200,7 @@ describe('the passage a reflection was written against', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: `p${Math.random()}@example.com`, password: 'password123' }),
     });
-    const cookie = registered.headers.get('set-cookie')?.split(';')[0] ?? '';
+    const cookie = cookieHeader(registered.headers.get('set-cookie'));
     const created = await app.request('/api/conversations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Cookie: cookie },
@@ -1233,7 +1234,7 @@ describe('the passage a reflection was written against', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: `a${Math.random()}@example.com`, password: 'password123' }),
     });
-    const myCookie = mine.headers.get('set-cookie')?.split(';')[0] ?? '';
+    const myCookie = cookieHeader(mine.headers.get('set-cookie'));
     const created = await app.request('/api/conversations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Cookie: myCookie },
@@ -1246,7 +1247,7 @@ describe('the passage a reflection was written against', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: `b${Math.random()}@example.com`, password: 'password123' }),
     });
-    const theirCookie = theirs.headers.get('set-cookie')?.split(';')[0] ?? '';
+    const theirCookie = cookieHeader(theirs.headers.get('set-cookie'));
 
     const stolen = await app.request(`/api/bible/reflections/${id}/passage`, {
       headers: { Cookie: theirCookie },

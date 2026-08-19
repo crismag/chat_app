@@ -53,6 +53,7 @@ import {
   validSection,
 } from './draft-target.ts';
 import { mapGeminiError, readGeminiPayload } from './providers/gemini.ts';
+import { cookieHeader } from '../http/set-cookie.ts';
 import {
   AiRequestError,
   boundHistory,
@@ -734,7 +735,7 @@ describe('the endpoints', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: `w${Math.random()}@example.com`, password: 'secret12' }),
     });
-    return { app, cookie: registered.headers.get('set-cookie') ?? '' };
+    return { app, cookie: cookieHeader(registered.headers.get('set-cookie')) };
   }
 
   const post = (
@@ -961,7 +962,7 @@ describe('the endpoints', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'still@example.com', password: 'secret12' }),
     });
-    const cookie = registered.headers.get('set-cookie') ?? '';
+    const cookie = cookieHeader(registered.headers.get('set-cookie'));
 
     const status = (await (await app.request('/api/ai/status')).json()) as {
       enabled: boolean;
@@ -1191,7 +1192,7 @@ describe('the conversation endpoint', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: `c${Math.random()}@example.com`, password: 'secret12' }),
     });
-    const cookie = registered.headers.get('set-cookie') ?? '';
+    const cookie = cookieHeader(registered.headers.get('set-cookie'));
     const send = (path: string, body: unknown) =>
       app.request(path, {
         method: 'POST',
@@ -1314,7 +1315,7 @@ describe('the conversation endpoint', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'intruder@example.com', password: 'secret12' }),
     });
-    const theirCookie = intruder.headers.get('set-cookie') ?? '';
+    const theirCookie = cookieHeader(intruder.headers.get('set-cookie'));
 
     const response = await app.request('/api/ai/reflection-chat', {
       method: 'POST',
@@ -1505,7 +1506,7 @@ describe('the model may generate, and may never mutate', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'boundary@example.com', password: 'secret12' }),
     });
-    const cookie = registered.headers.get('set-cookie') ?? '';
+    const cookie = cookieHeader(registered.headers.get('set-cookie'));
     const post = (path: string, body: unknown) =>
       app.request(path, {
         method: 'POST',
@@ -1572,7 +1573,7 @@ describe('the model may generate, and may never mutate', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'unplaced@example.com', password: 'secret12' }),
     });
-    const cookie = registered.headers.get('set-cookie') ?? '';
+    const cookie = cookieHeader(registered.headers.get('set-cookie'));
     const post = (path: string, body: unknown) =>
       app.request(path, {
         method: 'POST',
@@ -1626,7 +1627,7 @@ describe('the model may generate, and may never mutate', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'actions@example.com', password: 'secret12' }),
     });
-    const cookie = registered.headers.get('set-cookie') ?? '';
+    const cookie = cookieHeader(registered.headers.get('set-cookie'));
     const post = (path: string, body: unknown) =>
       app.request(path, {
         method: 'POST',
@@ -1677,7 +1678,7 @@ describe('the model may generate, and may never mutate', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'unknownaction@example.com', password: 'secret12' }),
     });
-    const cookie = registered.headers.get('set-cookie') ?? '';
+    const cookie = cookieHeader(registered.headers.get('set-cookie'));
     const created = await app.request('/api/conversations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Cookie: cookie },
@@ -1718,7 +1719,7 @@ describe('the model may generate, and may never mutate', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'scoped@example.com', password: 'secret12' }),
     });
-    const cookie = registered.headers.get('set-cookie') ?? '';
+    const cookie = cookieHeader(registered.headers.get('set-cookie'));
     const post = (path: string, body: unknown) =>
       app.request(path, {
         method: 'POST',
@@ -1758,7 +1759,7 @@ describe('the model may generate, and may never mutate', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'persist@example.com', password: 'secret12' }),
     });
-    const cookie = registered.headers.get('set-cookie') ?? '';
+    const cookie = cookieHeader(registered.headers.get('set-cookie'));
     const post = (path: string, body: unknown) =>
       app.request(path, {
         method: 'POST',
@@ -1862,7 +1863,7 @@ describe('suggest title, end to end', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: `t${Math.random()}@example.com`, password: 'secret12' }),
     });
-    const cookie = registered.headers.get('set-cookie') ?? '';
+    const cookie = cookieHeader(registered.headers.get('set-cookie'));
     const post = (path: string, body: unknown) =>
       app.request(path, {
         method: 'POST',
@@ -2052,7 +2053,7 @@ describe('the passage reaches the model', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password: 'secret12' }),
     });
-    const cookie = registered.headers.get('set-cookie') ?? '';
+    const cookie = cookieHeader(registered.headers.get('set-cookie'));
     const send = (path: string, body: unknown, method = 'POST') =>
       app.request(path, {
         method,

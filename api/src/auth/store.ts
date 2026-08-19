@@ -251,7 +251,17 @@ export class MysqlAuthStore implements AuthStore {
      */
     const claiming = claimUserId ? await this.db.getUserByPublicUuid(claimUserId) : null;
     if (claiming && claiming.accountType === ACCOUNT_TYPES.ANONYMOUS) {
-      await this.db.setLocalCredentials(claiming.id, handle, password);
+      try {
+        await this.db.setLocalCredentials(claiming.id, handle, password);
+      } catch (error: unknown) {
+        /*
+         * Two registrations for one address, landing together. The unique key
+         * decides it; the loser leaves the guest exactly as it was -- still a
+         * guest, still owning everything it owned -- rather than half-claimed.
+         */
+        if (await this.db.findUserIdByLocalUsername(handle)) return null;
+        throw error;
+      }
       await this.db.markUserRegistered(claiming.id);
       return this.account(claiming.id, handle);
     }

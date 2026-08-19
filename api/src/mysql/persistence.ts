@@ -921,25 +921,34 @@ export class MysqlPersistence {
   /**
    * The next number for a base name, handed out exactly once.
    *
-   * `LAST_INSERT_ID(expression)` is the trick that makes this atomic without a
-   * transaction: the UPDATE both stores the incremented value and records it
-   * for this connection, so two callers arriving together are serialised by
-   * the row lock and read back different numbers. The stored column is the
-   * *next* number to hand out, so what was allocated is one less than what
-   * comes back.
+   * `LAST_INSERT_ID(expression)` is what makes this atomic without an explicit
+   * transaction: the UPDATE stores the incremented value and records it in the
+   * same statement, and the row lock serialises two callers arriving together
+   * so they read back different numbers. The stored column is the *next*
+   * number to hand out, so what was allocated is one less than what comes back.
+   *
+   * On ONE connection, taken from the pool and held. `LAST_INSERT_ID()` is
+   * per-connection state: issued through the pool, the SELECT could land on a
+   * different connection and read a value belonging to somebody else's insert,
+   * which is exactly the collision this function exists to prevent.
    */
   async nextGuestNameSequence(baseName: string): Promise<number> {
-    await this.pool.execute(
-      'INSERT IGNORE INTO guest_name_sequences (base_name, next_sequence) VALUES (?, 1)',
-      [baseName],
-    );
-    await this.pool.execute(
-      'UPDATE guest_name_sequences SET next_sequence = LAST_INSERT_ID(next_sequence + 1) WHERE base_name = ?',
-      [baseName],
-    );
-    const [rows] = await this.pool.query<RowDataPacket[]>('SELECT LAST_INSERT_ID() AS allocated');
-    const allocated = Number(rows[0]?.allocated ?? 1);
-    return Math.max(1, allocated - 1);
+    const connection = await this.pool.getConnection();
+    try {
+      await connection.execute(
+        'INSERT IGNORE INTO guest_name_sequences (base_name, next_sequence) VALUES (?, 1)',
+        [baseName],
+      );
+      await connection.execute(
+        'UPDATE guest_name_sequences SET next_sequence = LAST_INSERT_ID(next_sequence + 1) WHERE base_name = ?',
+        [baseName],
+      );
+      const [rows] = await connection.query<RowDataPacket[]>('SELECT LAST_INSERT_ID() AS allocated');
+      const allocated = Number(rows[0]?.allocated ?? 1);
+      return Math.max(1, allocated - 1);
+    } finally {
+      connection.release();
+    }
   }
 
   /**
