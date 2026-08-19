@@ -107,3 +107,58 @@
   flex: none;
   color: var(--muted);
 }
+
+/*
+ * The destructive guest action, and the warning in front of it.
+ *
+ * Styled apart from the rest of the menu because it is not the same kind of
+ * thing: every other item is reversible, and this one ends an account that has
+ * no other way back.
+ */
+.destructive {
+  color: var(--danger, #b3261e);
+}
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--ink, #1b1b1f) 45%, transparent);
+}
+
+.confirm {
+  width: min(28rem, 100%);
+  padding: 1.5rem;
+  border-radius: var(--radius-lg, 1rem);
+  background: var(--surface, #fff);
+  box-shadow: 0 1.5rem 3rem color-mix(in srgb, var(--ink, #1b1b1f) 25%, transparent);
+  text-align: left;
+}
+
+.confirmTitle {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+}
+
+.confirmBody {
+  margin: 0 0 0.75rem;
+  color: var(--ink-muted, #5c5c66);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.confirmActions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.destructiveButton {
+  color: var(--danger, #b3261e);
+  border: 1px solid currentColor;
+  background: transparent;
+}

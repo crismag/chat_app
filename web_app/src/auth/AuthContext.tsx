@@ -26,10 +26,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value: AuthContextValue = {
     user,
     ready,
-    async login(email, password) {
+    async login(email, password, keepSignedIn) {
       const account = await api<AuthUser & { merged?: number }>('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, keepSignedIn }),
       })
       setUser(account)
       /* How much of their guest work moved into this account, if any. */
@@ -72,6 +72,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     async logout() {
       await api('/auth/logout', { method: 'POST' })
+      setUser(null)
+    },
+    async forgetThisBrowser() {
+      await api('/auth/forget-installation', { method: 'POST' })
       setUser(null)
     },
   }

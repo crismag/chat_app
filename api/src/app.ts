@@ -6,12 +6,15 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { sessionCookieOptions } from './auth/session-cookie.ts';
 import { SqliteAuthStore, type AuthStore, type AuthUser } from './auth/store.ts';
 import {
-  clearGuestCookie,
+  PERSISTENCE_TYPES,
+  SESSION_TYPES,
+  clearInstallationCookie,
   createGuest,
-  currentAccount as accountFor,
   deviceClassFromRequest,
-  guestFromCookie,
-} from './auth/guest.ts';
+  recognisedAccount,
+  rememberInstallation,
+  sessionTypeFor,
+} from './auth/identity.ts';
 import { AnonymousAiAllowance } from './ai/anonymous-allowance.ts';
 import { hashPassword, verifyPassword } from './auth/local-password.ts';
 import { webOrigins } from './http/origins.ts';
@@ -33,6 +36,7 @@ import {
   type CreateLayout,
   type CreateStyle,
   type HealthResponse,
+  ACCOUNT_TYPES,
   CREATION_METHODS,
   CREATION_SOURCES,
   readCreationContext,
@@ -209,6 +213,30 @@ export function createApp(
    */
   const currentUser = async (c: Context) => auth.userForToken(getCookie(c, SESSION_COOKIE) ?? '');
 
+  /**
+   * Begin a session and put its token where the browser will send it back.
+   *
+   * `persistent` is about the cookie, not the row: an unticked "keep me signed
+   * in" gets a cookie with no Max-Age, so it goes when the browser closes.
+   */
+  const beginSession = async (
+    c: Context,
+    user: AuthUser,
+    options: { installationId?: string | null; persistent: boolean },
+  ) => {
+    const token = await auth.startSession(user.id, {
+      installationId: options.installationId ?? null,
+      sessionType: sessionTypeFor(user, options.persistent),
+    });
+    setCookie(
+      c,
+      SESSION_COOKIE,
+      token,
+      sessionCookieOptions(c.req.header('origin'), process.env, options.persistent),
+    );
+    return token;
+  };
+
   const requireUser = async (c: Parameters<typeof currentUser>[0]) => currentUser(c);
 
   /*
@@ -219,7 +247,32 @@ export function createApp(
    * nobody, and no account is created to serve them -- that only happens when
    * somebody asks for one at /api/auth/guest.
    */
-  const currentAccount = async (c: Context) => accountFor(c, auth, await currentUser(c));
+  /**
+   * Whoever this request is for: the session, else the browser's durable
+   * recognition, else nobody.
+   *
+   * The second step is what makes recognition survive a session ending: a
+   * browser holding a live installation credential is silently given a new
+   * session rather than being asked to sign in again. Nobody is still an
+   * ordinary answer -- a visitor reading a shared reflection is nobody, and no
+   * account is created to serve them.
+   */
+  const currentAccount = async (c: Context): Promise<AuthUser | null> => {
+    const signedIn = await currentUser(c);
+    if (signedIn) return signedIn;
+    const recognised = await recognisedAccount(c, auth);
+    if (!recognised) return null;
+    /*
+     * Renewal is invisible, and persistent: this browser is durably recognised
+     * already, so a session cookie that died with the window would just be
+     * re-minted on the next request.
+     */
+    await beginSession(c, recognised.user, {
+      installationId: recognised.installationId,
+      persistent: true,
+    });
+    return recognised.user;
+  };
 
   /*
    * What the client is told about whoever it is talking to.
@@ -510,9 +563,7 @@ export function createApp(
    * signed-in person gets themselves.
    */
   app.post('/api/auth/guest', async (c) => {
-    const signedIn = await currentUser(c);
-    if (signedIn) return c.json(accountBody(signedIn));
-    const existing = await guestFromCookie(c, auth);
+    const existing = await currentAccount(c);
     if (existing) return c.json(accountBody(existing));
 
     const body = await c.req.json<unknown>().catch(() => ({}));
@@ -521,8 +572,14 @@ export function createApp(
       creationMethod: CREATION_METHODS.GUEST_OPT_IN,
       deviceClass: deviceClassFromRequest(c),
     });
-    const guest = await createGuest(c, auth, context);
-    return c.json(accountBody(guest), 201);
+    const { user, installationId } = await createGuest(c, auth, context);
+    /*
+     * A session as well as the credential. The credential is what makes them
+     * the same guest next month; the session is what makes them somebody for
+     * the next thirty seconds, and neither substitutes for the other.
+     */
+    await beginSession(c, user, { installationId, persistent: true });
+    return c.json(accountBody(user), 201);
   });
 
   app.post('/api/auth/register', async (c) => {
@@ -540,7 +597,11 @@ export function createApp(
      * is rewritten. That is the invariant the whole design exists to keep:
      * registration is an upgrade, not a new account with a migration attached.
      */
-    const guest = await guestFromCookie(c, auth);
+    const recognised = await recognisedAccount(c, auth);
+    const guest =
+      recognised && recognised.user.accountType === ACCOUNT_TYPES.ANONYMOUS
+        ? recognised.user
+        : null;
     const user = await auth.register(email, password, guest?.id ?? null);
     if (!user) {
       /*
@@ -558,15 +619,24 @@ export function createApp(
         409,
       );
     }
-    /* The account is theirs now; the guest credential has nothing left to do. */
-    if (guest) clearGuestCookie(c);
-    const token = await auth.startSession(user.id);
-    setCookie(c, SESSION_COOKIE, token, sessionCookieOptions(c.req.header('origin')));
+    /*
+     * The installation stays exactly where it was.
+     *
+     * It is the same account -- upgraded, not replaced -- so the browser that
+     * was recognised as this guest is now recognised as this registered user,
+     * which is what "same user_id, same creations" means at the cookie level.
+     * Somebody registering from a browser that was not recognised at all gets
+     * durable recognition here, because they chose an account on this device.
+     */
+    const installationId =
+      recognised?.installationId ??
+      (await rememberInstallation(c, auth, user.id, PERSISTENCE_TYPES.REGISTERED_PERSISTENT));
+    await beginSession(c, user, { installationId, persistent: true });
     return c.json(accountBody(user), 201);
   });
 
   app.post('/api/auth/login', async (c) => {
-    const body = await c.req.json<{ email?: string; password?: string }>();
+    const body = await c.req.json<{ email?: string; password?: string; keepSignedIn?: boolean }>();
     const email = body.email?.trim().toLowerCase() ?? '';
     const user = await auth.verify(email, body.password ?? '');
     if (!user) {
@@ -586,23 +656,73 @@ export function createApp(
      * is revoked, so a cookie left behind resolves to something known instead
      * of looking like a new visitor.
      */
-    const guest = await guestFromCookie(c, auth);
+    const recognised = await recognisedAccount(c, auth);
+    const guest =
+      recognised && recognised.user.accountType === ACCOUNT_TYPES.ANONYMOUS
+        ? recognised.user
+        : null;
     let merged = 0;
     if (guest && guest.id !== user.id) {
       merged = store.accounts.merge(guest.id, user.id);
       await auth.merge(guest.id, user.id);
-      clearGuestCookie(c);
+      clearInstallationCookie(c);
     }
-    const token = await auth.startSession(user.id);
-    setCookie(c, SESSION_COOKIE, token, sessionCookieOptions(c.req.header('origin')));
+
+    /*
+     * "Keep me signed in on this device", and nothing else, decides whether
+     * this browser is durably recognised afterwards.
+     *
+     * Unticked leaves no durable credential at all -- not a short-lived one --
+     * which is the right answer on a public computer. Whether a computer is
+     * public is not guessed at: the person knows, and the checkbox is how they
+     * say so.
+     */
+    const keepSignedIn = body.keepSignedIn === true;
+    const installationId = keepSignedIn
+      ? await rememberInstallation(c, auth, user.id, PERSISTENCE_TYPES.REGISTERED_PERSISTENT)
+      : null;
+    await beginSession(c, user, { installationId, persistent: keepSignedIn });
     return c.json({ ...accountBody(user), ...(merged > 0 ? { merged } : {}) });
   });
 
+  /*
+   * Ending the interaction, not the account.
+   *
+   * A registered user who asked to be kept signed in has that credential
+   * revoked too, so the account does not simply restore itself on the next
+   * request -- signing out has to mean something.
+   *
+   * A guest's installation credential is deliberately left alone. It is the
+   * only way back to everything they have written, and destroying it behind an
+   * ordinary "sign out" is exactly the accident this split exists to prevent.
+   * Forgetting a guest is its own route, below, with its own warning.
+   */
   app.post('/api/auth/logout', async (c) => {
     const token = getCookie(c, SESSION_COOKIE);
-    if (token) {
-      await auth.endSession(token);
+    const session = token ? await auth.sessionForToken(token) : null;
+    if (token) await auth.endSession(token);
+    if (session?.installationId && session.sessionType === SESSION_TYPES.REGISTERED_PERSISTENT) {
+      await auth.revokeInstallation(session.installationId);
+      clearInstallationCookie(c);
     }
+    deleteCookie(c, SESSION_COOKIE, { path: '/' });
+    return c.json({ ok: true });
+  });
+
+  /*
+   * "Forget this guest on this browser": the destructive one.
+   *
+   * For an unregistered guest this is the end of their access to everything
+   * they wrote -- there is no email to recover from and no second credential.
+   * That is said plainly in the interface, and it is a separate action from
+   * signing out precisely so it can be.
+   */
+  app.post('/api/auth/forget-installation', async (c) => {
+    const recognised = await recognisedAccount(c, auth);
+    if (recognised) await auth.revokeInstallation(recognised.installationId);
+    const token = getCookie(c, SESSION_COOKIE);
+    if (token) await auth.endSession(token);
+    clearInstallationCookie(c);
     deleteCookie(c, SESSION_COOKIE, { path: '/' });
     return c.json({ ok: true });
   });

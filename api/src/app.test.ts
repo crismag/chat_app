@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { createApp } from './app.ts';
 import { MemoryStore } from './store.ts';
+import { cookieHeader, cookieNamed as namedCookie } from './http/set-cookie.ts';
 
 async function json<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
@@ -16,8 +17,7 @@ async function register(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
-  const cookie = response.headers.get('set-cookie') ?? '';
-  return { response, cookie };
+  return { response, cookie: cookieHeader(response.headers.get('set-cookie')) };
 }
 
 describe('GET /api/health', () => {
@@ -926,18 +926,10 @@ describe('sharing is always an explicit act', () => {
  * anything written before it.
  */
 describe('writing as a guest', () => {
-  /*
-   * One response can set two cookies -- registering both clears the guest
-   * credential and starts a session -- so a test that took the first one would
-   * be carrying an empty deletion around and proving nothing.
-   */
   const cookieNamed = (response: Response, name: string) =>
-    (response.headers.get('set-cookie') ?? '')
-      .split(/,(?=\s*[^ ;,]+=)/)
-      .map((part) => part.trim().split(';')[0] ?? '')
-      .find((pair) => pair.startsWith(`${name}=`) && pair.length > name.length + 1) ?? '';
+    namedCookie(response.headers.get('set-cookie'), name);
 
-  const cookieFrom = (response: Response) => cookieNamed(response, 'chat_session');
+  const cookieFrom = (response: Response) => cookieHeader(response.headers.get('set-cookie'));
 
   const post = (app: ReturnType<typeof createApp>, path: string, cookie: string, body: unknown) =>
     app.request(path, {
@@ -955,7 +947,7 @@ describe('writing as a guest', () => {
     expect(response.status).toBe(201);
     return {
       response,
-      cookie: cookieNamed(response, 'chat_guest'),
+      cookie: cookieHeader(response.headers.get('set-cookie')),
       account: await json<Record<string, unknown>>(response),
     };
   }
@@ -989,8 +981,16 @@ describe('writing as a guest', () => {
     expect(account['guestName']).toMatch(/^[A-Z][a-zA-Z]+-\d+$/);
 
     const cookie = response.headers.get('set-cookie') ?? '';
-    expect(cookie).toMatch(/^chat_guest=/);
-    /* A bearer credential for everything they write: script may not read it. */
+    /*
+     * Two credentials, not one. The installation is durable recognition of
+     * this browser; the session is the current interaction, and ending it must
+     * not be what destroys a guest's only way back to their reflections.
+     */
+    expect(cookie).toMatch(/chat_install=/);
+    expect(cookie).toMatch(/chat_session=/);
+    /* The id alone proves nothing: a secret travels with it. */
+    expect(cookieNamed(response, 'chat_install')).toMatch(/^chat_install=[^.]+\..+/);
+    /* Bearer credentials for everything they write: script may not read them. */
     expect(cookie).toMatch(/HttpOnly/i);
     expect(cookie).toMatch(/SameSite=Lax/i);
   });
@@ -1021,7 +1021,7 @@ describe('writing as a guest', () => {
   test('a credential naming nobody is nobody', async () => {
     const app = createApp(new MemoryStore());
     const response = await app.request('/api/conversations', {
-      headers: { Cookie: 'chat_guest=not-a-real-credential' },
+      headers: { Cookie: 'chat_install=not-a-real.credential' },
     });
     expect(response.status).toBe(200);
     expect(await json<unknown[]>(response)).toEqual([]);
@@ -1125,6 +1125,99 @@ describe('writing as a guest', () => {
     });
 
     /* The old credential resolves to nobody now, rather than to an empty guest. */
+    expect((await app.request('/api/auth/me', { headers: { Cookie: cookie } })).status).toBe(401);
+  });
+
+  /*
+   * The two credentials do different jobs, and the difference is the whole
+   * reason a guest can be signed out without being destroyed.
+   */
+  test('a guest whose session ended is still recognised', async () => {
+    const app = createApp(new MemoryStore());
+    const { response } = await continueAsGuest(app);
+    const install = cookieNamed(response, 'chat_install')
+    const mine = await json<{ id: string }>(
+      await reflection(app, cookieHeader(response.headers.get('set-cookie'))),
+    );
+
+    /* The session is gone; only durable recognition of the browser remains. */
+    const listed = await app.request('/api/conversations', { headers: { Cookie: install } });
+    expect((await json<{ id: string }[]>(listed)).map((item) => item.id)).toEqual([mine.id]);
+    /* And a session was quietly re-established rather than being demanded. */
+    expect(cookieNamed(listed, 'chat_session')).not.toBe('');
+  });
+
+  test('the installation id alone is not a credential', async () => {
+    const app = createApp(new MemoryStore());
+    const { response } = await continueAsGuest(app);
+    const [, credential] = cookieNamed(response, 'chat_install').split('=');
+    const id = (credential ?? '').split('.')[0];
+
+    const response2 = await app.request('/api/auth/me', {
+      headers: { Cookie: `chat_install=${id}.` },
+    });
+    expect(response2.status).toBe(401);
+    const guessed = await app.request('/api/auth/me', {
+      headers: { Cookie: `chat_install=${id}.wrong-secret` },
+    });
+    expect(guessed.status).toBe(401);
+  });
+
+  test('forgetting a guest on this browser really forgets them', async () => {
+    const app = createApp(new MemoryStore());
+    const { cookie, response } = await continueAsGuest(app);
+    await reflection(app, cookie);
+
+    const forgotten = await post(app, '/api/auth/forget-installation', cookie, {});
+    expect(forgotten.status).toBe(200);
+
+    /* The credential that was their whole account no longer names anybody. */
+    const install = cookieNamed(response, 'chat_install');
+    expect((await app.request('/api/auth/me', { headers: { Cookie: install } })).status).toBe(401);
+  });
+
+  test('keeping signed in is what makes a browser remembered, and nothing else', async () => {
+    const app = createApp(new MemoryStore());
+    await post(app, '/api/auth/register', '', {
+      email: 'shared@example.com',
+      password: 'a-long-password',
+    });
+
+    /* On a shared computer: a session that dies with the window, and no more. */
+    const temporary = await post(app, '/api/auth/login', '', {
+      email: 'shared@example.com',
+      password: 'a-long-password',
+    });
+    expect(cookieNamed(temporary, 'chat_install')).toBe('');
+    expect(temporary.headers.get('set-cookie')).not.toMatch(/chat_session=[^;]+;[^,]*Max-Age/)
+
+    /* On their own: durable recognition, because they asked for it. */
+    const persistent = await post(app, '/api/auth/login', '', {
+      email: 'shared@example.com',
+      password: 'a-long-password',
+      keepSignedIn: true,
+    })
+    const install = cookieNamed(persistent, 'chat_install')
+    expect(install).not.toBe('')
+    const restored = await app.request('/api/auth/me', { headers: { Cookie: install } })
+    expect(restored.status).toBe(200)
+  })
+
+  test('signing out of a remembered device does not remember it afterwards', async () => {
+    const app = createApp(new MemoryStore());
+    await post(app, '/api/auth/register', '', {
+      email: 'forgets@example.com',
+      password: 'a-long-password',
+    });
+    const signedIn = await post(app, '/api/auth/login', '', {
+      email: 'forgets@example.com',
+      password: 'a-long-password',
+      keepSignedIn: true,
+    });
+    const cookie = cookieHeader(signedIn.headers.get('set-cookie'));
+    await post(app, '/api/auth/logout', cookie, {});
+
+    /* Otherwise the account would restore itself on the very next request. */
     expect((await app.request('/api/auth/me', { headers: { Cookie: cookie } })).status).toBe(401);
   });
 

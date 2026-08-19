@@ -32,6 +32,37 @@ export type StoredCreationContext = {
 export type StoredSession = {
   token: string;
   userId: string;
+  /** Which browser established it, when one is durably recognised. */
+  installationId?: string | null;
+  /** GUEST, REGISTERED_TEMPORARY, or REGISTERED_PERSISTENT. */
+  sessionType?: string;
+};
+
+/**
+ * A browser or app that is durably recognised as belonging to an account.
+ *
+ * Separate from a session on purpose. A session is the current authorised
+ * interaction; this is recognition, and for a guest it is the only thing
+ * between them and losing what they have written -- which is why signing out
+ * must not touch it, and why forgetting it is its own deliberate action.
+ */
+export type StoredInstallation = {
+  id: string;
+  userId: string;
+  installationId: string;
+  credentialHash: string;
+  persistenceType: string;
+};
+
+export type StoredInstallationInput = {
+  userId: string;
+  installationId: string;
+  credentialHash: string;
+  platform: string;
+  persistenceType: string;
+  deviceClass?: string | null;
+  browserFamily?: string | null;
+  osFamily?: string | null;
 };
 
 export type StoredConversation = {
@@ -150,14 +181,14 @@ export class MemoryAccountTable {
   private readonly rows = new Map<string, StoredAccount>();
   private readonly sequences = new Map<string, number>();
   private readonly conversations: Map<string, StoredConversation>;
-  private readonly credentials: MemoryGuestCredentialTable;
+  private readonly installations: MemoryInstallationTable;
 
   constructor(
     conversations: Map<string, StoredConversation>,
-    credentials: MemoryGuestCredentialTable,
+    installations: MemoryInstallationTable,
   ) {
     this.conversations = conversations;
-    this.credentials = credentials;
+    this.installations = installations;
   }
 
   get(id: string): StoredAccount | undefined {
@@ -230,7 +261,7 @@ export class MemoryAccountTable {
     }
     const row = this.rows.get(fromUserId);
     if (row) row.mergedIntoUserId = intoUserId;
-    this.credentials.revokeForUser(fromUserId);
+    this.installations.revokeForUser(fromUserId);
     return moved;
   }
 
@@ -241,23 +272,37 @@ export class MemoryAccountTable {
   }
 }
 
-/** Guest credentials in memory, stored as hashes exactly as the table does. */
-export class MemoryGuestCredentialTable {
-  private readonly rows = new Map<string, { id: string; userId: string; revoked: boolean }>();
+/** Installations in memory, stored as hashes exactly as the table does. */
+export class MemoryInstallationTable {
+  private readonly rows = new Map<string, StoredInstallation & { revoked: boolean }>();
 
-  create(input: { userId: string; tokenHash: string }): string {
+  create(input: StoredInstallationInput): string {
     const id = randomUUID();
-    this.rows.set(input.tokenHash, { id, userId: input.userId, revoked: false });
+    this.rows.set(input.installationId, {
+      id,
+      userId: input.userId,
+      installationId: input.installationId,
+      credentialHash: input.credentialHash,
+      persistenceType: input.persistenceType,
+      revoked: false,
+    });
     return id;
   }
 
-  findByTokenHash(tokenHash: string): { id: string; userId: string } | undefined {
-    const row = this.rows.get(tokenHash);
-    return row && !row.revoked ? { id: row.id, userId: row.userId } : undefined;
+  find(installationId: string): StoredInstallation | undefined {
+    const row = this.rows.get(installationId);
+    if (!row || row.revoked) return undefined;
+    const { revoked: _revoked, ...rest } = row;
+    return { ...rest };
   }
 
   touch(): void {
     /* Last-seen is a column in the table and nothing reads it back. */
+  }
+
+  revoke(installationId: string): void {
+    const row = this.rows.get(installationId);
+    if (row) row.revoked = true;
   }
 
   revokeForUser(userId: string): void {
@@ -265,11 +310,47 @@ export class MemoryGuestCredentialTable {
   }
 }
 
+/** Sessions in memory, revocable in the same way the table's are. */
+export class MemorySessionTable {
+  private readonly rows = new Map<string, StoredSession & { revoked: boolean }>();
+
+  get(token: string): StoredSession | undefined {
+    const row = this.rows.get(token);
+    if (!row || row.revoked) return undefined;
+    const { revoked: _revoked, ...rest } = row;
+    return { ...rest };
+  }
+
+  set(token: string, session: StoredSession): this {
+    this.rows.set(token, { ...session, revoked: false });
+    return this;
+  }
+
+  revoke(token: string): void {
+    const row = this.rows.get(token);
+    if (row) row.revoked = true;
+  }
+
+  revokeForUser(userId: string): void {
+    for (const row of this.rows.values()) if (row.userId === userId) row.revoked = true;
+  }
+
+  revokeForInstallation(installationId: string): void {
+    for (const row of this.rows.values()) {
+      if (row.installationId === installationId) row.revoked = true;
+    }
+  }
+
+  delete(token: string): boolean {
+    return this.rows.delete(token);
+  }
+}
+
 export class MemoryStore {
-  sessions = new Map<string, StoredSession>();
+  sessions = new MemorySessionTable();
   conversations = new Map<string, StoredConversation>();
   messages = new MemoryMessageTable();
   sections = new MemorySectionTable();
-  guestCredentials = new MemoryGuestCredentialTable();
-  accounts = new MemoryAccountTable(this.conversations, this.guestCredentials);
+  installations = new MemoryInstallationTable();
+  accounts = new MemoryAccountTable(this.conversations, this.installations);
 }

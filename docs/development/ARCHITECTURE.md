@@ -213,9 +213,9 @@ What is actually implemented for the live SQLite path, in `api/src/db.ts`:
 
 - one file, `chat.sqlite`, overridable with `DATABASE_PATH`;
 - `PRAGMA journal_mode = WAL` and `PRAGMA foreign_keys = ON`;
-- tables `users`, `sessions`, `conversations`, `messages`, `sections`, plus
-  `reflection_passages` owned by the Bible connector
-  (`api/src/bible/passage-store.ts`);
+- tables `users`, `account_installations`, `guest_name_sequences`, `sessions`,
+  `conversations`, `messages`, `sections`, plus `reflection_passages` owned by
+  the Bible connector (`api/src/bible/passage-store.ts`);
 - idempotent migrations run on every construction — `CREATE TABLE IF NOT
   EXISTS`, a `PRAGMA table_info` guard before each added column, and a
   transactional rename of the `context` section type to `content`.
@@ -275,6 +275,55 @@ Chosen model:
   only) does not enforce it at all;
 - ownership is re-checked on every conversation route, not inherited from the
   session alone.
+
+**Phase 9: guests, and the end of the login wall.**
+
+There is no login wall. A visitor reads and browses without an account, and no
+row is created for them; the first action that must persist is refused with
+`needsAccount`, the client asks *Continue as guest* or *Sign in*, and only the
+first of those creates anything.
+
+A guest is a first-class user. `users.accountType` is `ANONYMOUS` or
+`REGISTERED`, stored rather than inferred from a missing password, and content
+points at `users.id` whichever it is. Registration is therefore an UPDATE of
+that row — same id, same reflections, nothing moved. The one exception is an
+email that already belongs to an account: that is refused rather than
+overwritten, and signing in performs an explicit merge, after which the guest
+row is marked `mergedIntoUserId` and its credentials are revoked.
+
+Guest names come from a controlled adjective+noun vocabulary with a per-base
+sequence (`QuietCedar-14`), allocated atomically and unique. The name is
+display and audit metadata: nothing authenticates by it.
+
+**Identity is in two layers, deliberately.**
+
+- An **installation** (`account_installations`) is durable recognition of one
+  browser or app. Its credential is `installationId.secret`; only the secret's
+  SHA-256 is stored, and the id alone proves nothing. Cookie `chat_install`:
+  `httpOnly`, `sameSite=Lax`, `secure` in production, ~400 days.
+- A **session** (`chat_session`) is the current authorised interaction. A
+  request with no session but a live installation credential silently gets a
+  new session.
+
+That split is what makes guest sign-out safe: ending a session says nothing
+about whether the browser is still recognised. Forgetting a guest is a separate
+route (`POST /api/auth/forget-installation`) behind a warning that says what it
+costs, because for an unregistered guest it is the end of their access.
+
+Registered users get durable recognition **only** when they tick *Keep me
+signed in on this device*; unticked leaves no installation credential at all
+and a session cookie with no `Max-Age`. Whether a computer is shared is never
+guessed at. Signing out revokes the session and, when the login created one,
+that persistent credential too.
+
+**Never fingerprinting.** No address, User-Agent, screen, timezone or hardware
+characteristic is used to recognise anybody. `browserFamily`, `osFamily` and
+`deviceClass` are coarse diagnostics from client hints, written once and never
+read to decide who somebody is.
+
+Native Android/iOS device identity is deferred. The model is User →
+Installation → Session precisely so a native client is another installation row
+rather than another protocol.
 
 Not required for MVP:
 

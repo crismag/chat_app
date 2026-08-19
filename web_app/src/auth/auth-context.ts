@@ -20,7 +20,12 @@ export type RegisterOutcome =
 export type AuthContextValue = {
   user: AuthUser | null
   ready: boolean
-  login: (email: string, password: string) => Promise<{ merged: number }>
+  /**
+   * `keepSignedIn` is the only thing that makes this browser durably
+   * recognised afterwards. Left off, the session ends with the window, which
+   * is the right behaviour on a shared computer.
+   */
+  login: (email: string, password: string, keepSignedIn: boolean) => Promise<{ merged: number }>
   /**
    * Claim the account this person already has.
    *
@@ -31,6 +36,14 @@ export type AuthContextValue = {
   /** Take the guest option, explicitly, at the moment it was offered. */
   continueAsGuest: (creationSource: CreationSource) => Promise<AuthUser>
   logout: () => Promise<void>
+  /**
+   * Destructive, and separate from signing out on purpose.
+   *
+   * For a guest this is the end of their access to everything they wrote:
+   * there is no email to recover from and no second credential. The interface
+   * says so before calling it.
+   */
+  forgetThisBrowser: () => Promise<void>
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null)

@@ -18,14 +18,20 @@
  * schema was designed around anyway.
  */
 
-import { randomBytes, randomInt, randomUUID } from 'node:crypto';
+import { randomBytes, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 import { ACCOUNT_TYPES, type AccountCreationContext, type AccountType } from '@chat/shared';
 import { SESSION_TTL_MS } from '../db.ts';
 import { sha256Hex } from '../mysql/tokens.ts';
 import { GUEST_NAME_ATTEMPTS, guestName, randomGuestBaseName } from './guest-names.ts';
 import { verifyPassword as verifyArgon2 } from '../mysql/passwords.ts';
 import type { MysqlPersistence } from '../mysql/persistence.ts';
-import type { StoredAccount, StoredCreationContext } from '../store.ts';
+import type {
+  StoredAccount,
+  StoredCreationContext,
+  StoredInstallation,
+  StoredInstallationInput,
+  StoredSession,
+} from '../store.ts';
 
 export interface AuthUser {
   /** Stable, public, and safe to put in a cookie, a payload or a URL. */
@@ -52,21 +58,120 @@ export interface AuthStore {
    */
   register(email: string, password: string, claimUserId?: string | null): Promise<AuthUser | null>;
   verify(email: string, password: string): Promise<AuthUser | null>;
-  startSession(userId: string): Promise<string>;
+  /**
+   * Begin an interaction. Separate from recognising the browser.
+   *
+   * `installationId` records which browser established it, so signing out of
+   * one device can be told apart from signing out of all of them, and so a
+   * durable credential can be revoked alongside the session it created.
+   */
+  startSession(userId: string, options?: SessionOptions): Promise<string>;
   userForToken(token: string): Promise<AuthUser | null>;
+  /** What a token was, so logging out can decide what else to revoke. */
+  sessionForToken(token: string): Promise<StoredSessionInfo | null>;
   endSession(token: string): Promise<void>;
+  /**
+   * Durable recognition for this browser, and the credential that proves it.
+   *
+   * Returned exactly once: only the hash is kept, so this is the single
+   * opportunity to put it in a cookie.
+   */
+  createInstallation(
+    userId: string,
+    context: InstallationContext,
+    persistenceType: PersistenceType,
+  ): Promise<{ installationId: string; credential: string }>;
+  /** The account a presented credential belongs to, or nobody. */
+  accountForInstallation(credential: string): Promise<{ user: AuthUser; installationId: string } | null>;
+  /** Deliberate and destructive: this browser is no longer recognised. */
+  revokeInstallation(installationId: string): Promise<void>;
   /**
    * A guest account, made because somebody asked for one.
    *
    * Returns the credential exactly once. It is never stored, only its hash is,
    * so this return value is the single opportunity to put it in a cookie.
    */
-  createGuest(context: AccountCreationContext): Promise<{ user: AuthUser; credential: string }>;
-  /** The guest a credential names, or nobody. Never creates one. */
-  guestForCredential(credential: string): Promise<AuthUser | null>;
+  createGuest(
+    context: AccountCreationContext,
+  ): Promise<{ user: AuthUser; installationId: string; credential: string }>;
   /** Move a guest's work into an account that already existed. */
   merge(fromUserId: string, intoUserId: string): Promise<number>;
   markEmailVerified(userId: string): Promise<void>;
+}
+
+export const SESSION_TYPES = {
+  GUEST: 'GUEST',
+  REGISTERED_TEMPORARY: 'REGISTERED_TEMPORARY',
+  REGISTERED_PERSISTENT: 'REGISTERED_PERSISTENT',
+} as const;
+
+export type SessionType = (typeof SESSION_TYPES)[keyof typeof SESSION_TYPES];
+
+/**
+ * Why a browser is durably recognised at all.
+ *
+ * A guest's recognition is the account: without it there is no way back to
+ * what they wrote. A registered user's is a convenience they asked for, and
+ * its absence is the right answer on a shared computer -- which is why there
+ * is no value here for "signed in temporarily". That state has no durable
+ * credential rather than a short-lived one.
+ */
+export const PERSISTENCE_TYPES = {
+  GUEST_PERSISTENT: 'GUEST_PERSISTENT',
+  REGISTERED_PERSISTENT: 'REGISTERED_PERSISTENT',
+} as const;
+
+export type PersistenceType = (typeof PERSISTENCE_TYPES)[keyof typeof PERSISTENCE_TYPES];
+
+export type SessionOptions = {
+  installationId?: string | null;
+  sessionType?: SessionType;
+};
+
+export type StoredSessionInfo = {
+  userId: string;
+  installationId: string | null;
+  sessionType: string;
+};
+
+/** Coarse diagnostics, written once and never read to identify anybody. */
+export type InstallationContext = {
+  platform: string;
+  deviceClass?: string | null;
+  browserFamily?: string | null;
+  osFamily?: string | null;
+};
+
+/**
+ * The value a browser holds: an id and a secret, together.
+ *
+ * The id finds the row and the secret proves it. Sent as one string because
+ * two cookies would be two things to lose separately, and split on the first
+ * separator so a secret containing one is still read whole.
+ */
+export function encodeInstallationCredential(installationId: string, secret: string): string {
+  return `${installationId}.${secret}`;
+}
+
+export function decodeInstallationCredential(
+  value: string,
+): { installationId: string; secret: string } | null {
+  const separator = value.indexOf('.');
+  if (separator <= 0 || separator === value.length - 1) return null;
+  return { installationId: value.slice(0, separator), secret: value.slice(separator + 1) };
+}
+
+/**
+ * Compare a presented secret with the stored hash without leaking timing.
+ *
+ * `timingSafeEqual` needs equal lengths, and both sides here are SHA-256 hex,
+ * so a length mismatch means the stored value is not a hash this code wrote --
+ * which is a no, not a comparison.
+ */
+export function credentialMatches(secret: string, storedHash: string): boolean {
+  const presented = Buffer.from(sha256Hex(secret), 'utf8');
+  const stored = Buffer.from(storedHash, 'utf8');
+  return presented.length === stored.length && timingSafeEqual(presented, stored);
 }
 
 /**
@@ -81,14 +186,14 @@ async function allocateGuestName(nextSequence: (baseName: string) => Promise<num
 }
 
 /**
- * The value that goes in the guest's cookie.
+ * The secret half of an installation credential.
  *
  * 32 bytes from the system's random source, exactly as a session token is.
- * This is a bearer credential for everything that guest has written, so it is
- * held to the same standard -- not a UUID, and not derived from anything about
- * the request.
+ * This is a bearer credential for everything the account holds, so it is held
+ * to the same standard -- not a UUID, and not derived from anything about the
+ * request or the machine making it.
  */
-export function newGuestCredential(): string {
+export function newInstallationSecret(): string {
   return randomBytes(32).toString('base64url');
 }
 
@@ -178,11 +283,61 @@ export class MysqlAuthStore implements AuthStore {
     return this.account(userId, handle);
   }
 
-  async startSession(userId: string): Promise<string> {
+  async startSession(userId: string, options: SessionOptions = {}): Promise<string> {
     const user = await this.db.getUserByPublicUuid(userId);
     if (!user) throw new Error(`No account for ${userId}`);
-    const { token } = await this.db.createSession(user.id, SESSION_TTL_MS);
+    const { token } = await this.db.createSession(user.id, SESSION_TTL_MS, {
+      installationId: options.installationId ?? null,
+      sessionType: options.sessionType ?? SESSION_TYPES.REGISTERED_TEMPORARY,
+    });
     return token;
+  }
+
+  async sessionForToken(token: string): Promise<StoredSessionInfo | null> {
+    const session = await this.db.findActiveSession(token);
+    if (!session) return null;
+    const user = await this.db.getUserById(session.userId);
+    if (!user) return null;
+    return {
+      userId: user.publicUuid,
+      installationId: session.installationId ?? null,
+      sessionType: session.sessionType ?? SESSION_TYPES.REGISTERED_TEMPORARY,
+    };
+  }
+
+  async createInstallation(
+    userId: string,
+    context: InstallationContext,
+    persistenceType: PersistenceType,
+  ): Promise<{ installationId: string; credential: string }> {
+    const user = await this.db.getUserByPublicUuid(userId);
+    if (!user) throw new Error(`No account for ${userId}`);
+    const installationId = randomUUID();
+    const secret = newInstallationSecret();
+    await this.db.addInstallation({
+      userId: user.id,
+      installationId,
+      credentialHash: sha256Hex(secret),
+      persistenceType,
+      ...context,
+    });
+    return { installationId, credential: encodeInstallationCredential(installationId, secret) };
+  }
+
+  async accountForInstallation(
+    credential: string,
+  ): Promise<{ user: AuthUser; installationId: string } | null> {
+    const parts = decodeInstallationCredential(credential);
+    if (!parts) return null;
+    const found = await this.db.findInstallation(parts.installationId);
+    if (!found || !credentialMatches(parts.secret, found.credentialHash)) return null;
+    await this.db.touchInstallation(parts.installationId);
+    const user = await this.account(found.userId);
+    return user ? { user, installationId: parts.installationId } : null;
+  }
+
+  async revokeInstallation(installationId: string): Promise<void> {
+    await this.db.revokeInstallation(installationId);
   }
 
   async userForToken(token: string): Promise<AuthUser | null> {
@@ -196,7 +351,9 @@ export class MysqlAuthStore implements AuthStore {
     if (session) await this.db.revokeSession(session.id);
   }
 
-  async createGuest(context: AccountCreationContext): Promise<{ user: AuthUser; credential: string }> {
+  async createGuest(
+    context: AccountCreationContext,
+  ): Promise<{ user: AuthUser; installationId: string; credential: string }> {
     for (let attempt = 0; attempt < GUEST_NAME_ATTEMPTS; attempt += 1) {
       const name = await allocateGuestName((base) => this.db.nextGuestNameSequence(base));
       const created = await this.db.createGuestUser(name, context).catch((error: unknown) => {
@@ -205,30 +362,24 @@ export class MysqlAuthStore implements AuthStore {
         return null;
       });
       if (!created) continue;
-      const credential = newGuestCredential();
-      await this.db.addAnonymousCredential({
-        userId: created.id,
-        tokenHash: sha256Hex(credential),
-        platform: context.platform,
-      });
       const user = await this.account(created.id, null);
-      if (user) return { user, credential };
+      if (!user) continue;
+      const { installationId, credential } = await this.createInstallation(
+        user.id,
+        { platform: context.platform, deviceClass: context.deviceClass },
+        PERSISTENCE_TYPES.GUEST_PERSISTENT,
+      );
+      return { user, installationId, credential };
     }
     throw new Error('Could not allocate a guest name.');
-  }
-
-  async guestForCredential(credential: string): Promise<AuthUser | null> {
-    const found = await this.db.findAnonymousCredential(sha256Hex(credential));
-    if (!found) return null;
-    await this.db.touchAnonymousCredential(found.id);
-    return this.account(found.userId, null);
   }
 
   async merge(fromUserId: string, intoUserId: string): Promise<number> {
     const from = await this.db.getUserByPublicUuid(fromUserId);
     const into = await this.db.getUserByPublicUuid(intoUserId);
     if (!from || !into) return 0;
-    await this.db.revokeAnonymousCredentials(from.id);
+    await this.db.revokeInstallationsForUser(from.id);
+    await this.db.revokeSessionsForUser(from.id);
     await this.db.markUserMerged(from.id, into.id);
     /* Reflections still live in SQLite; the caller moves those. */
     return 0;
@@ -261,16 +412,19 @@ export interface SqliteAuthTables {
     merge(fromUserId: string, intoUserId: string): number;
     nextGuestSequence(baseName: string): number;
   };
-  guestCredentials: {
-    create(input: { userId: string; tokenHash: string; platform: string }): string;
-    findByTokenHash(tokenHash: string): { id: string; userId: string } | undefined;
-    touch(id: string): void;
+  installations: {
+    create(input: StoredInstallationInput): string;
+    find(installationId: string): StoredInstallation | undefined;
+    touch(installationId: string): void;
+    revoke(installationId: string): void;
     revokeForUser(userId: string): void;
   };
   sessions: {
-    get(token: string): { token: string; userId: string } | undefined;
-    set(token: string, session: { token: string; userId: string }): unknown;
-    delete(token: string): unknown;
+    get(token: string): StoredSession | undefined;
+    set(token: string, session: StoredSession): unknown;
+    revoke(token: string): void;
+    revokeForUser(userId: string): void;
+    revokeForInstallation(installationId: string): void;
   };
 }
 
@@ -321,10 +475,73 @@ export class SqliteAuthStore implements AuthStore {
     return Promise.resolve(SqliteAuthStore.user(found));
   }
 
-  startSession(userId: string): Promise<string> {
+  startSession(userId: string, options: SessionOptions = {}): Promise<string> {
     const token = randomUUID();
-    this.store.sessions.set(token, { token, userId });
+    this.store.sessions.set(token, {
+      token,
+      userId,
+      installationId: options.installationId ?? null,
+      sessionType: options.sessionType ?? SESSION_TYPES.REGISTERED_TEMPORARY,
+    });
     return Promise.resolve(token);
+  }
+
+  sessionForToken(token: string): Promise<StoredSessionInfo | null> {
+    const session = this.store.sessions.get(token);
+    return Promise.resolve(
+      session
+        ? {
+            userId: session.userId,
+            installationId: session.installationId ?? null,
+            sessionType: session.sessionType ?? SESSION_TYPES.REGISTERED_TEMPORARY,
+          }
+        : null,
+    );
+  }
+
+  createInstallation(
+    userId: string,
+    context: InstallationContext,
+    persistenceType: PersistenceType,
+  ): Promise<{ installationId: string; credential: string }> {
+    const installationId = randomUUID();
+    const secret = newInstallationSecret();
+    this.store.installations.create({
+      userId,
+      installationId,
+      credentialHash: sha256Hex(secret),
+      persistenceType,
+      platform: context.platform,
+      deviceClass: context.deviceClass ?? null,
+      browserFamily: context.browserFamily ?? null,
+      osFamily: context.osFamily ?? null,
+    });
+    return Promise.resolve({
+      installationId,
+      credential: encodeInstallationCredential(installationId, secret),
+    });
+  }
+
+  accountForInstallation(
+    credential: string,
+  ): Promise<{ user: AuthUser; installationId: string } | null> {
+    const parts = decodeInstallationCredential(credential);
+    if (!parts) return Promise.resolve(null);
+    const found = this.store.installations.find(parts.installationId);
+    if (!found || !credentialMatches(parts.secret, found.credentialHash)) {
+      return Promise.resolve(null);
+    }
+    this.store.installations.touch(parts.installationId);
+    this.store.accounts.touch(found.userId);
+    const user = SqliteAuthStore.user(this.store.accounts.get(found.userId));
+    return Promise.resolve(user ? { user, installationId: parts.installationId } : null);
+  }
+
+  revokeInstallation(installationId: string): Promise<void> {
+    this.store.installations.revoke(installationId);
+    /* Its sessions go with it: recognition and interaction both end here. */
+    this.store.sessions.revokeForInstallation(installationId);
+    return Promise.resolve();
   }
 
   userForToken(token: string): Promise<AuthUser | null> {
@@ -332,12 +549,15 @@ export class SqliteAuthStore implements AuthStore {
     return Promise.resolve(session ? SqliteAuthStore.user(this.store.accounts.get(session.userId)) : null);
   }
 
+  /* Revoked, not forgotten: an old token stays distinguishable from a fake. */
   endSession(token: string): Promise<void> {
-    this.store.sessions.delete(token);
+    this.store.sessions.revoke(token);
     return Promise.resolve();
   }
 
-  async createGuest(context: AccountCreationContext): Promise<{ user: AuthUser; credential: string }> {
+  async createGuest(
+    context: AccountCreationContext,
+  ): Promise<{ user: AuthUser; installationId: string; credential: string }> {
     let created: StoredAccount | undefined;
     for (let attempt = 0; attempt < GUEST_NAME_ATTEMPTS && !created; attempt += 1) {
       const name = await allocateGuestName((base) =>
@@ -357,25 +577,23 @@ export class SqliteAuthStore implements AuthStore {
     }
     const user = SqliteAuthStore.user(created);
     if (!user) throw new Error('Could not allocate a guest name.');
-    const credential = newGuestCredential();
-    this.store.guestCredentials.create({
-      userId: user.id,
-      tokenHash: sha256Hex(credential),
-      platform: context.platform,
-    });
-    return { user, credential };
+    const { installationId, credential } = await this.createInstallation(
+      user.id,
+      { platform: context.platform, deviceClass: context.deviceClass },
+      PERSISTENCE_TYPES.GUEST_PERSISTENT,
+    );
+    return { user, installationId, credential };
   }
 
-  guestForCredential(credential: string): Promise<AuthUser | null> {
-    const found = this.store.guestCredentials.findByTokenHash(sha256Hex(credential));
-    if (!found) return Promise.resolve(null);
-    this.store.guestCredentials.touch(found.id);
-    this.store.accounts.touch(found.userId);
-    return Promise.resolve(SqliteAuthStore.user(this.store.accounts.get(found.userId)));
-  }
-
+  /*
+   * The guest account is retired here, so everything that could still act as
+   * it goes: its installations, and the sessions they established. A cookie
+   * left in that browser resolves to nobody rather than to an emptied account.
+   */
   merge(fromUserId: string, intoUserId: string): Promise<number> {
-    return Promise.resolve(this.store.accounts.merge(fromUserId, intoUserId));
+    const moved = this.store.accounts.merge(fromUserId, intoUserId);
+    this.store.sessions.revokeForUser(fromUserId);
+    return Promise.resolve(moved);
   }
 
   markEmailVerified(userId: string): Promise<void> {

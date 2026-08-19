@@ -5,6 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createApp } from './app.ts';
 import { SESSION_TTL_MS, SqliteStore } from './db.ts';
+import { cookieHeader } from './http/set-cookie.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'chat-db-'));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -22,8 +23,7 @@ async function register(app: ReturnType<typeof createApp>, email: string) {
     json({ email, password: 'password123' }),
   );
   expect(response.status).toBeLessThan(400);
-  const cookie = response.headers.get('set-cookie') ?? '';
-  return cookie.split(';')[0] ?? '';
+  return cookieHeader(response.headers.get('set-cookie'));
 }
 
 /**

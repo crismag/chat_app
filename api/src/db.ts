@@ -21,6 +21,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { readAccountType, readVisibility } from '@chat/shared';
 import type {
   StoredAccount,
+  StoredInstallation,
+  StoredInstallationInput,
   StoredConversation,
   StoredCreationContext,
   StoredMessage,
@@ -72,24 +74,43 @@ function migrate(db: DatabaseSync): void {
     );
 
     /*
-     * How a guest proves, on their next visit, that they are the same guest.
+     * How a browser proves, on its next visit, which account it belongs to.
      *
-     * The credential is a long random value held in a cookie; what is stored
-     * here is its hash, for the same reason a password's is. A database that
-     * leaked would then contain nothing that can be replayed.
+     * An installation is a browser profile or an app on a device, and it is
+     * deliberately not the same thing as a session. A session is the current
+     * authorised interaction and can end; an installation is durable
+     * recognition, and for a guest it is the only thing standing between them
+     * and losing everything they have written. Collapsing the two would mean
+     * an ordinary "sign out" destroyed a guest's account.
      *
-     * Separate from the user row because it is revocable and replaceable
-     * without touching the account, and because a future application
-     * installation is another row rather than another user.
+     * The credential has two halves. installationId is a plain UUID and
+     * identifies the row; credentialHash is the hash of a secret that never
+     * touches the database. Both are presented together and both must match --
+     * an id alone proves nothing, which is the difference between a credential
+     * and a name.
+     *
+     * browserFamily, osFamily and deviceClass are diagnostics. They are
+     * written when the row is made and never read to decide who somebody is:
+     * recognising a person by what their machine looks like is recognising
+     * somebody who did not agree to be recognised, and no amount of matching
+     * metadata will unlock an account here.
      */
-    CREATE TABLE IF NOT EXISTS anonymous_credentials (
+    CREATE TABLE IF NOT EXISTS account_installations (
       id TEXT PRIMARY KEY,
       userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      tokenHash TEXT NOT NULL UNIQUE,
-      installationId TEXT,
-      platform TEXT,
+      installationId TEXT NOT NULL UNIQUE,
+      credentialHash TEXT NOT NULL,
+      platform TEXT NOT NULL,
+      deviceClass TEXT,
+      browserFamily TEXT,
+      osFamily TEXT,
+      /* GUEST_PERSISTENT, or REGISTERED_PERSISTENT when somebody asked to be
+         kept signed in on this device. There is no third value: a temporary
+         sign-in deliberately leaves no durable recognition behind. */
+      persistenceType TEXT NOT NULL,
       createdAt TEXT NOT NULL,
       lastSeenAt TEXT,
+      rotatedAt TEXT,
       revokedAt TEXT
     );
 
@@ -105,10 +126,23 @@ function migrate(db: DatabaseSync): void {
       nextSequence INTEGER NOT NULL
     );
 
+    /*
+     * The current interaction, and which installation established it.
+     *
+     * Revocable on its own, so ending a session says nothing about whether the
+     * browser is still recognised. That separation is what lets a guest leave
+     * without being destroyed, and lets a registered user on a shared computer
+     * have a session that outlives nothing.
+     */
     CREATE TABLE IF NOT EXISTS sessions (
       token TEXT PRIMARY KEY,
-      userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      expiresAt INTEGER NOT NULL
+      userId TEXT NOT NULL,
+      installationId TEXT,
+      sessionType TEXT NOT NULL DEFAULT 'REGISTERED_TEMPORARY',
+      createdAt TEXT,
+      lastSeenAt TEXT,
+      expiresAt INTEGER NOT NULL,
+      revokedAt TEXT
     );
 
     CREATE TABLE IF NOT EXISTS conversations (
@@ -170,9 +204,15 @@ function migrate(db: DatabaseSync): void {
   renameContextSectionToContent(db);
   renamePublicationStateToVisibility(db);
   upgradeUsersToAccounts(db);
+  /* Sessions predate installations; an old database has the two-column one. */
+  addColumn(db, 'sessions', 'installationId', 'TEXT');
+  addColumn(db, 'sessions', 'sessionType', "TEXT NOT NULL DEFAULT 'REGISTERED_TEMPORARY'");
+  addColumn(db, 'sessions', 'createdAt', 'TEXT');
+  addColumn(db, 'sessions', 'lastSeenAt', 'TEXT');
+  addColumn(db, 'sessions', 'revokedAt', 'TEXT');
   carryOwnersIntoUsers(db);
   db.exec('CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(userId)');
-  db.exec('CREATE INDEX IF NOT EXISTS idx_anonymous_credentials_user ON anonymous_credentials(userId)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_installations_user ON account_installations(userId)');
 }
 
 /**
@@ -527,7 +567,7 @@ class AccountTable {
         .prepare('UPDATE users SET mergedIntoUserId = ? WHERE id = ?')
         .run(intoUserId, fromUserId);
       this.db
-        .prepare("UPDATE anonymous_credentials SET revokedAt = ? WHERE userId = ? AND revokedAt IS NULL")
+        .prepare("UPDATE account_installations SET revokedAt = ? WHERE userId = ? AND revokedAt IS NULL")
         .run(new Date().toISOString(), fromUserId);
       this.db.exec('COMMIT');
       return Number(moved);
@@ -567,56 +607,86 @@ class AccountTable {
 }
 
 /**
- * Guest credentials: the hash, never the value.
+ * Installations: the hash, never the secret.
  *
- * Looking one up is a lookup by hash, so a stolen database yields nothing that
- * can be presented to the server. Revocation is a timestamp rather than a
- * delete, so a credential that was retired stays distinguishable from one that
- * never existed.
+ * A row is found by its `installationId` and then the secret is checked
+ * against the stored hash, so the lookup and the proof are separate steps and
+ * neither is sufficient alone. Revocation is a timestamp rather than a delete,
+ * because a credential that was retired has to stay distinguishable from one
+ * that never existed -- a browser presenting a revoked credential is told it
+ * is nobody, not treated as a stranger who might be handed a new account.
  */
-class GuestCredentialTable {
+class InstallationTable {
   private readonly db: DatabaseSync;
 
   constructor(db: DatabaseSync) {
     this.db = db;
   }
 
-  create(input: { userId: string; tokenHash: string; platform: string; installationId?: string | null }): string {
+  create(input: StoredInstallationInput): string {
     const id = randomUUID();
+    const now = new Date().toISOString();
     this.db
       .prepare(
-        `INSERT INTO anonymous_credentials
-           (id, userId, tokenHash, installationId, platform, createdAt, lastSeenAt, revokedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
+        `INSERT INTO account_installations
+           (id, userId, installationId, credentialHash, platform, deviceClass,
+            browserFamily, osFamily, persistenceType, createdAt, lastSeenAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
         input.userId,
-        input.tokenHash,
-        input.installationId ?? null,
+        input.installationId,
+        input.credentialHash,
         input.platform,
-        new Date().toISOString(),
-        new Date().toISOString(),
+        input.deviceClass ?? null,
+        input.browserFamily ?? null,
+        input.osFamily ?? null,
+        input.persistenceType,
+        now,
+        now,
       );
     return id;
   }
 
-  findByTokenHash(tokenHash: string): { id: string; userId: string } | undefined {
+  /** By id alone, so the caller can compare the secret in constant time. */
+  find(installationId: string): StoredInstallation | undefined {
     const row = this.db
-      .prepare('SELECT id, userId FROM anonymous_credentials WHERE tokenHash = ? AND revokedAt IS NULL')
-      .get(tokenHash) as Row | undefined;
-    return row ? { id: String(row['id']), userId: String(row['userId']) } : undefined;
+      .prepare(
+        `SELECT id, userId, installationId, credentialHash, persistenceType
+           FROM account_installations
+          WHERE installationId = ? AND revokedAt IS NULL`,
+      )
+      .get(installationId) as Row | undefined;
+    if (!row) return undefined;
+    return {
+      id: String(row['id']),
+      userId: String(row['userId']),
+      installationId: String(row['installationId']),
+      credentialHash: String(row['credentialHash']),
+      persistenceType: String(row['persistenceType']),
+    };
   }
 
-  touch(id: string): void {
+  touch(installationId: string): void {
     this.db
-      .prepare('UPDATE anonymous_credentials SET lastSeenAt = ? WHERE id = ?')
-      .run(new Date().toISOString(), id);
+      .prepare('UPDATE account_installations SET lastSeenAt = ? WHERE installationId = ?')
+      .run(new Date().toISOString(), installationId);
+  }
+
+  revoke(installationId: string): void {
+    this.db
+      .prepare(
+        'UPDATE account_installations SET revokedAt = ? WHERE installationId = ? AND revokedAt IS NULL',
+      )
+      .run(new Date().toISOString(), installationId);
   }
 
   revokeForUser(userId: string): void {
     this.db
-      .prepare('UPDATE anonymous_credentials SET revokedAt = ? WHERE userId = ? AND revokedAt IS NULL')
+      .prepare(
+        'UPDATE account_installations SET revokedAt = ? WHERE userId = ? AND revokedAt IS NULL',
+      )
       .run(new Date().toISOString(), userId);
   }
 }
@@ -635,25 +705,72 @@ class SessionTable {
    */
   get(token: string): StoredSession | undefined {
     const row = this.db
-      .prepare('SELECT token, userId, expiresAt FROM sessions WHERE token = ?')
+      .prepare(
+        'SELECT token, userId, installationId, sessionType, expiresAt, revokedAt FROM sessions WHERE token = ?',
+      )
       .get(token) as Row | undefined;
     if (!row) return undefined;
+    /* Revoked is not expired: the row stays, and it answers nobody. */
+    if (row['revokedAt']) return undefined;
 
     if (Number(row['expiresAt']) <= Date.now()) {
       this.delete(token);
       return undefined;
     }
-    return { token: row['token'] as string, userId: row['userId'] as string };
+    return {
+      token: String(row['token']),
+      userId: String(row['userId']),
+      installationId: row['installationId'] == null ? null : String(row['installationId']),
+      sessionType: String(row['sessionType']),
+    };
   }
 
   set(token: string, session: StoredSession): this {
+    const now = new Date().toISOString();
     this.db
       .prepare(
-        `INSERT INTO sessions (token, userId, expiresAt) VALUES (?, ?, ?)
-         ON CONFLICT(token) DO UPDATE SET expiresAt = excluded.expiresAt`,
+        `INSERT INTO sessions (token, userId, installationId, sessionType, createdAt, lastSeenAt, expiresAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(token) DO UPDATE SET expiresAt = excluded.expiresAt,
+                                          lastSeenAt = excluded.lastSeenAt`,
       )
-      .run(token, session.userId, Date.now() + SESSION_TTL_MS);
+      .run(
+        token,
+        session.userId,
+        session.installationId ?? null,
+        session.sessionType ?? 'REGISTERED_TEMPORARY',
+        now,
+        now,
+        Date.now() + SESSION_TTL_MS,
+      );
     return this;
+  }
+
+  /**
+   * Ending a session revokes it rather than forgetting it.
+   *
+   * A revoked row is what makes "sign out everywhere" answerable later, and it
+   * is why presenting an old token is distinguishable from presenting one that
+   * never existed.
+   */
+  revoke(token: string): void {
+    this.db
+      .prepare('UPDATE sessions SET revokedAt = ? WHERE token = ? AND revokedAt IS NULL')
+      .run(new Date().toISOString(), token);
+  }
+
+  /** Everything this account has open: used when an account is retired. */
+  revokeForUser(userId: string): void {
+    this.db
+      .prepare('UPDATE sessions SET revokedAt = ? WHERE userId = ? AND revokedAt IS NULL')
+      .run(new Date().toISOString(), userId);
+  }
+
+  /** Everything this browser established, whether or not it is signed in. */
+  revokeForInstallation(installationId: string): void {
+    this.db
+      .prepare('UPDATE sessions SET revokedAt = ? WHERE installationId = ? AND revokedAt IS NULL')
+      .run(new Date().toISOString(), installationId);
   }
 
   delete(token: string): boolean {
@@ -889,7 +1006,7 @@ class SectionTable {
 export class SqliteStore {
   readonly db: DatabaseSync;
   readonly accounts: AccountTable;
-  readonly guestCredentials: GuestCredentialTable;
+  readonly installations: InstallationTable;
   readonly sessions: SessionTable;
   readonly conversations: ConversationTable;
   readonly messages: MessageTable;
@@ -899,7 +1016,7 @@ export class SqliteStore {
     this.db = new DatabaseSync(location);
     migrate(this.db);
     this.accounts = new AccountTable(this.db);
-    this.guestCredentials = new GuestCredentialTable(this.db);
+    this.installations = new InstallationTable(this.db);
     this.sessions = new SessionTable(this.db);
     this.conversations = new ConversationTable(this.db);
     this.messages = new MessageTable(this.db);

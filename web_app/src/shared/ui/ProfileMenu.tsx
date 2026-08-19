@@ -19,11 +19,15 @@ import styles from './ProfileMenu.module.css'
 export function ProfileMenu({
   account,
   onSignOut,
+  onForgetThisBrowser,
 }: {
   account: Account
   onSignOut: () => void
+  /** Destructive, and never behind the ordinary sign-out control. */
+  onForgetThisBrowser: () => void
 }) {
   const [open, setOpen] = useState(false)
+  const [forgetting, setForgetting] = useState(false)
   const menuId = useId()
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -202,7 +206,27 @@ export function ProfileMenu({
             <span className={styles.itemIcon} aria-hidden="true">§</span>
             Open Source Licences
           </button>
-          {guest ? null : (
+          {/*
+            A guest has nothing to sign out of, and signing them out would be
+            the one thing that could destroy their account: their credential is
+            how they are recognised, and it is all they have. So what is
+            offered instead is the destructive action, named as such, behind a
+            confirmation that says what it costs.
+          */}
+          {guest ? (
+            <button
+              type="button"
+              role="menuitem"
+              className={`${styles.item} ${styles.destructive}`}
+              onClick={() => {
+                close(false)
+                setForgetting(true)
+              }}
+            >
+              <SignOutIcon className={styles.itemIcon} />
+              Forget this guest on this browser
+            </button>
+          ) : (
             <button
               type="button"
               role="menuitem"
@@ -218,6 +242,80 @@ export function ProfileMenu({
           )}
         </div>
       ) : null}
+
+      {forgetting ? (
+        <ForgetGuestConfirmation
+          guestName={account.guestName}
+          onCancel={() => setForgetting(false)}
+          onConfirm={() => {
+            setForgetting(false)
+            onForgetThisBrowser()
+          }}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * The warning that has to be read before a guest is forgotten.
+ *
+ * An unregistered guest has no email and no second credential, so this really
+ * is the end of their access to what they wrote. Saying that plainly, and
+ * offering the alternative that avoids it, is the whole job of this dialog --
+ * which is why it is not the confirmation on an ordinary "sign out".
+ */
+function ForgetGuestConfirmation({
+  guestName,
+  onCancel,
+  onConfirm,
+}: {
+  guestName: string | null
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  const headingId = useId()
+  const cancelRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    cancelRef.current?.focus()
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') onCancel()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onCancel])
+
+  return (
+    <div className={styles.scrim} onClick={onCancel}>
+      <div
+        className={styles.confirm}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 className={styles.confirmTitle} id={headingId}>
+          Forget {guestName ?? 'this guest'} on this browser?
+        </h2>
+        <p className={styles.confirmBody}>
+          This browser is the only thing that identifies you. There is no email and no password on
+          this account yet, so forgetting it here means <strong>losing access to everything you
+          have written</strong> — permanently, and for us as well as for you.
+        </p>
+        <p className={styles.confirmBody}>
+          If you want to reach your reflections from somewhere else instead, create an account
+          first: it keeps the same reflections and adds a way back to them.
+        </p>
+        <div className={styles.confirmActions}>
+          <button ref={cancelRef} type="button" className="btn btn-primary btn-sm" onClick={onCancel}>
+            Keep them
+          </button>
+          <button type="button" className={`btn btn-sm ${styles.destructiveButton}`} onClick={onConfirm}>
+            Forget and lose them
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

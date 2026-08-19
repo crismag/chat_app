@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { createApp } from '../app.ts'
 import { SqliteStore } from '../db.ts'
 import { MemoryStore } from '../store.ts'
+import { cookieHeader } from '../http/set-cookie.ts'
 import {
   DeterministicStudioImageProvider,
   type StudioImageProvider,
@@ -16,7 +17,7 @@ async function register(app: ReturnType<typeof createApp>, email: string) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password: 'secret12' }),
   })
-  return response.headers.get('set-cookie') ?? ''
+  return cookieHeader(response.headers.get('set-cookie'))
 }
 
 async function createReflection(app: ReturnType<typeof createApp>, cookie: string) {

@@ -30,7 +30,7 @@ const letters = [
 ] as const
 
 export function AppShell() {
-  const { user, ready, logout } = useAuth()
+  const { user, ready, logout, forgetThisBrowser } = useAuth()
   const navigate = useNavigate()
 
   if (!ready) {
@@ -113,7 +113,11 @@ export function AppShell() {
               something, and never on a screen they are only reading.
             */}
             {user ? (
-              <ProfileMenu account={user} onSignOut={() => void logout()} />
+              <ProfileMenu
+                account={user}
+                onSignOut={() => void logout()}
+                onForgetThisBrowser={() => void forgetThisBrowser()}
+              />
             ) : (
               /* Nobody yet, so nothing is saved yet. */
               <Link className={styles.deviceNote} to="/login" title="Sign in to reach your reflections on any device">

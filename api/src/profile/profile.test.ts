@@ -18,6 +18,7 @@ import { describe, expect, test } from 'vitest';
 import { createApp } from '../app.ts';
 import { SqliteStore } from '../db.ts';
 import { MemoryStore } from '../store.ts';
+import { cookieHeader } from '../http/set-cookie.ts';
 
 type App = ReturnType<typeof createApp>;
 
@@ -33,7 +34,7 @@ async function register(app: App, email: string) {
     body: JSON.stringify({ email, password: 'secret12' }),
   });
   expect(response.status).toBe(201);
-  return response.headers.get('set-cookie') ?? '';
+  return cookieHeader(response.headers.get('set-cookie'));
 }
 
 function send(app: App, path: string, cookie: string, method = 'GET', body?: unknown) {

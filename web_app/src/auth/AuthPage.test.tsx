@@ -27,12 +27,14 @@ function deferred<T>() {
 let registerCalls = 0
 let loginCalls = 0
 let pending: ReturnType<typeof deferred<Response>> | null = null
+let loginBodies: Record<string, unknown>[] = []
 
 beforeEach(() => {
   registerCalls = 0
   loginCalls = 0
+  loginBodies = []
   pending = null
-  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
     const json = (body: unknown, status = 200) =>
       new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -45,6 +47,7 @@ beforeEach(() => {
     }
     if (url.includes('/auth/login')) {
       loginCalls += 1
+      loginBodies.push(JSON.parse(String(init?.body ?? '{}')))
       return json({ error: 'Invalid email or password.' }, 401)
     }
     return json({ error: 'unexpected' }, 500)
@@ -150,4 +153,67 @@ test('correcting the field clears the failure', async () => {
   fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'another-password' } })
   expect(screen.queryByRole('alert')).toBeNull()
   expect(screen.getByLabelText('Email')).not.toHaveAttribute('aria-invalid')
+})
+
+/*
+ * The one decision on this form that is about the machine rather than the
+ * person. Off by default is the safe answer on a computer somebody does not
+ * own, and it is never inferred -- a browser cannot tell a library from a
+ * kitchen table, and guessing wrong leaves somebody signed in on a public one.
+ */
+test('staying signed in is off unless it is chosen', async () => {
+  renderPage()
+  await fillIn('login')
+
+  const keep = screen.getByLabelText(/Keep me signed in on this device/i)
+  expect(keep).not.toBeChecked()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+  await waitFor(() => expect(loginCalls).toBe(1))
+  expect(loginBodies[0]).toMatchObject({ keepSignedIn: false })
+
+  fireEvent.click(keep)
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+  await waitFor(() => expect(loginCalls).toBe(2))
+  expect(loginBodies[1]).toMatchObject({ keepSignedIn: true })
+})
+
+/*
+ * A guest registering is claiming the account they already have, so the email
+ * collision is not a failure to correct -- it is a different account, and
+ * signing in is what brings their work into it.
+ */
+test('an email that already has an account offers the way in, not an error', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input)
+    const json = (body: unknown, status = 200) =>
+      new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+    if (url.includes('/auth/me')) {
+      return json({
+        id: 'g1',
+        accountType: 'ANONYMOUS',
+        email: null,
+        guestName: 'QuietCedar-14',
+        emailVerified: false,
+      })
+    }
+    if (url.includes('/auth/register')) {
+      return json({ error: 'exists', accountExists: true, guestReflections: 3 }, 409)
+    }
+    return json({ error: 'unexpected' }, 500)
+  }))
+
+  renderPage()
+  /* A guest lands on the claim form, named as themselves. */
+  expect(await screen.findByRole('heading', { name: 'Create your account' })).toBeInTheDocument()
+  expect(screen.getByText(/QuietCedar-14/)).toBeInTheDocument()
+
+  fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'taken@example.com' } })
+  fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'a-long-password' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Create account' }))
+
+  expect(await screen.findByText(/the 3 reflections you have written here move into it/i))
+    .toBeInTheDocument()
+  /* And they are put on the form that does it. */
+  expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
 })

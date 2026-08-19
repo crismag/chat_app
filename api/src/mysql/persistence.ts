@@ -107,6 +107,9 @@ export type SessionRecord = {
   id: number;
   publicUuid: string;
   userId: number;
+  /** The browser that established it, when one is durably recognised. */
+  installationId: string | null;
+  sessionType: string;
   expiresAt: string;
   lastSeenAt: string | null;
   createdAt: string;
@@ -741,15 +744,23 @@ export class MysqlPersistence {
   async createSession(
     userId: number,
     ttlMs: number,
+    options: { installationId?: string | null; sessionType?: string } = {},
   ): Promise<{ session: SessionRecord; token: string }> {
     const token = newSessionToken();
     const tokenHash = hashSessionToken(token);
     const publicUuid = newPublicUuid();
     const ttlSeconds = Math.max(1, Math.ceil(ttlMs / 1000));
     const [result] = await this.pool.execute<ResultSetHeader>(
-      `INSERT INTO user_sessions (public_uuid, user_id, token_hash, expires_at)
-       VALUES (?, ?, ?, DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? SECOND))`,
-      [publicUuid, userId, tokenHash, ttlSeconds],
+      `INSERT INTO user_sessions (public_uuid, user_id, installation_id, session_type, token_hash, expires_at)
+       VALUES (?, ?, ?, ?, ?, DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? SECOND))`,
+      [
+        publicUuid,
+        userId,
+        options.installationId ?? null,
+        options.sessionType ?? 'REGISTERED_TEMPORARY',
+        tokenHash,
+        ttlSeconds,
+      ],
     );
     const session = await this.getSessionById(asBigIntId(result.insertId));
     if (!session) throw new MysqlPersistenceError('session insert did not persist');
@@ -931,40 +942,94 @@ export class MysqlPersistence {
     return Math.max(1, allocated - 1);
   }
 
-  /** The hash of a guest's credential. The credential itself is never here. */
-  async addAnonymousCredential(input: {
+  /**
+   * Durable recognition for one browser or app.
+   *
+   * Only the hash of the secret is stored, so this row cannot be turned back
+   * into something presentable. The diagnostic columns are written here and
+   * read nowhere: they answer "what kind of clients are these" and never
+   * "is this the same person".
+   */
+  async addInstallation(input: {
     userId: number;
-    tokenHash: string;
+    installationId: string;
+    credentialHash: string;
+    persistenceType: string;
     platform: string;
-    installationId?: string | null;
+    deviceClass?: string | null;
+    browserFamily?: string | null;
+    osFamily?: string | null;
   }): Promise<number> {
     const [result] = await this.pool.execute<ResultSetHeader>(
-      `INSERT INTO anonymous_credentials (user_id, token_hash, installation_id, platform, last_seen_at)
-       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-      [input.userId, input.tokenHash, input.installationId ?? null, input.platform],
+      `INSERT INTO account_installations
+         (user_id, installation_id, credential_hash, platform, device_class,
+          browser_family, os_family, persistence_type, last_seen_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+      [
+        input.userId,
+        input.installationId,
+        input.credentialHash,
+        input.platform,
+        input.deviceClass ?? null,
+        input.browserFamily ?? null,
+        input.osFamily ?? null,
+        input.persistenceType,
+      ],
     );
     return asBigIntId(result.insertId);
   }
 
-  async findAnonymousCredential(tokenHash: string): Promise<{ id: number; userId: number } | null> {
+  /** By id alone: the caller compares the secret against the hash itself. */
+  async findInstallation(
+    installationId: string,
+  ): Promise<{ id: number; userId: number; credentialHash: string; persistenceType: string } | null> {
     const [rows] = await this.pool.execute<RowDataPacket[]>(
-      'SELECT id, user_id FROM anonymous_credentials WHERE token_hash = ? AND revoked_at IS NULL',
-      [tokenHash],
+      `SELECT id, user_id, credential_hash, persistence_type
+         FROM account_installations
+        WHERE installation_id = ? AND revoked_at IS NULL`,
+      [installationId],
     );
     const row = rows[0];
-    return row ? { id: asBigIntId(row.id), userId: asBigIntId(row.user_id) } : null;
+    return row
+      ? {
+          id: asBigIntId(row.id),
+          userId: asBigIntId(row.user_id),
+          credentialHash: String(row.credential_hash),
+          persistenceType: String(row.persistence_type),
+        }
+      : null;
   }
 
-  async touchAnonymousCredential(id: number): Promise<void> {
+  async touchInstallation(installationId: string): Promise<void> {
     await this.pool.execute(
-      'UPDATE anonymous_credentials SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [id],
+      'UPDATE account_installations SET last_seen_at = CURRENT_TIMESTAMP WHERE installation_id = ?',
+      [installationId],
     );
   }
 
-  async revokeAnonymousCredentials(userId: number): Promise<void> {
+  /** The browser is no longer recognised, and neither is anything it started. */
+  async revokeInstallation(installationId: string): Promise<void> {
     await this.pool.execute(
-      'UPDATE anonymous_credentials SET revoked_at = CURRENT_TIMESTAMP WHERE user_id = ? AND revoked_at IS NULL',
+      'UPDATE account_installations SET revoked_at = CURRENT_TIMESTAMP WHERE installation_id = ? AND revoked_at IS NULL',
+      [installationId],
+    );
+    await this.pool.execute(
+      'UPDATE user_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE installation_id = ? AND revoked_at IS NULL',
+      [installationId],
+    );
+  }
+
+  /** Used when an account is retired: nothing it opened stays usable. */
+  async revokeSessionsForUser(userId: number): Promise<void> {
+    await this.pool.execute(
+      'UPDATE user_sessions SET revoked_at = CURRENT_TIMESTAMP WHERE user_id = ? AND revoked_at IS NULL',
+      [userId],
+    );
+  }
+
+  async revokeInstallationsForUser(userId: number): Promise<void> {
+    await this.pool.execute(
+      'UPDATE account_installations SET revoked_at = CURRENT_TIMESTAMP WHERE user_id = ? AND revoked_at IS NULL',
       [userId],
     );
   }
@@ -1002,7 +1067,7 @@ export class MysqlPersistence {
   }
 
   async deleteUserGraph(userId: number): Promise<void> {
-    await this.pool.execute('DELETE FROM anonymous_credentials WHERE user_id = ?', [userId]);
+    await this.pool.execute('DELETE FROM account_installations WHERE user_id = ?', [userId]);
     await this.pool.execute(
       'UPDATE reflections SET current_revision_id = NULL WHERE user_id = ?',
       [userId],
@@ -1074,6 +1139,8 @@ export class MysqlPersistence {
       id: asBigIntId(row.id),
       publicUuid: String(row.public_uuid),
       userId: asBigIntId(row.user_id),
+      installationId: row.installation_id ? String(row.installation_id) : null,
+      sessionType: row.session_type ? String(row.session_type) : 'REGISTERED_TEMPORARY',
       expiresAt: String(row.expires_at),
       lastSeenAt: row.last_seen_at ? String(row.last_seen_at) : null,
       createdAt: String(row.created_at),
