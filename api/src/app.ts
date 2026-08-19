@@ -16,6 +16,7 @@ import {
   sessionTypeFor,
 } from './auth/identity.ts';
 import { AnonymousAiAllowance } from './ai/anonymous-allowance.ts';
+import { CAPABILITIES, isEnabled, unavailableReason } from './http/capabilities.ts';
 import { hashPassword, verifyPassword } from './auth/local-password.ts';
 import { webOrigins } from './http/origins.ts';
 import {
@@ -590,6 +591,15 @@ export function createApp(
   });
 
   app.post('/api/auth/register', async (c) => {
+    /*
+     * Registration can be paused. It is the door abuse comes through — nothing
+     * outward can be reached without an account — and pausing it stops new
+     * abuse without touching anybody who is already here or anybody writing
+     * privately as a guest.
+     */
+    if (!isEnabled(CAPABILITIES.REGISTRATION)) {
+      return c.json({ error: unavailableReason(CAPABILITIES.REGISTRATION) }, 503);
+    }
     const body = await c.req.json<{ email?: string; password?: string }>();
     const email = body.email?.trim().toLowerCase() ?? '';
     const password = body.password ?? '';

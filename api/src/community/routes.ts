@@ -78,9 +78,17 @@ import {
   type MembershipState,
   type ReflectionVisibility,
 } from '@chat/shared';
+import { addressOf } from '../http/address.ts';
+import { CAPABILITIES, isEnabled, unavailableReason, type Capability } from '../http/capabilities.ts';
+import { OUTWARD_ACTIONS, OutwardLimits, type OutwardAction } from '../http/outward-limits.ts';
 import type { CommunityStore, PublicationView } from './store.ts';
 
-export type CommunityUser = { id: string; email: string };
+export type CommunityUser = {
+  id: string;
+  email: string;
+  /** When the account was made, so a brand-new one is held to less. */
+  createdAt?: string | null;
+};
 
 /**
  * What this module needs from the rest of the API, stated as functions.
@@ -107,6 +115,8 @@ export type CommunityRouteOptions = {
   userIdByEmail: (email: string) => string | null;
   /** Ensure the person has a public identity before their name is shown. */
   ensureIdentity: (user: CommunityUser) => { handle: string; displayName: string };
+  /** Injected in tests so a ceiling can be reached without making 40 requests. */
+  limits?: OutwardLimits;
 };
 
 const UNAVAILABLE =
@@ -176,6 +186,38 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
   const app = new Hono();
   const { currentUser, store, reflection, userIdByEmail, ensureIdentity } = options;
 
+  /*
+   * The outward surfaces are metered and switchable; private writing is
+   * neither. Everything in this file publishes, joins or reacts, which is
+   * exactly the set that has to survive somebody pointing a script at it.
+   */
+  const limits = options.limits ?? new OutwardLimits();
+
+  /**
+   * A capability that has been switched off answers 503 with a sentence.
+   *
+   * 503 rather than 403: this is not about who is asking. It says the feature
+   * is unavailable for everybody right now, which is what a person needs to
+   * know before they try three more times.
+   */
+  const switchedOff = (c: Context, capability: Capability) =>
+    isEnabled(capability) ? null : c.json({ error: unavailableReason(capability) }, 503);
+
+  /** Spend one outward action, or hand back the refusal to return. */
+  const meter = (c: Context, action: OutwardAction, user: { id: string; createdAt?: string | null }) => {
+    const created = user.createdAt ? Date.parse(user.createdAt) : NaN;
+    const decision = limits.take(action, {
+      userId: user.id,
+      address: addressOf(c),
+      accountAgeMs: Number.isFinite(created) ? Date.now() - created : null,
+    });
+    if (decision.allowed) return null;
+    return c.json(
+      { error: decision.message, retryAfterSeconds: decision.retryAfterSeconds },
+      429,
+    );
+  };
+
   /**
    * Every route begins here: a session, and a store that can hold membership.
    *
@@ -224,6 +266,10 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
   app.post('/communities', async (c) => {
     const { user, store: db, response } = await guard(c);
     if (!user || !db) return response;
+    const off = switchedOff(c, CAPABILITIES.COMMUNITY_CREATION);
+    if (off) return off;
+    const limited = meter(c, OUTWARD_ACTIONS.COMMUNITY_CREATE, user);
+    if (limited) return limited;
 
     const body = await c.req
       .json<{ name?: string; description?: string; preset?: string; settings?: unknown }>()
@@ -531,6 +577,10 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
   app.post('/communities/:id/join', async (c) => {
     const { user, store: db, response } = await guard(c);
     if (!user || !db) return response;
+    const off = switchedOff(c, CAPABILITIES.COMMUNITY_JOINING);
+    if (off) return off;
+    const limited = meter(c, OUTWARD_ACTIONS.COMMUNITY_JOIN, user);
+    if (limited) return limited;
 
     const id = c.req.param('id');
     const community = db.community(id);
@@ -831,6 +881,24 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     const audience = body.audience;
     if (!isAudience(audience)) return c.json({ error: 'Unknown audience.' }, 400);
 
+    /*
+     * Switched off per audience, because they fail for different reasons and
+     * one of them being abused is no reason to stop the other. `only_me` is
+     * not an outward action at all and passes both of these.
+     */
+    if (audience === AUDIENCES.PUBLIC) {
+      const off = switchedOff(c, CAPABILITIES.PUBLIC_SHARING);
+      if (off) return off;
+    }
+    if (audience === AUDIENCES.COMMUNITY) {
+      const off = switchedOff(c, CAPABILITIES.COMMUNITY_SHARING);
+      if (off) return off;
+    }
+    if (audience !== AUDIENCES.ONLY_ME) {
+      const limited = meter(c, OUTWARD_ACTIONS.PUBLISH, user);
+      if (limited) return limited;
+    }
+
     const source = reflection(user.id, conversationId);
     if (!source) return c.json({ error: 'Reflection not found.' }, 404);
 
@@ -965,6 +1033,8 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
   app.post('/publications/:id/encouraged', async (c) => {
     const { user, store: db, response } = await guard(c);
     if (!user || !db) return response;
+    const limited = meter(c, OUTWARD_ACTIONS.REACT, user);
+    if (limited) return limited;
 
     const id = c.req.param('id');
     const view = visible(db, user.id, id);
@@ -1014,6 +1084,8 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
   app.post('/publications/:id/report', async (c) => {
     const { user, store: db, response } = await guard(c);
     if (!user || !db) return response;
+    const limited = meter(c, OUTWARD_ACTIONS.REPORT, user);
+    if (limited) return limited;
 
     const id = c.req.param('id');
     const view = visible(db, user.id, id);
