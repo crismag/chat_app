@@ -20,6 +20,7 @@
 # session cookie working: different origin, same site.
 : "${DEPLOY_API_DOMAIN:=chatapi.crishub.com}"
 : "${DEPLOY_API_URL:=https://${DEPLOY_API_DOMAIN}}"
+: "${DEPLOY_API_PUBLIC:=${DEPLOY_HOME%/*}/${DEPLOY_API_DOMAIN}/public_html}"
 
 # The API listens here, on the loopback only. The public URL reaches it through
 # the rewrite in public_html/.htaccess, so this port is never exposed directly.

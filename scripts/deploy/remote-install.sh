@@ -48,6 +48,15 @@ echo "==> publishing the web app"
 # in public_html that we did not ship is left alone.
 cp -r "${STAGED_PUBLIC}/." "${DEPLOY_PUBLIC}/"
 
+echo "==> publishing the API gateway"
+# chatapi.crishub.com's own document root. The gateway is what makes the Node
+# process reachable at all on this plan — see README.
+if [ -d "${DEPLOY_API_PUBLIC}" ]; then
+  cp "${BUNDLE}/../chatapi/index.php" "${BUNDLE}/../chatapi/.htaccess" "${DEPLOY_API_PUBLIC}/"
+else
+  echo "    no ${DEPLOY_API_PUBLIC}; skipping (the API will not be reachable from a browser)"
+fi
+
 echo "==> restarting the API"
 bash "${HERE}/restart-api.sh"
 
