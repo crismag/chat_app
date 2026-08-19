@@ -374,7 +374,7 @@ Questions, access requests, corrections, or deletion requests:
 
 **Reflections**  
 **reflections.crishub.com**  
-Operator: **[Legal/business name]**  
+Operator: **crishub.com**  
 Email: **chat_app@crishub.com**
 
 Please don't email us your password to prove you're you.

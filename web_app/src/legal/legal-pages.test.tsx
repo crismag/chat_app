@@ -72,16 +72,37 @@ test('the document supplies its own title and date, so the page cannot contradic
 })
 
 /*
- * The guard that matters most here. These documents still carry bracketed
- * blanks — an operator's legal name, a contact address, a governing
- * jurisdiction — and a policy published with those in it is worse than one
- * that is plainly unfinished.
+ * Every document is finished now, so this asserts that rather than asserting
+ * that an unfinished one admits it — which is what it used to do, back when
+ * there was one to point at.
+ *
+ * It is the more useful assertion anyway: it fails the moment a blank is
+ * reintroduced, wherever it is, instead of watching one known page.
  */
-test('a document with blanks left in it says so on the page', async () => {
-  renderAt('/privacy')
-  const notice = await screen.findByRole('status')
-  expect(notice).toHaveTextContent(/not final/i)
-  expect(notice).toHaveTextContent(/\[.+\]/)
+test('no document still has a blank in it', () => {
+  for (const { label, markdown } of LEGAL_PAGES) {
+    const blanks = parseDocument(markdown!).placeholders
+    expect(blanks, `${label} still has ${blanks.join(', ')}`).toEqual([])
+  }
+})
+
+test('and none of them shows the unfinished notice', async () => {
+  for (const { slug, label } of LEGAL_PAGES) {
+    cleanup()
+    renderAt(`/${slug}`)
+    await screen.findByRole('main')
+    expect(screen.queryByRole('status'), `${label} shows a notice`).toBeNull()
+  }
+})
+
+/*
+ * The notice itself still works, and is tested on text written for the purpose
+ * rather than on a real document. That way filling in the last blank could not
+ * quietly delete the guard along with its last example.
+ */
+test('a document that did have a blank would say so', () => {
+  const parsed = parseDocument('# Draft\n\nOperator: **[Legal name]**\n')
+  expect(parsed.placeholders).toEqual(['Legal name'])
 })
 
 test('every page has a document now, and each one renders it', async () => {

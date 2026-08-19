@@ -273,11 +273,21 @@ This provision does not apply to the extent a claim results from our own unlawfu
 
 ## 20. Governing Law
 
-These Terms are governed by the laws applicable to the operator of Reflections and, where specified, the laws of the relevant jurisdiction, without regard to conflict-of-law principles.
+Reflections is operated by **crishub.com**.
 
-Nothing in this section deprives you of mandatory consumer protections or other rights that cannot lawfully be waived in your jurisdiction.
+These Terms are governed by the laws applicable in **Ontario, Canada**, without excluding any rights that applicable law does not allow us to exclude.
 
-**[Before launch: insert the operator's legal name and chosen governing jurisdiction here.]**
+Reflections is currently free.
+
+This has not, despite our hopes, caused the laws of Canada to cease applying.
+
+If you don't agree with these Terms, please don't use Reflections.
+
+We mean that sincerely.
+
+Reflections is an independently operated application, not an international diplomatic incident. If you have concerns about the Terms, privacy practices, or how the Service operates, contact us. If those concerns mean you're uncomfortable using Reflections, please don't use it.
+
+Nothing in this section removes rights or obligations that applicable law says cannot be removed.
 
 ---
 
@@ -325,7 +335,7 @@ And yes, after all the jokes, **this paragraph is still legally serious.**
 Questions about these Terms may be sent to:
 
 **Reflections**  
-Operated by: **[Legal name / business name]**  
+Operated by: **crishub.com**  
 Email: **chat_app@crishub.com**  
 Website: **reflections.crishub.com**
 
