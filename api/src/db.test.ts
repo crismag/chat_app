@@ -385,21 +385,51 @@ describe('publicationState → visibility', () => {
  * there without losing a row.
  */
 describe('older databases become accounts', () => {
-  /** The original shape: users with two columns, conversations keyed to them. */
+  /*
+   * The original shape, constraint and all.
+   *
+   * `REFERENCES users(id)` is not decoration here: it is the login wall
+   * written as SQL, and it is what made a guest's first reflection fail on a
+   * database that predates them. A fixture without it -- which is what this
+   * was, once -- proves nothing about the migration that has to remove it.
+   */
   function beforeAccounts(name: string): string {
     const file = join(dir, name);
     const seed = new DatabaseSync(file);
     seed.exec(`
       CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, passwordHash TEXT NOT NULL);
       CREATE TABLE conversations (
-        id TEXT PRIMARY KEY, userId TEXT NOT NULL, format TEXT NOT NULL DEFAULT 'full',
+        id TEXT PRIMARY KEY,
+        userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        format TEXT NOT NULL DEFAULT 'full',
         title TEXT NOT NULL, scriptureReference TEXT, visibility TEXT NOT NULL,
         tags TEXT NOT NULL DEFAULT '[]', createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+      );
+      CREATE TABLE messages (
+        id TEXT PRIMARY KEY,
+        conversationId TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+        position INTEGER NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL,
+        originalContent TEXT NOT NULL, authorOrigin TEXT NOT NULL, createdAt TEXT NOT NULL
+      );
+      CREATE TABLE sections (
+        conversationId TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+        type TEXT NOT NULL, content TEXT NOT NULL, authorOrigin TEXT NOT NULL,
+        PRIMARY KEY (conversationId, type)
+      );
+      CREATE TABLE sessions (
+        token TEXT PRIMARY KEY,
+        userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        expiresAt INTEGER NOT NULL
       );
       INSERT INTO users (id, email, passwordHash) VALUES ('u1', 'author@example.com', 'x');
       INSERT INTO conversations (id, userId, title, visibility, createdAt, updatedAt)
         VALUES ('c1', 'u1', 'First', 'private', '2026-01-01', '2026-01-01'),
                ('c2', 'u1', 'Second', 'shared', '2026-01-01', '2026-01-01');
+      INSERT INTO messages (id, conversationId, position, role, content, originalContent, authorOrigin, createdAt)
+        VALUES ('m1', 'c1', 0, 'user', 'Written before guests existed', 'Written before guests existed', 'user', '2026-01-01');
+      INSERT INTO sections (conversationId, type, content, authorOrigin)
+        VALUES ('c1', 'heart', 'What it meant that morning', 'user');
+      INSERT INTO sessions (token, userId, expiresAt) VALUES ('t1', 'u1', 99999999999999);
     `);
     seed.close();
     return file;
@@ -439,6 +469,67 @@ describe('older databases become accounts', () => {
       expect(store.conversations.get('c2')?.userId).toBe('u1');
       /* Accounts that existed before guests did are registered ones. */
       expect(store.accounts.get('u1')?.accountType).toBe('REGISTERED');
+    } finally {
+      store.close();
+    }
+  });
+
+  /*
+   * The defect this fixture exists for: a guest lives in MariaDB, so a
+   * reflection of theirs has an owner SQLite has never heard of, and the old
+   * foreign key refused the insert. Reached through the API rather than the
+   * table, because that is where it failed.
+   */
+  it('lets somebody SQLite has never heard of own a reflection', () => {
+    const store = new SqliteStore(beforeAccounts('accounts-foreign-key.sqlite'));
+    try {
+      const keys = store.db.prepare('PRAGMA foreign_key_list(conversations)').all() as {
+        table: string;
+      }[];
+      expect(keys.some((key) => key.table === 'users')).toBe(false);
+
+      store.conversations.set('c3', {
+        id: 'c3',
+        userId: 'a-guest-in-another-database',
+        format: 'full',
+        title: 'Written as a guest',
+        scriptureReference: null,
+        visibility: 'private',
+        tags: [],
+        createdAt: '2026-08-01',
+        updatedAt: '2026-08-01',
+      });
+      expect(store.conversations.get('c3')?.userId).toBe('a-guest-in-another-database');
+
+      /* And the rebuild did not take the thread with it. */
+      expect(store.messages.get('c1')?.[0]?.content).toBe('Written before guests existed');
+    } finally {
+      store.close();
+    }
+  });
+
+  /*
+   * The defect this whole fixture exists for, and it is not hypothetical: this
+   * migration ran against the live database and emptied it.
+   *
+   * Rebuilding `users` means dropping it, and `DROP TABLE` with foreign keys
+   * enabled behaves as though every row were deleted first -- so every child
+   * with `ON DELETE CASCADE` fired. Sessions went, and so did every reflection
+   * still carrying the old `REFERENCES users(id)`. The rebuild was meant to be
+   * invisible; instead it was the most destructive thing in the file.
+   *
+   * A fixture without the constraints could not see it, which is exactly what
+   * the first version of this test was.
+   */
+  it('carries every row through a rebuild that used to cascade them away', () => {
+    const store = new SqliteStore(beforeAccounts('accounts-no-cascade.sqlite'));
+    try {
+      expect(store.conversations.values()).toHaveLength(2);
+      expect(store.messages.get('c1')?.[0]?.content).toBe('Written before guests existed');
+      expect(store.sections.get('c1')?.['heart']?.content).toBe('What it meant that morning');
+      expect(store.sessions.get('t1')?.userId).toBe('u1');
+      /* And the rebuilds left nothing pointing at something that is gone. */
+      expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     } finally {
       store.close();
     }
