@@ -90,7 +90,39 @@ until that is switched on on purpose.
 `NODE_ENV=production` is what marks the session cookie `Secure`, so it is set
 by `restart-api.sh` rather than left to the file.
 
-## How /api is served, on this host
+## The API answers on chatapi.crishub.com
+
+A separate domain with its own document root
+(`~/domains/chatapi.crishub.com/public_html`), and the web app is built against
+`https://chatapi.crishub.com/api`. The `/api` path is kept: the routes are
+defined as `/api/...` and nothing strips it.
+
+**Why a separate domain and not a path on the site.** mod_proxy is not
+permitted here, so `/api` cannot be handed to a local process — a `[P]` rewrite
+answers 503. A subdomain *of* reflections.crishub.com was tried and cannot
+help: this host will only root one inside the site's own `public_html`, which
+made every file the API served also readable at `reflections.crishub.com/api/…`
+— demonstrated with a file that came back 200 from both. `chatapi.crishub.com`
+has its own root, so there is no overlap to defend against.
+
+**Cross-origin needs nothing new.** `cors()` runs on `/api/*` with
+`credentials: true` and reads `CHAT_WEB_ORIGINS`, which the deployment sets to
+`https://reflections.crishub.com`. The session cookie still arrives: both hosts
+sit under `crishub.com`, so they are the same *site* even though they are
+different origins, and a `SameSite=Lax` cookie is sent.
+
+`.htaccess` still answers 404 for `/api` on the site, before checking whether
+the path exists. Nothing lives there now, but the rule also stops the
+single-page fallback answering an API call with `index.html` and a 200.
+
+The base URL is baked in at build time — Vite replaces `import.meta.env` when
+it compiles — so changing it is a rebuild, not a restart:
+
+```bash
+VITE_API_BASE_URL=https://elsewhere.example/api ./scripts/deploy/build-release.sh
+```
+
+## How /api was served before, and why it is not
 
 Settled by testing rather than assumption, on reflections.crishub.com:
 
@@ -112,7 +144,7 @@ Create the application once, in hPanel:
 | Node.js version | 22 |
 | Application mode | Production |
 | Application root | `domains/reflections.crishub.com/private/chat_app/current` |
-| Application URL | `reflections.crishub.com/api` |
+| Application URL | `chatapi.crishub.com` |
 | Application startup file | `app.mjs` |
 
 Nothing needs to be typed into the manager's environment editor. `app.mjs`

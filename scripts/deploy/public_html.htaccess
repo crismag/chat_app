@@ -28,16 +28,26 @@
   # A real file wins; everything else is the app's own route. Without this a
   # reload on /reflections asks the server for a directory that is not there
   # and gets a 404 on a page that exists.
+  # /api is not this site's, and this rule comes FIRST on purpose.
+  #
+  # api.reflections.crishub.com is served from public_html/api, which is inside
+  # this document root — so every file the API subdomain holds is also
+  # reachable at reflections.crishub.com/api/... Behind the "real file wins"
+  # rule below, this exclusion never ran for a file that existed, and
+  # /api/ping.txt returned it. Tested.
+  #
+  # First, it answers 404 whether or not the path exists, so the subdomain's
+  # contents are not readable from this domain. It also keeps the single-page
+  # fallback from answering an API call with index.html and a 200, which makes
+  # the browser parse a page as JSON and report an unrelated fault.
+  #
+  # The subdomain is unaffected: its own document root is public_html/api, so
+  # its request paths do not begin with "api".
+  RewriteRule ^api(/|$) - [R=404,L]
+
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]
-
-  # /api is never the app. Without this exclusion the fallback answers an API
-  # call with index.html and a 200, so the browser tries to parse a page as
-  # JSON and reports something that has nothing to do with the real fault —
-  # which is that the API is not mounted. Excluded, an unmounted API 404s,
-  # which is true and legible.
-  RewriteRule ^api(/|$) - [R=404,L]
 
   RewriteRule ^ index.html [L]
 </IfModule>
