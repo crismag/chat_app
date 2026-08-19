@@ -25,11 +25,11 @@ echo "==> building the web app"
 # replaces import.meta.env at compile time — changing it needs a rebuild, not a
 # restart.
 #
-# The default is the API subdomain rather than a same-origin /api, because
+# The default is the API's own domain rather than a same-origin /api, because
 # mod_proxy is not permitted on this host and a rewrite to a local port answers
 # 503. The path keeps its /api prefix: the routes are defined as /api/... and
-# the subdomain does not strip it.
-: "${VITE_API_BASE_URL:=https://api.${DEPLOY_DOMAIN}/api}"
+# nothing strips it.
+: "${VITE_API_BASE_URL:=${DEPLOY_API_URL}/api}"
 echo "    API base: ${VITE_API_BASE_URL}"
 VITE_API_BASE_URL="${VITE_API_BASE_URL}" npm run build -w web_app >/dev/null
 
