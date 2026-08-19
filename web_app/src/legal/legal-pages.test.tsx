@@ -72,16 +72,26 @@ test('the document supplies its own title and date, so the page cannot contradic
 })
 
 /*
- * The guard that matters most here. These documents still carry bracketed
- * blanks — an operator's legal name, a contact address, a governing
- * jurisdiction — and a policy published with those in it is worse than one
- * that is plainly unfinished.
+ * The guard that matters most here: a policy published with a blank still in
+ * it is worse than one that is plainly unfinished.
+ *
+ * Terms is the example because it is the one still waiting on a governing
+ * jurisdiction. When that is filled in this test has to move to whichever
+ * document is unfinished next — or, if none is, be deleted along with the
+ * notice it guards.
  */
 test('a document with blanks left in it says so on the page', async () => {
-  renderAt('/privacy')
+  renderAt('/terms')
   const notice = await screen.findByRole('status')
   expect(notice).toHaveTextContent(/not final/i)
   expect(notice).toHaveTextContent(/\[.+\]/)
+})
+
+/* And a finished one shows no such notice, which is the other half of it. */
+test('a document with nothing left blank says nothing', async () => {
+  renderAt('/privacy')
+  await screen.findByRole('heading', { level: 1, name: 'Privacy Policy' })
+  expect(screen.queryByRole('status')).toBeNull()
 })
 
 test('every page has a document now, and each one renders it', async () => {

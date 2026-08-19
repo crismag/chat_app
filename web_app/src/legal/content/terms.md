@@ -277,7 +277,9 @@ These Terms are governed by the laws applicable to the operator of Reflections a
 
 Nothing in this section deprives you of mandatory consumer protections or other rights that cannot lawfully be waived in your jurisdiction.
 
-**[Before launch: insert the operator's legal name and chosen governing jurisdiction here.]**
+Reflections is operated by **crishub.com**.
+
+**[Governing jurisdiction: still to be chosen.]**
 
 ---
 
@@ -325,7 +327,7 @@ And yes, after all the jokes, **this paragraph is still legally serious.**
 Questions about these Terms may be sent to:
 
 **Reflections**  
-Operated by: **[Legal name / business name]**  
+Operated by: **crishub.com**  
 Email: **chat_app@crishub.com**  
 Website: **reflections.crishub.com**
 
