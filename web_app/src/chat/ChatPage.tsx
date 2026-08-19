@@ -1811,7 +1811,6 @@ export function ChatPage() {
           <ChatArtifact
             format={format}
             valueOf={valueOf}
-            originOf={storedOrigin}
             dirtyFields={dirtyFields}
             discussing={discussing}
             proposal={proposal}

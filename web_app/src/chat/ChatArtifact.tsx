@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { counterFor, splitAtLimit, type ChatFormat } from '@chat/shared'
 import { AssistMenu, AssistResults, type FieldAssistProps } from './FieldAssist.tsx'
-import { OriginMark, SaveToggle } from './FieldMarks.tsx'
+import { SaveToggle } from './FieldMarks.tsx'
 import {
   ORIGIN_CLASSES,
   ORIGIN_LABELS,
@@ -36,7 +36,6 @@ function Field({
   meta,
   format,
   value,
-  authorOrigin,
   dirty,
   discussing,
   proposal,
@@ -52,7 +51,6 @@ function Field({
   meta: FieldMeta
   format: ChatFormat
   value: string
-  authorOrigin: string
   dirty: boolean
   discussing: boolean
   proposal: Proposal | null
@@ -168,13 +166,6 @@ function Field({
           {/* Only when there is something unsaved to say. Blur saves anyway. */}
           {dirty ? <SaveToggle name={meta.name} dirty onSave={onSave} /> : null}
 
-          {/*
-            Whose words these are, when that is a question. "Your words" on
-            every field of a reflection somebody wrote themselves is a label
-            with no information in it.
-          */}
-          {filled && authorOrigin !== 'user' ? <OriginMark origin={authorOrigin} /> : null}
-
           {counter ? (
             <span
               className={styles.counter}
@@ -263,7 +254,6 @@ function Field({
 export function ChatArtifact({
   format,
   valueOf,
-  originOf,
   dirtyFields,
   discussing,
   proposal,
@@ -279,7 +269,6 @@ export function ChatArtifact({
 }: {
   format: ChatFormat
   valueOf: (field: FieldType) => string
-  originOf: (field: FieldType) => string
   dirtyFields: ReadonlySet<FieldType>
   discussing: FieldType | null
   proposal: Proposal | null
@@ -311,7 +300,6 @@ export function ChatArtifact({
           meta={meta}
           format={format}
           value={valueOf(meta.type)}
-          authorOrigin={originOf(meta.type)}
           dirty={dirtyFields.has(meta.type)}
           discussing={discussing === meta.type}
           proposal={proposal && proposal.field === meta.type ? proposal : null}

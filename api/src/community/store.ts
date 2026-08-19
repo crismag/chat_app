@@ -387,6 +387,61 @@ function migrate(db: DatabaseSync): void {
    * marked members-only.
    */
   db.exec("UPDATE publications SET shareVisibility = 'public' WHERE audience = 'public'");
+
+  collapseDuplicateShares(db);
+
+  /*
+   * And the rule, in the schema, so it cannot be broken by a code path that
+   * forgets to look first. Partial, because a deleted share really was
+   * removed: sharing again afterwards is a new share and gets a new row.
+   */
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_one_share_per_destination
+      ON publications (authorUserId, conversationId, audience, COALESCE(communityId, ''))
+      WHERE deletedAt IS NULL
+  `);
+}
+
+/**
+ * The copies that were made before a share had an identity.
+ *
+ * Sharing the same reflection into the same community wrote another row every
+ * time, so a feed could show three of one reflection differing only by
+ * timestamp. The first one is kept -- it is the one people may have
+ * encouraged or saved -- and the later copies are removed.
+ *
+ * Removed rather than marked deleted: these rows were never a distinct share
+ * of anything, and leaving them would leave the duplicates in every count that
+ * reads deleted rows.
+ */
+function collapseDuplicateShares(db: DatabaseSync): void {
+  const duplicates = db
+    .prepare(
+      `SELECT id FROM publications AS p
+        WHERE deletedAt IS NULL
+          AND EXISTS (
+            SELECT 1 FROM publications AS first
+             WHERE first.authorUserId = p.authorUserId
+               AND first.conversationId = p.conversationId
+               AND first.audience = p.audience
+               AND COALESCE(first.communityId, '') = COALESCE(p.communityId, '')
+               AND first.deletedAt IS NULL
+               AND (first.createdAt < p.createdAt
+                    OR (first.createdAt = p.createdAt AND first.id < p.id))
+          )`,
+    )
+    .all() as { id: string }[];
+  if (duplicates.length === 0) return;
+
+  db.exec('BEGIN');
+  try {
+    const remove = db.prepare('DELETE FROM publications WHERE id = ?');
+    for (const duplicate of duplicates) remove.run(duplicate.id);
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 /* ---------------------------------------------------- the one predicate */
@@ -933,6 +988,103 @@ export class CommunityStore {
    * with the text, so provenance survives into published content rather than
    * being reset by the act of sharing it.
    */
+  /**
+   * The share this reflection already has at this destination, if any.
+   *
+   * A share is identified by where it went — this reflection, into this
+   * community, or to Public — not by the row that happened to be written. Any
+   * other reading makes "share" mean "post again", and the feed fills with
+   * copies of one reflection that differ only in their timestamp.
+   *
+   * Deleted rows are excluded: unsharing really did remove it, so sharing
+   * again is a new share and gets a new row.
+   */
+  existingShare(input: {
+    authorUserId: string;
+    conversationId: string;
+    audience: string;
+    communityId: string | null;
+  }): string | null {
+    const row = this.db
+      .prepare(
+        `SELECT id FROM publications
+          WHERE authorUserId = $author AND conversationId = $conversation
+            AND audience = $audience
+            AND COALESCE(communityId, '') = COALESCE($community, '')
+            AND deletedAt IS NULL
+          ORDER BY createdAt
+          LIMIT 1`,
+      )
+      .get({
+        author: input.authorUserId,
+        conversation: input.conversationId,
+        audience: input.audience,
+        community: input.communityId,
+      }) as Row | undefined;
+    return row ? String(row['id']) : null;
+  }
+
+  /**
+   * Bring an existing share up to date with the reflection behind it.
+   *
+   * Re-sharing something already shared here is not a second share; it is the
+   * author saying "use what it says now". So the snapshot is replaced and the
+   * row keeps its identity — with its reactions, its saves, its date and its
+   * moderation state, none of which anybody meant to reset.
+   */
+  refreshShare(
+    id: string,
+    input: { caption: string; sectionTypes: readonly string[]; hashtags: readonly PublicationHashtag[] },
+    source: {
+      format: string;
+      title: string;
+      scriptureReference: string | null;
+      sections: Record<string, { content: string; authorOrigin: string }>;
+    },
+  ): void {
+    this.db.exec('BEGIN');
+    try {
+      this.db
+        .prepare(
+          `UPDATE publications
+              SET format = $format, title = $title, scriptureReference = $reference,
+                  caption = $caption, updatedAt = $now
+            WHERE id = $id`,
+        )
+        .run({
+          format: source.format,
+          title: source.title,
+          reference: source.scriptureReference,
+          caption: input.caption,
+          now: new Date().toISOString(),
+          id,
+        });
+
+      this.db.prepare('DELETE FROM publication_sections WHERE publicationId = ?').run(id);
+      const insertSection = this.db.prepare(
+        `INSERT INTO publication_sections (publicationId, position, type, content, authorOrigin)
+         VALUES (?, ?, ?, ?, ?)`,
+      );
+      input.sectionTypes.forEach((type, position) => {
+        const section = source.sections[type];
+        if (!section || !section.content.trim()) return;
+        insertSection.run(id, position, type, section.content, section.authorOrigin);
+      });
+
+      this.db.prepare('DELETE FROM publication_tags WHERE publicationId = ?').run(id);
+      const insertTag = this.db.prepare(
+        `INSERT INTO publication_tags (publicationId, tag, label) VALUES (?, ?, ?)
+         ON CONFLICT(publicationId, tag) DO NOTHING`,
+      );
+      for (const hashtag of input.hashtags) insertTag.run(id, hashtag.tag, hashtag.label);
+
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
   publish(
     input: NewPublication,
     source: {

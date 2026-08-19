@@ -28,7 +28,6 @@ function renderArtifact(value = (field: string) => (field === 'heart' ? 'It stay
     <ChatArtifact
       format="full"
       valueOf={value}
-      originOf={() => 'user'}
       dirtyFields={new Set()}
       discussing={null}
       proposal={null}

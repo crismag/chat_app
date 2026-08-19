@@ -258,7 +258,21 @@ describe('publishing', () => {
     }
   });
 
-  test('authorOrigin provenance survives into the published content', async () => {
+  /*
+   * Whether somebody used assistance is theirs, and does not travel to a
+   * reader.
+   *
+   * This used to assert the opposite: that provenance survived into published
+   * content, on the reasoning that AI wording must never be presented as
+   * another person's own experience. The owner decided otherwise, and the
+   * reasoning does not survive the decision either way — nothing reaches a
+   * section until the author accepts it, so the words in a published
+   * reflection are theirs however they were arrived at.
+   *
+   * It is still stored. It is how a suggestion is told apart from accepted
+   * words while somebody is writing; it simply is not anybody else's business.
+   */
+  test('how a reflection was written does not travel to its readers', async () => {
     const cookie = await register('ada@example.com');
     const reflection = await writeReflection(cookie, 'Trusting');
 
@@ -273,7 +287,10 @@ describe('publishing', () => {
 
     const published = await publish(cookie, reflection, AUDIENCES.PUBLIC);
     const content = published.body.sections.find((section) => section.type === 'content');
-    expect(content?.authorOrigin).toBe('ai_assisted');
+    expect(content?.content).toBe('A paragraph the model helped shape.');
+    /* Not rendered, and not served — a field in the payload is published. */
+    expect(content).not.toHaveProperty('authorOrigin');
+    expect(JSON.stringify(published.body)).not.toContain('ai_assisted');
   });
 
   test('an incomplete Full C.H.A.T. cannot be shared', async () => {
@@ -1289,5 +1306,91 @@ describe('reporting', () => {
 
     /* And a report is an allegation: nothing about the publication changed. */
     expect((await call(reader, `/api/publications/${shared.body.id}`)).status).toBe(200);
+  });
+});
+
+/*
+ * A share is where a reflection went, not how many times somebody pressed the
+ * button. The feed filling with three identical cards is what happens when a
+ * share has no identity of its own.
+ */
+describe('one share per destination', () => {
+  test('sharing the same reflection again updates it instead of piling up', async () => {
+    const cookie = await register('repeat@example.com');
+    const id = await makeCommunity(cookie, 'One room', 'private');
+    const reflection = await writeReflection(cookie, 'Said once');
+
+    const first = await publish(cookie, reflection, AUDIENCES.COMMUNITY, { communityId: id });
+    expect(first.status).toBe(201);
+
+    /* Pressing Share again on the same reflection, into the same community. */
+    const again = await call<{ id: string; alreadyShared?: boolean }>(cookie, '/api/publications', {
+      method: 'POST',
+      body: JSON.stringify({
+        conversationId: reflection,
+        audience: AUDIENCES.COMMUNITY,
+        communityId: id,
+        caption: 'A second thought about it',
+      }),
+    });
+    expect(again.status).toBe(200);
+    expect(again.body.alreadyShared).toBe(true);
+    /* The same share, not a new one. */
+    expect(again.body.id).toBe(first.body.id);
+
+    const feed = await call<{ items: Publication[] }>(cookie, '/api/publications?scope=shared');
+    expect(feed.body.items).toHaveLength(1);
+    expect(feed.body.items[0]!.caption).toBe('A second thought about it');
+  });
+
+  test('a different community is a different destination', async () => {
+    const cookie = await register('two-rooms@example.com');
+    const first = await makeCommunity(cookie, 'First room', 'private');
+    const second = await makeCommunity(cookie, 'Second room', 'private');
+    const reflection = await writeReflection(cookie, 'Said in both');
+
+    await publish(cookie, reflection, AUDIENCES.COMMUNITY, { communityId: first });
+    await publish(cookie, reflection, AUDIENCES.COMMUNITY, { communityId: second });
+
+    const feed = await call<{ items: Publication[] }>(cookie, '/api/publications?scope=shared');
+    expect(feed.body.items).toHaveLength(2);
+  });
+
+  test('re-sharing keeps what people did with it, and spends no allowance', async () => {
+    const author = await register('keeper@example.com');
+    const reader = await register('encourager@example.com');
+    const id = await makeCommunity(author, 'One room', 'private');
+    await invite(author, id, 'encourager@example.com');
+    await accept(reader, id);
+
+    const reflection = await writeReflection(author, 'Encouraged once');
+    const shared = await publish(author, reflection, AUDIENCES.COMMUNITY, { communityId: id });
+    await call(reader, `/api/publications/${shared.body.id}/encouraged`, { method: 'POST' });
+
+    await publish(author, reflection, AUDIENCES.COMMUNITY, { communityId: id });
+
+    /* The reaction is on the share, and the share is still the same one. */
+    const view = await call<{ encouraged: { count: number } }>(
+      reader,
+      `/api/publications/${shared.body.id}`,
+    );
+    expect(view.status).toBe(200);
+    expect(view.body.encouraged.count).toBe(1);
+  });
+
+  test('unsharing and sharing again is a new share, because it really was removed', async () => {
+    const cookie = await register('removed-then-back@example.com');
+    const id = await makeCommunity(cookie, 'One room', 'private');
+    const reflection = await writeReflection(cookie, 'Taken back');
+
+    const first = await publish(cookie, reflection, AUDIENCES.COMMUNITY, { communityId: id });
+    await call(cookie, `/api/publications/${first.body.id}`, { method: 'DELETE' });
+
+    const second = await publish(cookie, reflection, AUDIENCES.COMMUNITY, { communityId: id });
+    expect(second.status).toBe(201);
+    expect(second.body.id).not.toBe(first.body.id);
+
+    const feed = await call<{ items: Publication[] }>(cookie, '/api/publications?scope=shared');
+    expect(feed.body.items).toHaveLength(1);
   });
 });
