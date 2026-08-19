@@ -400,7 +400,7 @@ function migrate(db: DatabaseSync): void {
  * *called* can be forgotten; a predicate that is part of the query cannot be,
  * because the query does not compile without it.
  *
- * It takes the viewer's id twice (`?1` is used repeatedly by position, so
+ * It takes the viewer's id twice (`$viewer` is used repeatedly by position, so
  * callers bind it once) and admits exactly three things:
  *
  *  1. the viewer's own publications, at any audience, including `only_me`;
@@ -430,17 +430,17 @@ const VISIBLE_TO = `
    */
   AND NOT EXISTS (
     SELECT 1 FROM publication_hides AS ph
-     WHERE ph.publicationId = p.id AND ph.userId = ?1
+     WHERE ph.publicationId = p.id AND ph.userId = $viewer
   )
   AND (
-    p.authorUserId = ?1
+    p.authorUserId = $viewer
     OR NOT EXISTS (
       SELECT 1 FROM author_mutes AS am
-       WHERE am.userId = ?1 AND am.mutedUserId = p.authorUserId
+       WHERE am.userId = $viewer AND am.mutedUserId = p.authorUserId
     )
   )
   AND (
-    p.authorUserId = ?1
+    p.authorUserId = $viewer
     OR (
       p.moderationState = 'visible'
       AND (
@@ -460,7 +460,7 @@ const VISIBLE_TO = `
             OR EXISTS (
               SELECT 1 FROM community_members AS m
                WHERE m.communityId = p.communityId
-                 AND m.userId = ?1
+                 AND m.userId = $viewer
                  AND m.state = 'active'
             )
           )
@@ -478,7 +478,7 @@ const VISIBLE_TO = `
  */
 const SCOPE_SHARED = `p.audience = 'community'`;
 const SCOPE_PUBLIC = `p.audience = 'public'`;
-const SCOPE_MINE = `p.authorUserId = ?1`;
+const SCOPE_MINE = `p.authorUserId = $viewer`;
 
 type Row = Record<string, unknown>;
 
@@ -708,16 +708,16 @@ export class CommunityStore {
       .prepare(
         `SELECT c.*,
                 (SELECT state FROM community_members
-                  WHERE communityId = c.id AND userId = ?1) AS memberState,
+                  WHERE communityId = c.id AND userId = $viewer) AS memberState,
                 (SELECT COUNT(*) FROM community_members
                   WHERE communityId = c.id AND state = 'active') AS memberCount
            FROM communities AS c
           WHERE c.closedAt IS NULL
             AND c.discoverability = 'public'
-            AND (?2 = '%%' OR LOWER(c.name) LIKE ?2 OR LOWER(c.description) LIKE ?2)
+            AND ($q = '%%' OR LOWER(c.name) LIKE $q OR LOWER(c.description) LIKE $q)
           ORDER BY c.name`,
       )
-      .all(viewerUserId, like) as Row[];
+      .all({ viewer: viewerUserId, q: like }) as Row[];
     return rows.map((row) => ({
       ...communityFromRow(row),
       memberState: row['memberState'] ? (String(row['memberState']) as MembershipState) : null,
@@ -1014,8 +1014,8 @@ export class CommunityStore {
    */
   publication(viewerUserId: string, id: string): PublicationView | null {
     const row = this.db
-      .prepare(`${SELECT_PUBLICATION} WHERE ${VISIBLE_TO} AND p.id = ?2`)
-      .get(viewerUserId, id) as Row | undefined;
+      .prepare(`${SELECT_PUBLICATION} WHERE ${VISIBLE_TO} AND p.id = $id`)
+      .get({ viewer: viewerUserId, id }) as Row | undefined;
     if (!row) return null;
     return this.hydrate(viewerUserId, row);
   }
@@ -1031,22 +1031,29 @@ export class CommunityStore {
    */
   feed(viewerUserId: string, options: FeedQuery): PublicationView[] {
     const clauses: string[] = [VISIBLE_TO];
-    const params: unknown[] = [viewerUserId];
+    /*
+     * Named, not numbered. `?1` repeated in one statement binds differently
+     * across Node releases — it works on 22.23 and raises SQLITE_RANGE on
+     * 22.18, which is what the production host runs. Named parameters mean
+     * the same thing everywhere, and a value used in five places is still
+     * supplied once.
+     */
+    const params: Record<string, unknown> = { viewer: viewerUserId };
 
     if (options.scope === 'public') clauses.push(SCOPE_PUBLIC);
     else if (options.scope === 'shared') clauses.push(SCOPE_SHARED);
     else clauses.push(SCOPE_MINE);
 
     if (options.communityId) {
-      params.push(options.communityId);
-      clauses.push(`p.communityId = ?${params.length}`);
+      params['community'] = options.communityId;
+      clauses.push('p.communityId = $community');
     }
 
     if (options.tag) {
-      params.push(options.tag);
+      params['tag'] = options.tag;
       clauses.push(
         `EXISTS (SELECT 1 FROM publication_tags AS t
-                  WHERE t.publicationId = p.id AND t.tag = ?${params.length})`,
+                  WHERE t.publicationId = p.id AND t.tag = $tag)`,
       );
     }
 
@@ -1056,8 +1063,8 @@ export class CommunityStore {
        * same value serves the title, the reference, the caption, the section
        * text and the tags without five copies drifting apart.
        */
-      params.push(`%${options.query.toLowerCase()}%`);
-      const like = `?${params.length}`;
+      params['q'] = `%${options.query.toLowerCase()}%`;
+      const like = '$q';
       clauses.push(`(
         lower(p.title) LIKE ${like}
         OR lower(COALESCE(p.scriptureReference, '')) LIKE ${like}
@@ -1075,7 +1082,7 @@ export class CommunityStore {
       .prepare(
         `${SELECT_PUBLICATION} WHERE ${clauses.join(' AND ')} ORDER BY p.createdAt DESC LIMIT 100`,
       )
-      .all(...(params as never[])) as Row[];
+      .all(params as never) as Row[];
 
     return rows.map((row) => this.hydrate(viewerUserId, row));
   }
@@ -1100,7 +1107,7 @@ export class CommunityStore {
           ORDER BY n DESC, t.tag
           LIMIT 12`,
       )
-      .all(viewerUserId) as unknown as PublicationHashtag[];
+      .all({ viewer: viewerUserId }) as unknown as PublicationHashtag[];
   }
 
   /* --------------------------------------------------------- reactions */
@@ -1160,10 +1167,10 @@ export class CommunityStore {
         `${SELECT_PUBLICATION}
           WHERE ${VISIBLE_TO}
             AND EXISTS (SELECT 1 FROM publication_saves AS sv
-                         WHERE sv.publicationId = p.id AND sv.userId = ?1)
+                         WHERE sv.publicationId = p.id AND sv.userId = $viewer)
           ORDER BY p.createdAt DESC LIMIT 100`,
       )
-      .all(viewerUserId) as Row[];
+      .all({ viewer: viewerUserId }) as Row[];
     return rows.map((row) => this.hydrate(viewerUserId, row));
   }
 
@@ -1335,9 +1342,9 @@ const SELECT_PUBLICATION = `
          (SELECT COUNT(*) FROM publication_reactions AS r WHERE r.publicationId = p.id)
            AS encouragedCount,
          (SELECT COUNT(*) FROM publication_reactions AS r
-           WHERE r.publicationId = p.id AND r.userId = ?1) AS encouragedByViewer,
+           WHERE r.publicationId = p.id AND r.userId = $viewer) AS encouragedByViewer,
          (SELECT COUNT(*) FROM publication_saves AS sv
-           WHERE sv.publicationId = p.id AND sv.userId = ?1) AS savedByViewer
+           WHERE sv.publicationId = p.id AND sv.userId = $viewer) AS savedByViewer
     FROM publications AS p
     LEFT JOIN communities AS c ON c.id = p.communityId
     LEFT JOIN profiles AS author ON author.userId = p.authorUserId
