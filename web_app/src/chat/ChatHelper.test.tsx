@@ -321,8 +321,9 @@ describe('chips follow the state', () => {
 describe('scoped mode', () => {
   test('says which section, and can be dismissed', () => {
     const handlers = renderHelper({ discussing: 'heart' })
-    expect(screen.getByText(/Discussing:/)).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Stop discussing Heart' }))
+    expect(screen.getByText(/Working with:/)).toBeInTheDocument()
+    expect(screen.getByText('Heart')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Stop working with Heart' }))
     expect(handlers.onStopDiscussing).toHaveBeenCalledOnce()
   })
 })

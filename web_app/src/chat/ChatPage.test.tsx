@@ -296,7 +296,11 @@ test('a brand-new reflection shows every C.H.A.T. field and a writable title', a
   expect(screen.queryByRole('combobox', { name: 'Translation' })).toBeNull()
   expect(screen.queryByLabelText('Scripture reference')).toBeNull()
   expect(screen.queryByPlaceholderText('Reference')).toBeNull()
-  expect(screen.getByRole('button', { name: 'Suggest title' })).toBeDisabled()
+  /*
+   * Not offered at all on an empty page. It used to sit here permanently
+   * greyed, proposing to name a reflection nobody had written yet.
+   */
+  expect(screen.queryByRole('button', { name: /Suggest a title for this reflection/i })).toBeNull()
 })
 
 test('writing Content does not require a Bible passage first', async () => {
@@ -343,16 +347,21 @@ test('a saved reflection hydrates its title, passage control and C.H.A.T. fields
   expect(screen.getByRole('button', { name: /John 15:5/i })).toBeInTheDocument()
 })
 
-test('Suggest title stays disabled until a C.H.A.T. field has text', async () => {
+test('Suggest title appears once there is something to name', async () => {
   renderPage()
 
-  const suggest = await screen.findByRole('button', { name: 'Suggest title' })
-  expect(suggest).toBeDisabled()
+  /* Absent rather than greyed: there is nothing to suggest a title from yet. */
+  await screen.findByLabelText('Reflection title')
+  expect(screen.queryByRole('button', { name: /Suggest a title for this reflection/i })).toBeNull()
+  /* And it is still offered, with its reason, where the rest of the actions are. */
+  fireEvent.click(screen.getByRole('button', { name: /More actions for this reflection/i }))
+  expect(screen.getByRole('menuitem', { name: 'Suggest a title' })).toBeDisabled()
+  fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
 
   fireEvent.change(screen.getByLabelText(/Heart — What it means/i), {
     target: { value: 'This verse met me in the waiting.' },
   })
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Suggest title' })).toBeEnabled())
+  await waitFor(() => expect(screen.getByRole('button', { name: /Suggest a title for this reflection/i })).toBeEnabled())
   expect(screen.getByLabelText('Reflection title')).toBeEnabled()
 })
 

@@ -1,3 +1,4 @@
+import { useEffect, useId, useRef, useState } from 'react'
 import type { AiGuidanceSection } from '@chat/shared'
 import { SparkIcon } from '../shared/ui/icons.tsx'
 import { Sheet } from './ChatSheets.tsx'
@@ -9,10 +10,16 @@ import styles from './ChatPage.module.css'
  *
  * Not a chatbot panel. The C.H.A.T. is the page and the conversation is already
  * the helper beside it; a second assistant competing for the middle would undo
- * the rearrangement this page was just rebuilt for. So these are two small
- * controls in the row of controls the field already has, and anything they
- * produce opens underneath the words it is about — attached to the section it
- * concerns, closed when it is done with.
+ * the rearrangement this page was just rebuilt for.
+ *
+ * It is also not three buttons, four times over. "Ask me questions", "Improve
+ * wording" and "Discuss in chat" repeated once per section was twelve persistent
+ * controls around a page whose job is writing — more chrome than text on an
+ * empty reflection. There is one mark in the section's heading now, and the
+ * three actions live behind it. Nothing was removed; it stopped being shouted.
+ *
+ * Anything the actions produce still opens underneath the words it is about,
+ * attached to the section it concerns, and closed when it is done with.
  *
  * Two rules hold everywhere below:
  *
@@ -23,25 +30,8 @@ import styles from './ChatPage.module.css'
  *      hears "AI suggestion" from the badge and the group's accessible name.
  */
 
-export function FieldAssist({
-  field,
-  name,
-  available,
-  unavailableReason,
-  hasText,
-  busy,
-  guidance,
-  improvement,
-  clarification,
-  error,
-  undoable,
-  onAsk,
-  onImprove,
-  onAccept,
-  onDiscard,
-  onDismissGuidance,
-  onUndo,
-}: {
+/** What both halves need to know. One shape, so they cannot drift apart. */
+export type FieldAssistProps = {
   field: AiGuidanceSection
   name: string
   available: boolean
@@ -55,11 +45,40 @@ export function FieldAssist({
   undoable: boolean
   onAsk: () => void
   onImprove: () => void
+  onDiscuss: () => void
   onAccept: () => void
   onDiscard: () => void
   onDismissGuidance: () => void
   onUndo: () => void
-}) {
+}
+
+/**
+ * The one control, and the three actions behind it.
+ *
+ * A menu rather than a row: it costs a press to open, and it buys back three
+ * rows of buttons on every section. What cannot be done right now is still
+ * listed and still says why — a disabled item with its reason attached is
+ * information; an item that has quietly disappeared is a mystery.
+ */
+export function AssistMenu({
+  field,
+  name,
+  available,
+  unavailableReason,
+  hasText,
+  busy,
+  guidance,
+  improvement,
+  undoable,
+  onAsk,
+  onImprove,
+  onDiscuss,
+  onUndo,
+}: FieldAssistProps) {
+  const [open, setOpen] = useState(false)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const menuId = useId()
   const reasonId = `assist-reason-${field}`
   const guidanceId = `assist-questions-${field}`
   const improveId = `assist-improve-${field}`
@@ -83,54 +102,131 @@ export function FieldAssist({
         ? 'Waiting for the last request to come back.'
         : null
 
+  const discussReason = !hasText
+    ? `Write something in ${name} first — there is nothing to discuss yet.`
+    : null
+
+  function close(returnFocus = true) {
+    setOpen(false)
+    if (returnFocus) triggerRef.current?.focus()
+  }
+
+  useEffect(() => {
+    if (!open) return
+    menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])')?.focus()
+
+    function onPointerDown(event: MouseEvent) {
+      const target = event.target as Node
+      if (menuRef.current?.contains(target) || triggerRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [open])
+
+  /** Every item does its thing and gets out of the way. */
+  const item = (label: string, reason: string | null, run: () => void, controls?: string) => (
+    <button
+      type="button"
+      role="menuitem"
+      className={styles.assistItem}
+      disabled={reason !== null}
+      title={reason ?? undefined}
+      aria-describedby={reason ? reasonId : undefined}
+      aria-controls={controls}
+      onClick={() => {
+        close(false)
+        run()
+      }}
+    >
+      {label}
+    </button>
+  )
+
   return (
-    <>
-      <span className={styles.assistActions}>
-        <button
-          type="button"
-          className={styles.assistButton}
-          disabled={askReason !== null}
-          title={askReason ?? undefined}
-          aria-describedby={askReason ? reasonId : undefined}
-          aria-controls={guidance ? guidanceId : undefined}
-          onClick={onAsk}
+    <span className={styles.assistMenu}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={styles.assistTrigger}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        /* Named, because a sparkle is not a word. */
+        aria-label={`Assistance for ${name}`}
+        title={`Assistance for ${name}`}
+        data-busy={busy ? 'true' : 'false'}
+        onClick={() => setOpen((value: boolean) => !value)}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown') {
+            event.preventDefault()
+            setOpen(true)
+          }
+        }}
+      >
+        <SparkIcon className={styles.tinyIcon} />
+      </button>
+
+      {open ? (
+        <div
+          ref={menuRef}
+          id={menuId}
+          role="menu"
+          aria-label={`Assistance for ${name}`}
+          className={styles.assistPopover}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.stopPropagation()
+              close()
+            }
+          }}
         >
-          <SparkIcon className={styles.tinyIcon} />
-          {busy === 'questions' ? 'Thinking…' : 'Ask me questions'}
-        </button>
-
-        <button
-          type="button"
-          className={styles.assistButton}
-          disabled={improveReason !== null}
-          title={improveReason ?? undefined}
-          aria-describedby={improveReason ? reasonId : undefined}
-          aria-controls={improvement ? improveId : undefined}
-          onClick={onImprove}
-        >
-          <SparkIcon className={styles.tinyIcon} />
-          {busy === 'improve' ? 'Reading…' : 'Improve wording'}
-        </button>
-
-        {/*
-          Undo survives acceptance. Taking a suggestion is a decision someone is
-          allowed to change their mind about a second later, and "the original
-          must remain recoverable" is not satisfied by a suggestion that has
-          already overwritten the only copy of it.
-        */}
-        {undoable ? (
-          <button type="button" className={styles.assistButton} onClick={onUndo}>
-            Undo — put my words back
-          </button>
-        ) : null}
-      </span>
-
-      {askReason || improveReason ? (
-        <span className="sr-only" id={reasonId}>
-          {askReason ?? improveReason}
-        </span>
+          {item('Ask me questions', askReason, onAsk, guidance ? guidanceId : undefined)}
+          {item('Improve wording', improveReason, onImprove, improvement ? improveId : undefined)}
+          {item('Discuss in Reflect', discussReason, onDiscuss)}
+          {/*
+            Undo survives acceptance. Taking a suggestion is a decision someone
+            is allowed to change their mind about a second later, and "the
+            original must remain recoverable" is not satisfied by a suggestion
+            that has already overwritten the only copy of it.
+          */}
+          {undoable ? item('Undo — put my words back', null, onUndo) : null}
+        </div>
       ) : null}
 
+      {askReason || improveReason || discussReason ? (
+        <span className="sr-only" id={reasonId}>
+          {askReason ?? improveReason ?? discussReason}
+        </span>
+      ) : null}
+    </span>
+  )
+}
+
+/**
+ * What came back, under the words it is about.
+ *
+ * Separated from the trigger because they belong in different places: the
+ * control sits in the section's heading, and a result has to open beneath the
+ * textarea it concerns rather than above it.
+ */
+export function AssistResults({
+  field,
+  name,
+  busy,
+  guidance,
+  improvement,
+  clarification,
+  error,
+  onAccept,
+  onDiscard,
+  onDismissGuidance,
+}: FieldAssistProps) {
+  const guidanceId = `assist-questions-${field}`
+  const improveId = `assist-improve-${field}`
+
+  return (
+    <>
       {/* Loading is stated, not merely implied by a label changing. */}
       {busy ? (
         <p className={styles.assistStatus} role="status">

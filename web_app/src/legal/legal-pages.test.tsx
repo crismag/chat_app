@@ -156,3 +156,42 @@ describe('the renderer', () => {
     expect(parseDocument('Operator: **Someone Real**').placeholders).toEqual([])
   })
 })
+
+/*
+ * The front door, and the reason it exists: one address from which every other
+ * page can be reached, by somebody with no account — a reader deciding whether
+ * to use this, or a reviewer checking what it claims before approving a
+ * sign-in provider.
+ */
+describe('the welcome page', () => {
+  test('carries the banner, the four letters, and a way in', () => {
+    renderAt('/welcome')
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('C.H.A.T.')
+    for (const word of ['Content', 'Heart', 'Application', 'Testimony']) {
+      expect(screen.getByText(word)).toBeInTheDocument()
+    }
+    /* Straight into writing, not into a sign-up form. */
+    expect(screen.getByRole('link', { name: 'Start writing' })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/login')
+  })
+
+  test('links to every document, About and the licences', () => {
+    renderAt('/welcome')
+    for (const path of ['/about', '/privacy', '/terms', '/disclaimer', '/data-deletion', '/support', '/open-source-licenses']) {
+      expect(
+        screen.getAllByRole('link').some((link) => link.getAttribute('href') === path),
+      ).toBe(true)
+    }
+  })
+
+  test('needs no account, like the documents it links to', () => {
+    renderAt('/welcome')
+    /*
+     * Outside the application shell: no navigation, no account menu, nothing
+     * that asks who is reading it. A page a reviewer has to sign in to reach
+     * is a page they will report as unreachable.
+     */
+    expect(screen.queryByRole('button', { name: /New reflection/i })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Reflections' })).toBeNull()
+  })
+})

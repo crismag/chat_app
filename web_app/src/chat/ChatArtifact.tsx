@@ -1,8 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { counterFor, splitAtLimit, type ChatFormat } from '@chat/shared'
-import { SendIcon } from '../shared/ui/icons.tsx'
-import { FieldAssist } from './FieldAssist.tsx'
-import { OriginMark, SaveToggle, StatusLight, type FieldStatus } from './FieldMarks.tsx'
+import { AssistMenu, AssistResults, type FieldAssistProps } from './FieldAssist.tsx'
+import { OriginMark, SaveToggle } from './FieldMarks.tsx'
 import {
   ORIGIN_CLASSES,
   ORIGIN_LABELS,
@@ -21,11 +20,17 @@ import styles from './ChatPage.module.css'
  * directly.
  *
  * What is *not* on the face of the card is deliberate clutter, not the
- * framework itself. Status words, "Your words", and a Save button used to sit
- * around every one of four fields. The letter and the section name stay: four
- * identical boxes cannot teach C.H.A.T., and the names vanish from the
- * placeholder the moment there is writing in the field. The heading is the
- * name; the question remains the placeholder of an empty field.
+ * framework itself. Status words, "Your words", a Save button, a traffic
+ * light, a character count on its own line and three assistance buttons used
+ * to sit around every one of four fields — more furniture than writing, four
+ * times over, on a page that opens empty.
+ *
+ * What is left is the section's identity, the words, and one mark that opens
+ * everything else. Each remaining thing appears when it has something to say:
+ * the count when the length starts to matter, the save mark when there is
+ * something unsaved, the origin when the words are not entirely the author's.
+ * The letter and the name always stay — four identical boxes cannot teach
+ * C.H.A.T., and the question remains the placeholder of an empty field.
  */
 function Field({
   meta,
@@ -78,21 +83,61 @@ function Field({
   const filled = value.trim().length > 0
 
   /*
-   * Three states for three shapes. "Long" is the amber: written, and past the
-   * length this format suggests — which is a thing to know about, not a thing
-   * that is wrong.
+   * How loudly the count speaks, which is not the same as whether it is there.
+   *
+   * A number that is always shouting teaches nobody anything: at 12 of 700 the
+   * limit is not information, it is decoration on four sections at once. So it
+   * fades in as it starts to matter — silent early, quiet as it approaches,
+   * plain near the line, and unmissable past it.
+   *
+   * "Silent" is opacity, not absence: the element stays in the page, so a
+   * screen reader still reaches it and it appears the moment the section has
+   * the caret in it. Removing it outright would take the count away from the
+   * person who most wants it — the one who is writing right now.
    */
-  const status: FieldStatus = !filled
-    ? 'empty'
-    : counter && counter.status !== 'recommended'
-      ? 'long'
-      : 'written'
+  const share = counter ? counter.length / counter.recommended : 0
+  const tone = !counter || counter.length === 0
+    ? 'silent'
+    : counter.status !== 'recommended'
+      ? 'over'
+      : share > 0.9
+        ? 'near'
+        : share > 0.6
+          ? 'quiet'
+          : 'silent'
 
   /*
    * Narrowed once, into a const, so the callbacks below keep the narrowing.
    * Non-null exactly when this field is one of the four assistance understands.
    */
   const section = isGuidanceSection(meta.type) ? meta.type : null
+
+  /*
+   * The trigger sits in the heading and the results open under the textarea,
+   * so they are two components — built from one object, so they cannot end up
+   * disagreeing about which section they are for or what it may do.
+   */
+  const assistProps = (forSection: NonNullable<typeof section>): FieldAssistProps => ({
+    field: forSection,
+    name: meta.name,
+    available: assist.available,
+    unavailableReason: assist.unavailableReason,
+    hasText: filled,
+    busy: assist.busyField === forSection ? assist.busyKind : null,
+    guidance: assist.guidance[forSection] ?? null,
+    improvement: assist.improvement?.field === forSection ? assist.improvement : null,
+    clarification:
+      assist.clarification?.field === forSection ? assist.clarification.question : null,
+    error: assist.error?.field === forSection ? assist.error.message : null,
+    undoable: assist.undoable?.field === forSection,
+    onAsk: () => assist.onAsk(forSection),
+    onImprove: () => assist.onImprove(forSection),
+    onDiscuss: onDiscuss,
+    onAccept: assist.onAccept,
+    onDiscard: assist.onDiscard,
+    onDismissGuidance: () => assist.onDismissGuidance(forSection),
+    onUndo: assist.onUndo,
+  })
 
   return (
     <article
@@ -105,16 +150,48 @@ function Field({
       data-flash={flashed ? 'true' : 'false'}
     >
       {/*
-        The heading is the section. It stays visible after the placeholder
-        has left, because that is when a person most needs to know which
-        box they are in.
+        One row where a heading, a status row and an actions row used to be.
+        The heading is the section — it stays visible after the placeholder has
+        left, because that is when a person most needs to know which box they
+        are in — and everything else on this line earns its place by having
+        something to report.
       */}
-      <h3 className={styles.fieldHeading}>
-        <span className={styles.fieldLetter} aria-hidden="true">
-          {meta.letter}
+      <div className={styles.fieldHead}>
+        <h3 className={styles.fieldHeading}>
+          <span className={styles.fieldLetter} aria-hidden="true">
+            {meta.letter}
+          </span>
+          {meta.name}
+        </h3>
+
+        <span className={styles.fieldHeadMarks}>
+          {/* Only when there is something unsaved to say. Blur saves anyway. */}
+          {dirty ? <SaveToggle name={meta.name} dirty onSave={onSave} /> : null}
+
+          {/*
+            Whose words these are, when that is a question. "Your words" on
+            every field of a reflection somebody wrote themselves is a label
+            with no information in it.
+          */}
+          {filled && authorOrigin !== 'user' ? <OriginMark origin={authorOrigin} /> : null}
+
+          {counter ? (
+            <span
+              className={styles.counter}
+              data-status={counter.status}
+              data-tone={tone}
+              aria-live="polite"
+              title={`${meta.name}: ${counter.length} of ${counter.recommended} characters recommended, ${counter.hard} maximum`}
+            >
+              {counter.length} / {counter.recommended}
+              {counter.length > counter.recommended ? ` · ${counter.hard} max` : ''}
+              <span className="sr-only"> characters</span>
+            </span>
+          ) : null}
+
+          {section ? <AssistMenu {...assistProps(section)} /> : null}
         </span>
-        {meta.name}
-      </h3>
+      </div>
 
       <textarea
         ref={areaRef}
@@ -148,78 +225,12 @@ function Field({
         onBlur={onSave}
       />
 
-      <div className={styles.fieldFoot}>
-        {/* Where this section has got to: red hollow, amber half, green solid. */}
-        <StatusLight name={meta.name} status={status} />
-
-        {/* Nothing written is nobody's words yet, so nothing is claimed. */}
-        {filled ? <OriginMark origin={authorOrigin} /> : null}
-
-        {/*
-          The count against the limit, and nothing else. The word "recommended"
-          was three quarters of this line and the number was already saying it.
-        */}
-        {counter ? (
-          <span
-            className={styles.counter}
-            data-status={counter.status}
-            aria-live="polite"
-            title={`${meta.name}: ${counter.length} of ${counter.recommended} characters recommended, ${counter.hard} maximum`}
-          >
-            {counter.length} / {counter.recommended}
-            {counter.length > counter.recommended ? ` · ${counter.hard} max` : ''}
-            <span className="sr-only"> characters</span>
-          </span>
-        ) : null}
-
-        <span className={styles.fieldActions}>
-          {/* One control where a status and a button used to stand. */}
-          <SaveToggle name={meta.name} dirty={dirty} onSave={onSave} />
-          <button
-            type="button"
-            className={styles.discussButton}
-            onClick={onDiscuss}
-            disabled={!filled}
-            title={
-              filled
-                ? undefined
-                : 'Write something here first — there is nothing to discuss yet.'
-            }
-          >
-            <SendIcon className={styles.tinyIcon} />
-            Discuss in chat
-          </button>
-        </span>
-      </div>
-
       {/*
-        Assistance for this section, in the section. Only the four C.H.A.T.
-        sections can be asked about — Condensed's Verse is the passage itself
-        and its Reflection is not one of the four the guidance schema knows.
+        What assistance came back, under the words it is about. Only the four
+        C.H.A.T. sections can be asked about — Condensed's Verse is the passage
+        itself and its Reflection is not one of the four the schema knows.
       */}
-      {section ? (
-        <FieldAssist
-          field={section}
-          name={meta.name}
-          available={assist.available}
-          unavailableReason={assist.unavailableReason}
-          hasText={filled}
-          busy={assist.busyField === section ? assist.busyKind : null}
-          guidance={assist.guidance[section] ?? null}
-          improvement={assist.improvement?.field === section ? assist.improvement : null}
-          clarification={
-            assist.clarification?.field === section ? assist.clarification.question : null
-          }
-          error={assist.error?.field === section ? assist.error.message : null}
-          undoable={assist.undoable?.field === section}
-          onAsk={() => assist.onAsk(section)}
-          onImprove={() => assist.onImprove(section)}
-          onAccept={assist.onAccept}
-          onDiscard={assist.onDiscard}
-          onDismissGuidance={() => assist.onDismissGuidance(section)}
-          onUndo={assist.onUndo}
-        />
-      ) : null}
+      {section ? <AssistResults {...assistProps(section)} /> : null}
 
       {/*
         A result comes back to the field it was raised from, and it arrives as
