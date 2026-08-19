@@ -9,6 +9,12 @@ import { PublicationPage } from '../community/PublicationPage.tsx'
 import { CreatePage } from '../create/CreatePage.tsx'
 import { ProfilePage } from '../profile/ProfilePage.tsx'
 import { OpenSourceLicencesPage } from '../licenses/OpenSourceLicencesPage.tsx'
+import { AboutPage } from '../legal/AboutPage.tsx'
+import { PrivacyPage } from '../legal/PrivacyPage.tsx'
+import { TermsPage } from '../legal/TermsPage.tsx'
+import { DisclaimerPage } from '../legal/DisclaimerPage.tsx'
+import { DataDeletionPage } from '../legal/DataDeletionPage.tsx'
+import { SupportPage } from '../legal/SupportPage.tsx'
 import { NotFoundPage } from '../shared/ui/NotFoundPage.tsx'
 import { DeepLinks } from '../shared/native/DeepLinks.tsx'
 
@@ -19,6 +25,22 @@ export function App() {
       <Routes>
         <Route path="/login" element={<AuthPage />} />
         <Route path="/open-source-licenses" element={<OpenSourceLicencesPage />} />
+        {/*
+          About and the documents it links to sit outside the shell, which
+          sends anyone without a session to /login.
+
+          That is the point rather than a convenience: a privacy policy, terms,
+          a deletion route and a support contact have to be readable by someone
+          with no account — including a platform reviewer checking these URLs
+          before approving sign-in with Google, Facebook or Apple. A policy
+          behind a login is not a published policy.
+        */}
+        <Route path="/about" element={<AboutPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/disclaimer" element={<DisclaimerPage />} />
+        <Route path="/data-deletion" element={<DataDeletionPage />} />
+        <Route path="/support" element={<SupportPage />} />
         <Route element={<AppShell />}>
           <Route path="/" element={<ChatPage />} />
           <Route path="/reflections" element={<ReflectionsPage />} />

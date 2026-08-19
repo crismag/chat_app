@@ -138,6 +138,23 @@ export function ProfileMenu({
             <CreateIcon className={styles.itemIcon} />
             Create image
           </button>
+          {/*
+            About is the way in to the policies. It is listed here rather than
+            the four documents themselves, so this menu does not become a legal
+            index and there is one address to send someone to.
+          */}
+          <button
+            type="button"
+            role="menuitem"
+            className={styles.item}
+            onClick={() => {
+              close(false)
+              void navigate('/about')
+            }}
+          >
+            <span className={styles.itemIcon} aria-hidden="true">i</span>
+            About
+          </button>
           <button
             type="button"
             role="menuitem"
