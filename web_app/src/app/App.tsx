@@ -18,17 +18,25 @@ import { DataDeletionPage } from '../legal/DataDeletionPage.tsx'
 import { SupportPage } from '../legal/SupportPage.tsx'
 import { NotFoundPage } from '../shared/ui/NotFoundPage.tsx'
 import { DeepLinks } from '../shared/native/DeepLinks.tsx'
+import { AccountChoiceProvider } from '../auth/AccountChoice.tsx'
 
 export function App() {
   return (
     <AuthProvider>
+      {/*
+        The guest-or-sign-in question, mounted once above every route.
+
+        It is opened by the API client when the server refuses a persistent
+        action, so it appears wherever the first one happens to be rather
+        than being wired into each page that might be it.
+      */}
+      <AccountChoiceProvider />
       <DeepLinks />
       <Routes>
         <Route path="/login" element={<AuthPage />} />
         <Route path="/open-source-licenses" element={<OpenSourceLicencesPage />} />
         {/*
-          About and the documents it links to sit outside the shell, which
-          sends anyone without a session to /login.
+          About and the documents it links to sit outside the shell.
 
           That is the point rather than a convenience: a privacy policy, terms,
           a deletion route and a support contact have to be readable by someone

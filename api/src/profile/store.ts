@@ -372,6 +372,9 @@ class SqliteProfileStore implements ProfileStore {
 type ConversationSource = {
   conversations: { values(): Iterable<StoredConversation> };
   sections: { get(conversationId: string): Record<string, StoredSection> | undefined };
+  /* A profile shows an account's shared reflections, and an account reaches
+   * them through the owner it holds. */
+  owners: { forUser(userId: string): { id: string } | undefined };
 };
 
 class MemoryProfileStore implements ProfileStore {

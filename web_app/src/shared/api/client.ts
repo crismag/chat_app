@@ -25,7 +25,36 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+/**
+ * What to do when the server says this action needs somebody to own it.
+ *
+ * The API answers a persistent action from a visitor with 401 and
+ * `needsAccount`, because creating an account for them silently is the thing
+ * this design refuses to do. The interface has to ask -- guest, or sign in --
+ * and that question is the same wherever the action started, so it is answered
+ * in one place instead of at every call site that might be the first one
+ * somebody reaches.
+ *
+ * The handler resolves true once the caller is somebody, and the request is
+ * retried exactly once. False means they closed the question, and the original
+ * error travels on so the page can leave what they wrote alone.
+ */
+export type AccountRequiredHandler = (creationSource: string) => Promise<boolean>
+
+let accountRequired: AccountRequiredHandler | null = null
+
+export function onAccountRequired(handler: AccountRequiredHandler): () => void {
+  accountRequired = handler
+  return () => {
+    if (accountRequired === handler) accountRequired = null
+  }
+}
+
+function needsAccount(status: number, body: unknown): body is { creationSource?: string } {
+  return status === 401 && (body as { needsAccount?: boolean } | null)?.needsAccount === true
+}
+
+export async function api<T>(path: string, init?: RequestInit, retrying = false): Promise<T> {
   const response = await fetch(`${apiBase}${path}`, {
     ...init,
     credentials: 'include',
@@ -37,6 +66,10 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: response.statusText }))
+    if (!retrying && accountRequired && needsAccount(response.status, body)) {
+      const resolved = await accountRequired(body.creationSource ?? 'OTHER_PERSISTENT_ACTION')
+      if (resolved) return api<T>(path, init, true)
+    }
     throw new ApiError(
       (body as { error?: string }).error ?? `Request failed (${response.status})`,
       response.status,

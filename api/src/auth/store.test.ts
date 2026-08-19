@@ -13,6 +13,7 @@ import { createMysqlPool, type MysqlPool } from '../mysql/pool.ts';
 import { MysqlAuthStore } from './store.ts';
 import { createApp } from '../app.ts';
 import { MemoryStore } from '../store.ts';
+import { cookieHeader } from '../http/set-cookie.ts';
 
 const config = (() => {
   try {
@@ -151,9 +152,8 @@ describe.skipIf(!config)('signing in over HTTP, against MariaDB', () => {
       body: JSON.stringify(body),
     });
 
-  /** The cookie a browser would keep, taken off the response. */
-  const sessionCookie = (response: Response) =>
-    (response.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+  /** Everything a browser would keep: registering sets two cookies now. */
+  const cookiesFrom = (response: Response) => cookieHeader(response.headers.get('set-cookie'));
 
   it('registers, stays signed in, signs out, and signs back in', async () => {
     const email = `http-${Date.now()}@example.com`;
@@ -168,8 +168,10 @@ describe.skipIf(!config)('signing in over HTTP, against MariaDB', () => {
     /* The account is in MariaDB, not in the SQLite store handed to createApp. */
     expect(await db.getUserByPublicUuid(account.id)).not.toBeNull();
 
-    let cookie = sessionCookie(registered);
-    expect(cookie).toMatch(/^chat_session=/);
+    let cookie = cookiesFrom(registered);
+    expect(cookie).toMatch(/chat_session=/);
+    /* Registering on this browser also makes it a device they are known on. */
+    expect(cookie).toMatch(/chat_install=/);
 
     const me = await app.request('/api/auth/me', { headers: { cookie } });
     expect(me.status).toBe(200);
@@ -177,12 +179,13 @@ describe.skipIf(!config)('signing in over HTTP, against MariaDB', () => {
 
     const out = await post('/api/auth/logout', {}, cookie);
     expect(out.status).toBe(200);
+    /* Both the session and the recognition it created are gone. */
     const afterOut = await app.request('/api/auth/me', { headers: { cookie } });
     expect(afterOut.status).toBe(401);
 
-    const again = await post('/api/auth/login', { email, password });
+    const again = await post('/api/auth/login', { email, password, keepSignedIn: true });
     expect(again.status).toBe(200);
-    cookie = sessionCookie(again);
+    cookie = cookiesFrom(again);
     const back = await app.request('/api/auth/me', { headers: { cookie } });
     expect(await back.json()).toMatchObject({ id: account.id });
   });

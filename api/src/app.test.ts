@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { createApp } from './app.ts';
 import { MemoryStore } from './store.ts';
+import { cookieHeader, cookieNamed as namedCookie } from './http/set-cookie.ts';
 
 async function json<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
@@ -16,8 +17,7 @@ async function register(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
-  const cookie = response.headers.get('set-cookie') ?? '';
-  return { response, cookie };
+  return { response, cookie: cookieHeader(response.headers.get('set-cookie')) };
 }
 
 describe('GET /api/health', () => {
@@ -914,5 +914,322 @@ describe('sharing is always an explicit act', () => {
       });
       expect(response.status).toBe(404);
     }
+  });
+});
+
+/*
+ * The login wall, and what replaced it.
+ *
+ * A visitor writes first and decides about an account later. These say that
+ * plainly: no session is needed to create or read your own work, ownership is
+ * still proved on every request, and neither way of acquiring an account loses
+ * anything written before it.
+ */
+describe('writing as a guest', () => {
+  const cookieNamed = (response: Response, name: string) =>
+    namedCookie(response.headers.get('set-cookie'), name);
+
+  const cookieFrom = (response: Response) => cookieHeader(response.headers.get('set-cookie'));
+
+  const post = (app: ReturnType<typeof createApp>, path: string, cookie: string, body: unknown) =>
+    app.request(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) },
+      body: JSON.stringify(body),
+    });
+
+  /** Take the choice a visitor is offered, and keep the credential. */
+  async function continueAsGuest(app: ReturnType<typeof createApp>) {
+    const response = await post(app, '/api/auth/guest', '', {
+      creationSource: 'REFLECTION_CREATE',
+      platform: 'WEB',
+    });
+    expect(response.status).toBe(201);
+    return {
+      response,
+      cookie: cookieHeader(response.headers.get('set-cookie')),
+      account: await json<Record<string, unknown>>(response),
+    };
+  }
+
+  const reflection = (app: ReturnType<typeof createApp>, cookie: string, title = 'Written as a guest') =>
+    post(app, '/api/conversations', cookie, { title });
+
+  test('a visitor is asked to choose rather than given an account', async () => {
+    const app = createApp(new MemoryStore());
+    const response = await reflection(app, '');
+    expect(response.status).toBe(401);
+    /* What the client keys on to show the two ways of being somebody. */
+    expect(await json<{ needsAccount: boolean }>(response)).toMatchObject({ needsAccount: true });
+    /* Nothing was created and nothing was set on the way past. */
+    expect(response.headers.get('set-cookie')).toBeNull();
+  });
+
+  test('reading a page creates nobody', async () => {
+    const app = createApp(new MemoryStore());
+    const listed = await app.request('/api/conversations');
+    expect(listed.status).toBe(200);
+    expect(listed.headers.get('set-cookie')).toBeNull();
+    expect((await app.request('/api/auth/me')).status).toBe(401);
+  });
+
+  test('a guest is a real user, with a name and a protected credential', async () => {
+    const app = createApp(new MemoryStore());
+    const { response, account } = await continueAsGuest(app);
+    expect(account['accountType']).toBe('ANONYMOUS');
+    expect(account['id']).toBeTruthy();
+    expect(account['guestName']).toMatch(/^[A-Z][a-zA-Z]+-\d+$/);
+
+    const cookie = response.headers.get('set-cookie') ?? '';
+    /*
+     * Two credentials, not one. The installation is durable recognition of
+     * this browser; the session is the current interaction, and ending it must
+     * not be what destroys a guest's only way back to their reflections.
+     */
+    expect(cookie).toMatch(/chat_install=/);
+    expect(cookie).toMatch(/chat_session=/);
+    /* The id alone proves nothing: a secret travels with it. */
+    expect(cookieNamed(response, 'chat_install')).toMatch(/^chat_install=[^.]+\..+/);
+    /* Bearer credentials for everything they write: script may not read them. */
+    expect(cookie).toMatch(/HttpOnly/i);
+    expect(cookie).toMatch(/SameSite=Lax/i);
+  });
+
+  test('asking twice returns the same guest, not a second one', async () => {
+    const app = createApp(new MemoryStore());
+    const first = await continueAsGuest(app);
+    const again = await post(app, '/api/auth/guest', first.cookie, {});
+    expect(again.status).toBe(200);
+    expect((await json<{ id: string }>(again)).id).toBe(first.account['id']);
+  });
+
+  test('a guest owns what they write, and nobody else sees it', async () => {
+    const app = createApp(new MemoryStore());
+    const { cookie } = await continueAsGuest(app);
+    const mine = await json<{ id: string }>(await reflection(app, cookie));
+
+    const listed = await json<{ id: string }[]>(
+      await app.request('/api/conversations', { headers: { Cookie: cookie } }),
+    );
+    expect(listed.map((item) => item.id)).toEqual([mine.id]);
+
+    /* Another browser is another guest, and sees none of it. */
+    expect(await json<unknown[]>(await app.request('/api/conversations'))).toEqual([]);
+    expect((await app.request(`/api/conversations/${mine.id}`)).status).toBe(404);
+  });
+
+  test('a credential naming nobody is nobody', async () => {
+    const app = createApp(new MemoryStore());
+    const response = await app.request('/api/conversations', {
+      headers: { Cookie: 'chat_install=not-a-real.credential' },
+    });
+    expect(response.status).toBe(200);
+    expect(await json<unknown[]>(response)).toEqual([]);
+  });
+
+  /*
+   * The product invariant: registering claims the account that already exists,
+   * so the id does not change and nothing that points at it has to be found.
+   */
+  test('registering upgrades the guest in place, keeping the same user id', async () => {
+    const app = createApp(new MemoryStore());
+    const { cookie, account } = await continueAsGuest(app);
+    const before = await json<{ id: string }>(await reflection(app, cookie));
+
+    const registered = await post(app, '/api/auth/register', cookie, {
+      email: 'claims@example.com',
+      password: 'a-long-password',
+    });
+    expect(registered.status).toBe(201);
+    const body = await json<Record<string, unknown>>(registered);
+    expect(body['id']).toBe(account['id']);
+    expect(body['accountType']).toBe('REGISTERED');
+    /* The name they were known by is kept rather than thrown away. */
+    expect(body['guestName']).toBe(account['guestName']);
+
+    const session = cookieFrom(registered);
+    const listed = await json<{ id: string }[]>(
+      await app.request('/api/conversations', { headers: { Cookie: session } }),
+    );
+    expect(listed.map((item) => item.id)).toContain(before.id);
+  });
+
+  /*
+   * The one case an upgrade cannot handle. The existing account is not
+   * overwritten, no second account is made, and nothing is moved until the
+   * person has proved the account is theirs.
+   */
+  test('an email that already has an account is refused, not overwritten', async () => {
+    const app = createApp(new MemoryStore());
+    await post(app, '/api/auth/register', '', {
+      email: 'taken@example.com',
+      password: 'a-long-password',
+    });
+
+    const { cookie } = await continueAsGuest(app);
+    await reflection(app, cookie);
+    const refused = await post(app, '/api/auth/register', cookie, {
+      email: 'taken@example.com',
+      password: 'another-password',
+    });
+    expect(refused.status).toBe(409);
+    expect(await json<Record<string, unknown>>(refused)).toMatchObject({
+      accountExists: true,
+      guestReflections: 1,
+    });
+  });
+
+  test('signing in merges the guest’s work into the account, keeping both', async () => {
+    const app = createApp(new MemoryStore());
+
+    const registered = await post(app, '/api/auth/register', '', {
+      email: 'merger@example.com',
+      password: 'a-long-password',
+    });
+    const firstSession = cookieFrom(registered);
+    const accountReflection = (
+      await json<{ id: string }>(await reflection(app, firstSession, 'From the account'))
+    ).id;
+
+    /* Another browser: a guest, who writes something and then signs in. */
+    const { cookie } = await continueAsGuest(app);
+    const guestReflection = (await json<{ id: string }>(await reflection(app, cookie))).id;
+
+    const signedIn = await post(app, '/api/auth/login', cookie, {
+      email: 'merger@example.com',
+      password: 'a-long-password',
+    });
+    expect(await json<{ merged: number }>(signedIn)).toMatchObject({ merged: 1 });
+    const session = cookieFrom(signedIn);
+
+    const ids = (
+      await json<{ id: string }[]>(
+        await app.request('/api/conversations', { headers: { Cookie: session } }),
+      )
+    ).map((item) => item.id);
+    expect(ids).toContain(accountReflection);
+    expect(ids).toContain(guestReflection);
+  });
+
+  test('a merged guest’s credential is revoked, not left owning nothing', async () => {
+    const app = createApp(new MemoryStore());
+    await post(app, '/api/auth/register', '', {
+      email: 'revoke@example.com',
+      password: 'a-long-password',
+    });
+    const { cookie } = await continueAsGuest(app);
+    await reflection(app, cookie);
+    await post(app, '/api/auth/login', cookie, {
+      email: 'revoke@example.com',
+      password: 'a-long-password',
+    });
+
+    /* The old credential resolves to nobody now, rather than to an empty guest. */
+    expect((await app.request('/api/auth/me', { headers: { Cookie: cookie } })).status).toBe(401);
+  });
+
+  /*
+   * The two credentials do different jobs, and the difference is the whole
+   * reason a guest can be signed out without being destroyed.
+   */
+  test('a guest whose session ended is still recognised', async () => {
+    const app = createApp(new MemoryStore());
+    const { response } = await continueAsGuest(app);
+    const install = cookieNamed(response, 'chat_install')
+    const mine = await json<{ id: string }>(
+      await reflection(app, cookieHeader(response.headers.get('set-cookie'))),
+    );
+
+    /* The session is gone; only durable recognition of the browser remains. */
+    const listed = await app.request('/api/conversations', { headers: { Cookie: install } });
+    expect((await json<{ id: string }[]>(listed)).map((item) => item.id)).toEqual([mine.id]);
+    /* And a session was quietly re-established rather than being demanded. */
+    expect(cookieNamed(listed, 'chat_session')).not.toBe('');
+  });
+
+  test('the installation id alone is not a credential', async () => {
+    const app = createApp(new MemoryStore());
+    const { response } = await continueAsGuest(app);
+    const [, credential] = cookieNamed(response, 'chat_install').split('=');
+    const id = (credential ?? '').split('.')[0];
+
+    const response2 = await app.request('/api/auth/me', {
+      headers: { Cookie: `chat_install=${id}.` },
+    });
+    expect(response2.status).toBe(401);
+    const guessed = await app.request('/api/auth/me', {
+      headers: { Cookie: `chat_install=${id}.wrong-secret` },
+    });
+    expect(guessed.status).toBe(401);
+  });
+
+  test('forgetting a guest on this browser really forgets them', async () => {
+    const app = createApp(new MemoryStore());
+    const { cookie, response } = await continueAsGuest(app);
+    await reflection(app, cookie);
+
+    const forgotten = await post(app, '/api/auth/forget-installation', cookie, {});
+    expect(forgotten.status).toBe(200);
+
+    /* The credential that was their whole account no longer names anybody. */
+    const install = cookieNamed(response, 'chat_install');
+    expect((await app.request('/api/auth/me', { headers: { Cookie: install } })).status).toBe(401);
+  });
+
+  test('keeping signed in is what makes a browser remembered, and nothing else', async () => {
+    const app = createApp(new MemoryStore());
+    await post(app, '/api/auth/register', '', {
+      email: 'shared@example.com',
+      password: 'a-long-password',
+    });
+
+    /* On a shared computer: a session that dies with the window, and no more. */
+    const temporary = await post(app, '/api/auth/login', '', {
+      email: 'shared@example.com',
+      password: 'a-long-password',
+    });
+    expect(cookieNamed(temporary, 'chat_install')).toBe('');
+    expect(temporary.headers.get('set-cookie')).not.toMatch(/chat_session=[^;]+;[^,]*Max-Age/)
+
+    /* On their own: durable recognition, because they asked for it. */
+    const persistent = await post(app, '/api/auth/login', '', {
+      email: 'shared@example.com',
+      password: 'a-long-password',
+      keepSignedIn: true,
+    })
+    const install = cookieNamed(persistent, 'chat_install')
+    expect(install).not.toBe('')
+    const restored = await app.request('/api/auth/me', { headers: { Cookie: install } })
+    expect(restored.status).toBe(200)
+  })
+
+  test('signing out of a remembered device does not remember it afterwards', async () => {
+    const app = createApp(new MemoryStore());
+    await post(app, '/api/auth/register', '', {
+      email: 'forgets@example.com',
+      password: 'a-long-password',
+    });
+    const signedIn = await post(app, '/api/auth/login', '', {
+      email: 'forgets@example.com',
+      password: 'a-long-password',
+      keepSignedIn: true,
+    });
+    const cookie = cookieHeader(signedIn.headers.get('set-cookie'));
+    await post(app, '/api/auth/logout', cookie, {});
+
+    /* Otherwise the account would restore itself on the very next request. */
+    expect((await app.request('/api/auth/me', { headers: { Cookie: cookie } })).status).toBe(401);
+  });
+
+  test('a guest can say who they are', async () => {
+    const app = createApp(new MemoryStore());
+    const { cookie, account } = await continueAsGuest(app);
+    const me = await app.request('/api/auth/me', { headers: { Cookie: cookie } });
+    expect(me.status).toBe(200);
+    expect(await json<Record<string, unknown>>(me)).toMatchObject({
+      id: account['id'],
+      accountType: 'ANONYMOUS',
+      email: null,
+    });
   });
 });

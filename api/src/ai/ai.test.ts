@@ -24,6 +24,7 @@ import {
   AI_SECTION_MEANINGS,
   AI_TITLE_OPTIONS,
 } from '@chat/shared';
+import { ANONYMOUS_DAILY_MESSAGES, ANONYMOUS_MAX_INPUT_CHARS } from './anonymous-allowance.ts';
 import { createApp } from '../app.ts';
 import { MemoryStore } from '../store.ts';
 import { AI_PROVIDER_NAMES, readAiConfig } from './config.ts';
@@ -52,6 +53,7 @@ import {
   validSection,
 } from './draft-target.ts';
 import { mapGeminiError, readGeminiPayload } from './providers/gemini.ts';
+import { cookieHeader } from '../http/set-cookie.ts';
 import {
   AiRequestError,
   boundHistory,
@@ -733,7 +735,7 @@ describe('the endpoints', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: `w${Math.random()}@example.com`, password: 'secret12' }),
     });
-    return { app, cookie: registered.headers.get('set-cookie') ?? '' };
+    return { app, cookie: cookieHeader(registered.headers.get('set-cookie')) };
   }
 
   const post = (
@@ -748,12 +750,25 @@ describe('the endpoints', () => {
       body: JSON.stringify(body),
     });
 
-  test('assistance requires the app’s existing authentication', async () => {
+  test('a visitor gets a few assists a day, then is asked to make an account', async () => {
     const { app } = await signedIn();
-    for (const path of ['/api/ai/reflection-guidance', '/api/ai/improve-writing']) {
-      const response = await post(app, path, '', { section: 'heart', text: 'x' });
-      expect(response.status).toBe(401);
+    const body = { passageReference: 'Romans 8:28', sections: ['heart'], written: {} };
+    for (let attempt = 0; attempt < ANONYMOUS_DAILY_MESSAGES; attempt += 1) {
+      const response = await post(app, '/api/ai/reflection-guidance', '', body);
+      expect(response.status).toBe(200);
     }
+    const exhausted = await post(app, '/api/ai/reflection-guidance', '', body);
+    expect(exhausted.status).toBe(429);
+    expect(await exhausted.json()).toMatchObject({ outcome: AI_OUTCOMES.RATE_LIMITED });
+  });
+
+  test('a visitor’s assists must be short', async () => {
+    const { app } = await signedIn();
+    const response = await post(app, '/api/ai/improve-writing', '', {
+      section: 'heart',
+      text: 'x'.repeat(ANONYMOUS_MAX_INPUT_CHARS + 1),
+    });
+    expect(response.status).toBe(413);
   });
 
   test('guidance returns one to three questions per requested section, and the notice', async () => {
@@ -947,7 +962,7 @@ describe('the endpoints', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'still@example.com', password: 'secret12' }),
     });
-    const cookie = registered.headers.get('set-cookie') ?? '';
+    const cookie = cookieHeader(registered.headers.get('set-cookie'));
 
     const status = (await (await app.request('/api/ai/status')).json()) as {
       enabled: boolean;
@@ -1177,7 +1192,7 @@ describe('the conversation endpoint', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: `c${Math.random()}@example.com`, password: 'secret12' }),
     });
-    const cookie = registered.headers.get('set-cookie') ?? '';
+    const cookie = cookieHeader(registered.headers.get('set-cookie'));
     const send = (path: string, body: unknown) =>
       app.request(path, {
         method: 'POST',
@@ -1300,7 +1315,7 @@ describe('the conversation endpoint', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'intruder@example.com', password: 'secret12' }),
     });
-    const theirCookie = intruder.headers.get('set-cookie') ?? '';
+    const theirCookie = cookieHeader(intruder.headers.get('set-cookie'));
 
     const response = await app.request('/api/ai/reflection-chat', {
       method: 'POST',
@@ -1314,14 +1329,15 @@ describe('the conversation endpoint', () => {
     expect(response.status).toBe(404);
   });
 
-  test('a reply is refused without a session', async () => {
+  test('a reply is refused to someone the reflection does not belong to', async () => {
     const { app, id } = await conversationWith();
     const response = await app.request('/api/ai/reflection-chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ conversationId: id, message: 'Hello?' }),
     });
-    expect(response.status).toBe(401);
+    /* The same answer an absent reflection gets: ids stay undiscoverable. */
+    expect(response.status).toBe(404);
   });
 
   test('with AI off, the composer still stores messages as private notes', async () => {
@@ -1490,7 +1506,7 @@ describe('the model may generate, and may never mutate', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'boundary@example.com', password: 'secret12' }),
     });
-    const cookie = registered.headers.get('set-cookie') ?? '';
+    const cookie = cookieHeader(registered.headers.get('set-cookie'));
     const post = (path: string, body: unknown) =>
       app.request(path, {
         method: 'POST',
@@ -1557,7 +1573,7 @@ describe('the model may generate, and may never mutate', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'unplaced@example.com', password: 'secret12' }),
     });
-    const cookie = registered.headers.get('set-cookie') ?? '';
+    const cookie = cookieHeader(registered.headers.get('set-cookie'));
     const post = (path: string, body: unknown) =>
       app.request(path, {
         method: 'POST',
@@ -1611,7 +1627,7 @@ describe('the model may generate, and may never mutate', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'actions@example.com', password: 'secret12' }),
     });
-    const cookie = registered.headers.get('set-cookie') ?? '';
+    const cookie = cookieHeader(registered.headers.get('set-cookie'));
     const post = (path: string, body: unknown) =>
       app.request(path, {
         method: 'POST',
@@ -1662,7 +1678,7 @@ describe('the model may generate, and may never mutate', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'unknownaction@example.com', password: 'secret12' }),
     });
-    const cookie = registered.headers.get('set-cookie') ?? '';
+    const cookie = cookieHeader(registered.headers.get('set-cookie'));
     const created = await app.request('/api/conversations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Cookie: cookie },
@@ -1703,7 +1719,7 @@ describe('the model may generate, and may never mutate', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'scoped@example.com', password: 'secret12' }),
     });
-    const cookie = registered.headers.get('set-cookie') ?? '';
+    const cookie = cookieHeader(registered.headers.get('set-cookie'));
     const post = (path: string, body: unknown) =>
       app.request(path, {
         method: 'POST',
@@ -1743,7 +1759,7 @@ describe('the model may generate, and may never mutate', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'persist@example.com', password: 'secret12' }),
     });
-    const cookie = registered.headers.get('set-cookie') ?? '';
+    const cookie = cookieHeader(registered.headers.get('set-cookie'));
     const post = (path: string, body: unknown) =>
       app.request(path, {
         method: 'POST',
@@ -1847,7 +1863,7 @@ describe('suggest title, end to end', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: `t${Math.random()}@example.com`, password: 'secret12' }),
     });
-    const cookie = registered.headers.get('set-cookie') ?? '';
+    const cookie = cookieHeader(registered.headers.get('set-cookie'));
     const post = (path: string, body: unknown) =>
       app.request(path, {
         method: 'POST',
@@ -2037,7 +2053,7 @@ describe('the passage reaches the model', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password: 'secret12' }),
     });
-    const cookie = registered.headers.get('set-cookie') ?? '';
+    const cookie = cookieHeader(registered.headers.get('set-cookie'));
     const send = (path: string, body: unknown, method = 'POST') =>
       app.request(path, {
         method,

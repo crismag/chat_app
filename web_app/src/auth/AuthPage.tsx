@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Navigate } from 'react-router'
+import { Navigate, useSearchParams } from 'react-router'
+import { ACCOUNT_TYPES } from '@chat/shared'
 import { ApiError } from '../shared/api/client.ts'
 import { useAuth } from './useAuth.ts'
 import styles from './AuthPage.module.css'
@@ -59,7 +60,31 @@ function fieldOf(caught: unknown): ErrorField {
 
 export function AuthPage() {
   const { user, ready, login, register } = useAuth()
-  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [params] = useSearchParams()
+  /*
+   * A guest arriving here is claiming the account they already have, so the
+   * page opens on the form that does that rather than on sign-in.
+   *
+   * Derived rather than initialised, because who is asking is not known on the
+   * first render -- `/auth/me` is still in flight -- and a mode fixed before
+   * the answer arrives would show a guest the wrong form.
+   */
+  const guest = user?.accountType === ACCOUNT_TYPES.ANONYMOUS ? user : null
+  const [chosenMode, setChosenMode] = useState<'login' | 'register' | null>(null)
+  const mode = chosenMode ?? (guest ? 'register' : 'login')
+  const setMode = setChosenMode
+  /*
+   * Said after a guest tried an email that already has an account. Their work
+   * is not moved by registering -- that account is somebody's and is not
+   * overwritten -- so what they are told is to sign in, which is what moves it.
+   */
+  const [collision, setCollision] = useState<{ reflections: number } | null>(null)
+  /*
+   * Off by default, because the safe answer on a computer somebody does not
+   * own is the one that leaves nothing behind. Whether a computer is shared is
+   * never guessed at -- the person knows, and this is how they say so.
+   */
+  const [keepSignedIn, setKeepSignedIn] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<{ message: string; field: ErrorField } | null>(null)
@@ -85,8 +110,12 @@ export function AuthPage() {
     else alertRef.current?.focus()
   }, [error])
 
-  if (ready && user) {
-    return <Navigate to="/" replace />
+  /*
+   * A guest is somebody, but not somebody who has finished: they came here on
+   * purpose, so they stay. Only a registered user is sent away.
+   */
+  if (ready && user && user.accountType === ACCOUNT_TYPES.REGISTERED) {
+    return <Navigate to={params.get('next') ?? '/'} replace />
   }
 
   async function onSubmit(event: FormEvent) {
@@ -101,9 +130,18 @@ export function AuthPage() {
     setError(null)
     try {
       if (mode === 'login') {
-        await login(email, password)
+        await login(email, password, keepSignedIn)
       } else {
-        await register(email, password)
+        const outcome = await register(email, password)
+        if (!outcome.ok) {
+          /*
+           * Not an error to shout about: they have an account, and one sign-in
+           * away is everything they have written since, in it.
+           */
+          setCollision({ reflections: outcome.guestReflections })
+          setMode('login')
+          setPassword('')
+        }
       }
     } catch (caught) {
       setError({
@@ -151,11 +189,25 @@ export function AuthPage() {
 
       <section className={styles.panel}>
         <p className="eyebrow">Private by default</p>
-        <h1>{mode === 'login' ? 'Sign in' : 'Create account'}</h1>
+        <h1>
+          {mode === 'login' ? 'Sign in' : guest ? 'Create your account' : 'Create account'}
+        </h1>
         <p className={styles.lead}>
-          Your conversations stay private unless you explicitly publish one
-          C.H.A.T.
+          {guest && mode === 'register'
+            ? `You are writing as ${guest.guestName ?? 'a guest'}. Adding an email and a password keeps the same account — every reflection you have written stays exactly where it is, and you can reach it from any device.`
+            : 'Your reflections stay private unless you choose to share one.'}
         </p>
+
+        {collision ? (
+          <p className={styles.notice} role="status">
+            You already have an account with that email. Sign in and
+            {collision.reflections === 1
+              ? ' the reflection you have written here moves into it.'
+              : collision.reflections > 0
+                ? ` the ${collision.reflections} reflections you have written here move into it.`
+                : ' you can carry on there.'}
+          </p>
+        ) : null}
 
         <form className={styles.form} onSubmit={onSubmit}>
           <div className="field">
@@ -202,6 +254,24 @@ export function AuthPage() {
             />
           </div>
 
+          {mode === 'login' ? (
+            <label className={styles.keepSignedIn} htmlFor="keep-signed-in">
+              <input
+                id="keep-signed-in"
+                type="checkbox"
+                checked={keepSignedIn}
+                onChange={(event) => setKeepSignedIn(event.target.checked)}
+              />
+              <span>
+                Keep me signed in on this device
+                <span className={styles.keepNote}>
+                  Leave this off on a shared or public computer — you will be signed out when the
+                  browser closes.
+                </span>
+              </span>
+            </label>
+          ) : null}
+
           {error ? (
             <p
               ref={alertRef}
@@ -230,7 +300,10 @@ export function AuthPage() {
           <button
             type="button"
             className={styles.link}
-            onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
+            onClick={() => {
+              setCollision(null)
+              setMode(mode === 'login' ? 'register' : 'login')
+            }}
           >
             {mode === 'login' ? 'Create an account' : 'Sign in instead'}
           </button>

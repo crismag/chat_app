@@ -83,9 +83,19 @@ function addressOf(c: Context): string {
 export interface BibleRouteDeps {
   service: BibleService;
   /** The app's existing authentication. */
-  currentUser: (c: Context) => Promise<{ id: string } | null>;
+  /*
+   * Who is asking, which may be somebody with no account.
+   *
+   * Looking a passage up is not an identity-bearing act — it sends a reference
+   * to a Bible service and nothing else — so these routes ask for an owner
+   * rather than a user, and the two that do not touch a reflection work
+   * without either. Scripture is the material somebody writes against; making
+   * it wait for an account was the login wall reaching one page further than
+   * it needed to.
+   */
+  currentOwner: (c: Context) => Promise<{ id: string } | null>;
   /** Whether this user owns this reflection. Ownership is never assumed. */
-  ownsConversation: (userId: string, conversationId: string) => boolean;
+  ownsConversation: (ownerId: string, conversationId: string) => boolean;
   passages: PassageStore;
 }
 
@@ -179,8 +189,8 @@ export function createBibleRoutes(deps: BibleRouteDeps) {
   routes.get('/status', async (c) => c.json(deps.service.status()));
 
   routes.get('/translations', async (c) => {
-    const user = await deps.currentUser(c);
-    if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
+    /* Only for the rate-limit key; the catalog itself is nobody's. */
+    const owner = await deps.currentOwner(c);
 
     /*
      * `language` is an optional NARROWING, not a requirement.
@@ -208,7 +218,7 @@ export function createBibleRoutes(deps: BibleRouteDeps) {
     }
 
     const result = await deps.service.translations(
-      { userId: user.id, address: addressOf(c), requestId: randomUUID() },
+      { userId: owner?.id ?? addressOf(c), address: addressOf(c), requestId: randomUUID() },
       requested.length > 0 ? requested : undefined,
     );
 
@@ -233,8 +243,12 @@ export function createBibleRoutes(deps: BibleRouteDeps) {
   });
 
   routes.get('/passages', async (c) => {
-    const user = await deps.currentUser(c);
-    if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
+    /*
+     * No account needed. The rate limit still needs something to count, so an
+     * owner is used when there is one and the address when there is not —
+     * which is also what stops a visitor with no cookie from being unlimited.
+     */
+    const owner = await deps.currentOwner(c);
 
     const translationId = Number.parseInt((c.req.query('translationId') ?? '').trim(), 10);
     const reference = c.req.query('reference') ?? '';
@@ -247,7 +261,7 @@ export function createBibleRoutes(deps: BibleRouteDeps) {
 
     const result = await deps.service.passage(
       { translationId, reference },
-      { userId: user.id, address: addressOf(c), requestId: randomUUID() },
+      { userId: owner?.id ?? addressOf(c), address: addressOf(c), requestId: randomUUID() },
     );
 
     if (!result.ok) {
@@ -271,11 +285,11 @@ export function createBibleRoutes(deps: BibleRouteDeps) {
    * endpoints cannot be used to discover which reflection ids exist.
    */
   const owned = async (c: Context): Promise<{ userId: string; conversationId: string } | null> => {
-    const user = await deps.currentUser(c);
-    if (!user) return null;
+    const owner = await deps.currentOwner(c);
+    if (!owner) return null;
     const conversationId = c.req.param('id') ?? '';
-    if (!conversationId || !deps.ownsConversation(user.id, conversationId)) return null;
-    return { userId: user.id, conversationId };
+    if (!conversationId || !deps.ownsConversation(owner.id, conversationId)) return null;
+    return { userId: owner.id, conversationId };
   };
 
   routes.get('/reflections/:id/passage', async (c) => {

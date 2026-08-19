@@ -33,6 +33,7 @@ import { createBibleRoutes } from './routes.ts';
 import { BibleService } from './service.ts';
 import { MAX_PAGE_SIZE, YouVersionProvider, mapStatus, readPassage, readTranslation } from './providers/youversion.ts';
 import type { BiblePassage } from '@chat/shared';
+import { cookieHeader } from '../http/set-cookie.ts';
 
 /* ------------------------------------------------------------- fixtures */
 
@@ -1045,7 +1046,7 @@ describe('the endpoints', () => {
     const service = serviceWith(fakeFetch());
     const app = createBibleRoutes({
       service,
-      currentUser: () => Promise.resolve({ id: 'u1' }),
+      currentOwner: () => Promise.resolve({ id: 'o1' }),
       ownsConversation: () => true,
       passages,
       ...overrides,
@@ -1053,13 +1054,22 @@ describe('the endpoints', () => {
     return { app, passages };
   }
 
-  test('both endpoints require a signed-in user', async () => {
-    const store = new MemoryStore();
-    const app = createApp(store);
-    expect((await app.request('/api/bible/translations')).status).toBe(401);
-    expect(
-      (await app.request('/api/bible/passages?translationId=111&reference=JHN.3.16')).status,
-    ).toBe(401);
+  /*
+   * Scripture does not wait for an account.
+   *
+   * A visitor writing their first reflection needs the passage it is about,
+   * and looking one up sends a reference to a Bible service and nothing else.
+   * Neither endpoint is 401 any more — with no key configured they answer that
+   * they are not configured, which is the honest refusal.
+   */
+  test('looking up Scripture needs no account', async () => {
+    const app = createApp(new MemoryStore());
+    for (const path of [
+      '/api/bible/translations',
+      '/api/bible/passages?translationId=111&reference=JHN.3.16',
+    ]) {
+      expect((await app.request(path)).status).not.toBe(401);
+    }
   });
 
   test('an invalid reference answers 400 with a sentence about the reference', async () => {
@@ -1190,7 +1200,7 @@ describe('the passage a reflection was written against', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: `p${Math.random()}@example.com`, password: 'password123' }),
     });
-    const cookie = registered.headers.get('set-cookie')?.split(';')[0] ?? '';
+    const cookie = cookieHeader(registered.headers.get('set-cookie'));
     const created = await app.request('/api/conversations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Cookie: cookie },
@@ -1224,7 +1234,7 @@ describe('the passage a reflection was written against', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: `a${Math.random()}@example.com`, password: 'password123' }),
     });
-    const myCookie = mine.headers.get('set-cookie')?.split(';')[0] ?? '';
+    const myCookie = cookieHeader(mine.headers.get('set-cookie'));
     const created = await app.request('/api/conversations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Cookie: myCookie },
@@ -1237,7 +1247,7 @@ describe('the passage a reflection was written against', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: `b${Math.random()}@example.com`, password: 'password123' }),
     });
-    const theirCookie = theirs.headers.get('set-cookie')?.split(';')[0] ?? '';
+    const theirCookie = cookieHeader(theirs.headers.get('set-cookie'));
 
     const stolen = await app.request(`/api/bible/reflections/${id}/passage`, {
       headers: { Cookie: theirCookie },

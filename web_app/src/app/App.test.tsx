@@ -37,7 +37,13 @@ function mockAuthenticatedFetch() {
     if (url.includes('/auth/me')) {
       return Promise.resolve({
         ok: true,
-        json: async () => ({ id: 'u1', email: 'ada@example.com' }),
+        json: async () => ({
+          id: 'u1',
+          accountType: 'REGISTERED',
+          email: 'ada@example.com',
+          guestName: null,
+          emailVerified: true,
+        }),
       })
     }
     /*
@@ -106,11 +112,26 @@ function renderAt(path: string) {
   )
 }
 
-test('unauthenticated visitors are asked to sign in', async () => {
+/*
+ * There is no wall. A visitor lands in the application and can write; the
+ * things that need an account ask for one when they are reached.
+ */
+test('a visitor with no account lands in the app, not at a sign-in form', async () => {
   vi.stubGlobal('fetch', mockUnauthenticatedFetch())
   renderAt('/')
+  expect(await screen.findByLabelText('Write your reflection')).toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: 'Sign in' })).toBeNull()
+  /*
+   * And is offered a way in, once and quietly -- not told their work is saved,
+   * because a visitor has no account and nothing is saved for them yet.
+   */
+  expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument()
+})
+
+test('the sign-in page is still there for anyone who wants it', async () => {
+  vi.stubGlobal('fetch', mockUnauthenticatedFetch())
+  renderAt('/login')
   expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
-  expect(screen.getByText(/private unless you explicitly publish/i)).toBeInTheDocument()
 })
 
 test('Reflect opens on a question, and can be written in immediately', async () => {

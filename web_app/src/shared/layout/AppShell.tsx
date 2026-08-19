@@ -1,4 +1,4 @@
-import { Navigate, NavLink, Outlet, useNavigate } from 'react-router'
+import { Link, NavLink, Outlet, useNavigate } from 'react-router'
 import { useAuth } from '../../auth/useAuth.ts'
 import { ChatIcon, CommunityIcon, LibraryIcon, PlusIcon } from '../ui/icons.tsx'
 import { ProfileMenu } from '../ui/ProfileMenu.tsx'
@@ -30,7 +30,7 @@ const letters = [
 ] as const
 
 export function AppShell() {
-  const { user, ready, logout } = useAuth()
+  const { user, ready, logout, forgetThisBrowser } = useAuth()
   const navigate = useNavigate()
 
   if (!ready) {
@@ -42,9 +42,15 @@ export function AppShell() {
     )
   }
 
-  if (!user) {
-    return <Navigate to="/login" replace />
-  }
+  /*
+   * No wall.
+   *
+   * This used to send anyone without a session to /login, which meant a
+   * visitor had to decide whether to trust the product before they had used
+   * it. The shell renders for everybody now; what an anonymous person cannot
+   * do is refused at the point they try it, with the reason, rather than at
+   * the door.
+   */
 
   return (
     <div className={styles.shell}>
@@ -99,7 +105,26 @@ export function AppShell() {
               <PlusIcon className={styles.navIcon} />
               <span className={styles.newLabel}>New reflection</span>
             </button>
-            <ProfileMenu email={user.email} onSignOut={() => void logout()} />
+            {/*
+              Somebody — guest or registered: the account menu, which says
+              which they are. Nobody yet: an invitation to sign in, stated once
+              and quietly. It is not a prompt and not a banner; a visitor is
+              asked about an account exactly once, when they first keep
+              something, and never on a screen they are only reading.
+            */}
+            {user ? (
+              <ProfileMenu
+                account={user}
+                onSignOut={() => void logout()}
+                onForgetThisBrowser={() => void forgetThisBrowser()}
+              />
+            ) : (
+              /* Nobody yet, so nothing is saved yet. */
+              <Link className={styles.deviceNote} to="/login" title="Sign in to reach your reflections on any device">
+                <span className={styles.deviceDot} aria-hidden="true" />
+                Sign in
+              </Link>
+            )}
           </div>
         </div>
       </header>

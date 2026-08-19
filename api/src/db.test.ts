@@ -1,9 +1,11 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createApp } from './app.ts';
 import { SESSION_TTL_MS, SqliteStore } from './db.ts';
+import { cookieHeader } from './http/set-cookie.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'chat-db-'));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -21,8 +23,7 @@ async function register(app: ReturnType<typeof createApp>, email: string) {
     json({ email, password: 'password123' }),
   );
   expect(response.status).toBeLessThan(400);
-  const cookie = response.headers.get('set-cookie') ?? '';
-  return cookie.split(';')[0] ?? '';
+  return cookieHeader(response.headers.get('set-cookie'));
 }
 
 /**
@@ -146,12 +147,9 @@ describe('SQLite store', () => {
 
   it('refuses a session that has aged out, and forgets it', () => {
     const store = new SqliteStore();
-    store.users.set('u1', {
-      id: 'u1',
-      email: 'expiry@example.com',
-      passwordHash: 'x',
-    });
-    store.sessions.set('token-1', { token: 'token-1', userId: 'u1' });
+    store.accounts.createRegistered('expiry@example.com', 'x');
+    const { id: userId } = store.accounts.byEmail('expiry@example.com')!;
+    store.sessions.set('token-1', { token: 'token-1', userId });
     expect(store.sessions.get('token-1')).toBeTruthy();
 
     // Age it past the window rather than waiting thirty days.
@@ -190,6 +188,7 @@ describe('the Context → Content rename carries stored writing across', () => {
      * fixtures exist to be migrated, and one built with the new schema would
      * prove nothing.
      */
+    /* The shape this database actually had: a column called publicationState. */
     seed.db.exec('ALTER TABLE conversations RENAME COLUMN visibility TO publicationState');
     seed.db
       .prepare(
@@ -277,6 +276,7 @@ describe('the Context → Content rename carries stored writing across', () => {
      * fixtures exist to be migrated, and one built with the new schema would
      * prove nothing.
      */
+    /* The shape this database actually had: a column called publicationState. */
     seed.db.exec('ALTER TABLE conversations RENAME COLUMN visibility TO publicationState');
     seed.db
       .prepare(
@@ -315,6 +315,7 @@ describe('publicationState → visibility', () => {
   function beforeTheRename(name: string): string {
     const file = join(dir, name);
     const seed = new SqliteStore(file);
+    /* The shape this database actually had: a column called publicationState. */
     seed.db.exec('ALTER TABLE conversations RENAME COLUMN visibility TO publicationState');
     seed.db
       .prepare('INSERT INTO users (id, email, passwordHash) VALUES (?, ?, ?)')
@@ -367,6 +368,116 @@ describe('publicationState → visibility', () => {
     const store = new SqliteStore(file);
     try {
       expect(store.conversations.get('shared-one')?.visibility).toBe('shared');
+    } finally {
+      store.close();
+    }
+  });
+});
+
+/*
+ * Two older shapes, both of which still have to open.
+ *
+ * The first is the original: a reflection keyed to a user by a foreign key,
+ * which is the login wall written as a constraint. The second is the design in
+ * between, where a separate `owners` table stood between a reflection and the
+ * person who wrote it. Both become the same thing -- a reflection owned by a
+ * user, guest or registered -- and a database in either state has to arrive
+ * there without losing a row.
+ */
+describe('older databases become accounts', () => {
+  /** The original shape: users with two columns, conversations keyed to them. */
+  function beforeAccounts(name: string): string {
+    const file = join(dir, name);
+    const seed = new DatabaseSync(file);
+    seed.exec(`
+      CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, passwordHash TEXT NOT NULL);
+      CREATE TABLE conversations (
+        id TEXT PRIMARY KEY, userId TEXT NOT NULL, format TEXT NOT NULL DEFAULT 'full',
+        title TEXT NOT NULL, scriptureReference TEXT, visibility TEXT NOT NULL,
+        tags TEXT NOT NULL DEFAULT '[]', createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+      );
+      INSERT INTO users (id, email, passwordHash) VALUES ('u1', 'author@example.com', 'x');
+      INSERT INTO conversations (id, userId, title, visibility, createdAt, updatedAt)
+        VALUES ('c1', 'u1', 'First', 'private', '2026-01-01', '2026-01-01'),
+               ('c2', 'u1', 'Second', 'shared', '2026-01-01', '2026-01-01');
+    `);
+    seed.close();
+    return file;
+  }
+
+  /** The in-between shape: an owners table, and reflections pointing at it. */
+  function beforeGuestsWereUsers(name: string): string {
+    const file = join(dir, name);
+    const seed = new DatabaseSync(file);
+    seed.exec(`
+      CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, passwordHash TEXT NOT NULL);
+      CREATE TABLE owners (
+        id TEXT PRIMARY KEY, kind TEXT NOT NULL, userId TEXT,
+        createdAt TEXT NOT NULL, claimedAt TEXT, expiresAt TEXT
+      );
+      CREATE TABLE conversations (
+        id TEXT PRIMARY KEY, ownerId TEXT NOT NULL, format TEXT NOT NULL DEFAULT 'full',
+        title TEXT NOT NULL, scriptureReference TEXT, visibility TEXT NOT NULL,
+        tags TEXT NOT NULL DEFAULT '[]', createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL
+      );
+      INSERT INTO users (id, email, passwordHash) VALUES ('u1', 'author@example.com', 'x');
+      INSERT INTO owners (id, kind, userId, createdAt) VALUES
+        ('o-account', 'user', 'u1', '2026-01-01'),
+        ('o-guest', 'anonymous', NULL, '2026-01-01');
+      INSERT INTO conversations (id, ownerId, title, visibility, createdAt, updatedAt)
+        VALUES ('c1', 'o-account', 'Signed in', 'private', '2026-01-01', '2026-01-01'),
+               ('c2', 'o-guest', 'Written first', 'private', '2026-01-01', '2026-01-01');
+    `);
+    seed.close();
+    return file;
+  }
+
+  it('keeps every reflection with the account that wrote it', () => {
+    const store = new SqliteStore(beforeAccounts('accounts-upgrade.sqlite'));
+    try {
+      expect(store.conversations.get('c1')?.userId).toBe('u1');
+      expect(store.conversations.get('c2')?.userId).toBe('u1');
+      /* Accounts that existed before guests did are registered ones. */
+      expect(store.accounts.get('u1')?.accountType).toBe('REGISTERED');
+    } finally {
+      store.close();
+    }
+  });
+
+  it('gives the old users table room for a guest', () => {
+    const store = new SqliteStore(beforeAccounts('accounts-nullable.sqlite'));
+    try {
+      const guest = store.accounts.createGuest('QuietCedar-1', {
+        creationMethod: 'GUEST_OPT_IN',
+        creationSource: 'REFLECTION_CREATE',
+        platform: 'WEB',
+        deviceClass: 'UNKNOWN',
+      });
+      /* The old columns were NOT NULL, which a guest cannot satisfy. */
+      expect(guest.email).toBeNull();
+      expect(guest.passwordHash).toBeNull();
+      expect(guest.accountType).toBe('ANONYMOUS');
+    } finally {
+      store.close();
+    }
+  });
+
+  it('turns owners into the users they were standing in for', () => {
+    const store = new SqliteStore(beforeGuestsWereUsers('owners-carried.sqlite'));
+    try {
+      /* An owner with an account was always that account. */
+      expect(store.conversations.get('c1')?.userId).toBe('u1');
+
+      /* An owner without one becomes the guest it was already describing. */
+      const guestId = store.conversations.get('c2')?.userId;
+      expect(guestId).toBe('o-guest');
+      expect(store.accounts.get(guestId!)?.accountType).toBe('ANONYMOUS');
+
+      const columns = (store.db.prepare('PRAGMA table_info(conversations)').all() as {
+        name: string;
+      }[]).map((column) => column.name);
+      expect(columns).toContain('userId');
+      expect(columns).not.toContain('ownerId');
     } finally {
       store.close();
     }

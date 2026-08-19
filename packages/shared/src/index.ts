@@ -176,3 +176,132 @@ export * from './formats.ts';
 export * from './ai.ts';
 export * from './bible.ts';
 export * from './community.ts';
+
+/*
+ * Guest and registered, and the words for them.
+ *
+ * Three words are in play and only two of them are ours to define. A VISITOR
+ * has no account and nothing is stored for them. A GUEST chose to carry on
+ * without signing in and is a real user with a real id — everything they write
+ * belongs to them. A REGISTERED user is a guest who added an email and a
+ * password, or somebody who signed in from the start.
+ *
+ * The internal value is `ANONYMOUS`, because that is what the account is:
+ * an account with no identity attached to it. The word shown to a person is
+ * "Guest", because "anonymous account" describes a threat model rather than a
+ * choice they made. Both live here so the translation happens once.
+ */
+export const ACCOUNT_TYPES = {
+  ANONYMOUS: 'ANONYMOUS',
+  REGISTERED: 'REGISTERED',
+} as const;
+
+export type AccountType = (typeof ACCOUNT_TYPES)[keyof typeof ACCOUNT_TYPES];
+
+/** A stored value read back, defaulting to the safer of the two. */
+export function readAccountType(value: unknown): AccountType {
+  return value === ACCOUNT_TYPES.REGISTERED ? ACCOUNT_TYPES.REGISTERED : ACCOUNT_TYPES.ANONYMOUS;
+}
+
+/**
+ * Who the application is acting for.
+ *
+ * One shape for both kinds, because everything that owns something owns it the
+ * same way. A guest has no email and a registered user usually has no guest
+ * name — but one who used to be a guest keeps theirs, which is the whole point
+ * of upgrading a row instead of replacing it.
+ */
+export type Account = {
+  id: string;
+  accountType: AccountType;
+  email: string | null;
+  guestName: string | null;
+  emailVerified: boolean;
+};
+
+export function isGuest(account: Pick<Account, 'accountType'> | null): boolean {
+  return account?.accountType === ACCOUNT_TYPES.ANONYMOUS;
+}
+
+/**
+ * What to call somebody on screen.
+ *
+ * A guest is "Guest · QuietCedar-14" — the word first, because the state
+ * matters more than the name, and the name second, because a person needs
+ * something to recognise as theirs.
+ */
+export function accountLabel(account: Pick<Account, 'accountType' | 'email' | 'guestName'>): string {
+  if (account.accountType === ACCOUNT_TYPES.REGISTERED) return account.email ?? 'Your account';
+  return account.guestName ? `Guest · ${account.guestName}` : 'Guest';
+}
+
+/**
+ * How the account came to exist, kept because it cannot be reconstructed.
+ *
+ * Deliberately coarse. `deviceClass` is three buckets wide because the only
+ * thing worth knowing later is whether guests are made on phones; a finer
+ * measurement of somebody's hardware would be a fingerprint, and this
+ * application does not build those.
+ */
+export const CREATION_METHODS = {
+  GUEST_OPT_IN: 'GUEST_OPT_IN',
+  REGISTRATION: 'REGISTRATION',
+} as const;
+
+export type CreationMethod = (typeof CREATION_METHODS)[keyof typeof CREATION_METHODS];
+
+export const CREATION_SOURCES = {
+  REFLECTION_CREATE: 'REFLECTION_CREATE',
+  REFLECTION_SAVE: 'REFLECTION_SAVE',
+  CHAT_START: 'CHAT_START',
+  IMAGE_CREATE: 'IMAGE_CREATE',
+  PASSAGE_SAVE: 'PASSAGE_SAVE',
+  OTHER_PERSISTENT_ACTION: 'OTHER_PERSISTENT_ACTION',
+} as const;
+
+export type CreationSource = (typeof CREATION_SOURCES)[keyof typeof CREATION_SOURCES];
+
+export const PLATFORMS = { WEB: 'WEB', ANDROID: 'ANDROID', IOS: 'IOS' } as const;
+export type Platform = (typeof PLATFORMS)[keyof typeof PLATFORMS];
+
+export const DEVICE_CLASSES = {
+  MOBILE: 'MOBILE',
+  TABLET: 'TABLET',
+  DESKTOP: 'DESKTOP',
+  UNKNOWN: 'UNKNOWN',
+} as const;
+
+export type DeviceClass = (typeof DEVICE_CLASSES)[keyof typeof DEVICE_CLASSES];
+
+/** Creation context as it arrives from a client, with nothing trusted. */
+export type AccountCreationContext = {
+  creationMethod: CreationMethod;
+  creationSource: CreationSource;
+  platform: Platform;
+  deviceClass: DeviceClass;
+};
+
+function oneOf<T extends string>(values: Record<string, T>, value: unknown, fallback: T): T {
+  return Object.values(values).includes(value as T) ? (value as T) : fallback;
+}
+
+/**
+ * A client says where it was and this decides whether to believe the shape.
+ *
+ * Not the truth of it — a client can lie about being a phone and no harm comes
+ * of it — but the vocabulary, so an open string cannot be written into a
+ * column that reporting later groups by.
+ */
+export function readCreationContext(value: unknown): AccountCreationContext {
+  const source = (value ?? {}) as Record<string, unknown>;
+  return {
+    creationMethod: oneOf(CREATION_METHODS, source['creationMethod'], CREATION_METHODS.GUEST_OPT_IN),
+    creationSource: oneOf(
+      CREATION_SOURCES,
+      source['creationSource'],
+      CREATION_SOURCES.OTHER_PERSISTENT_ACTION,
+    ),
+    platform: oneOf(PLATFORMS, source['platform'], PLATFORMS.WEB),
+    deviceClass: oneOf(DEVICE_CLASSES, source['deviceClass'], DEVICE_CLASSES.UNKNOWN),
+  };
+}

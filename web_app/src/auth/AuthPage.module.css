@@ -151,6 +151,43 @@
   font-size: var(--text-sm);
 }
 
+/*
+ * Not a failure: they have an account, and signing in is the next step rather
+ * than a correction. So it reads in the ordinary voice, not the red one.
+ */
+.notice {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted, var(--accent-soft, #eef1fb));
+  color: var(--ink-muted, inherit);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+/*
+ * The one decision on this form that is about the machine rather than the
+ * person, so it explains itself in place rather than in a tooltip.
+ */
+.keepSignedIn {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.keepSignedIn input {
+  margin-top: 0.2em;
+}
+
+.keepNote {
+  display: block;
+  color: var(--ink-muted, inherit);
+  font-size: var(--text-xs, 0.8rem);
+}
+
 .switch {
   color: var(--muted);
   font-size: var(--text-sm);

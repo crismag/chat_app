@@ -17,16 +17,25 @@ export interface RateLimitDecision {
   retryAfterSeconds: number;
 }
 
-const WINDOW_MS = 60_000;
+export const MINUTE_MS = 60_000;
+export const DAY_MS = 24 * 60 * 60 * 1000;
 
 export class SlidingWindowRateLimiter {
   private readonly hits = new Map<string, number[]>();
   private readonly limit: number;
+  private readonly windowMs: number;
   private readonly now: () => number;
 
-  constructor(limit: number, now: () => number = Date.now) {
+  /*
+   * The window is a parameter because there are two different ceilings now: a
+   * per-minute one that stops a button being held down, and a per-day one that
+   * is the whole allowance somebody without an account gets. Same counting,
+   * different question.
+   */
+  constructor(limit: number, now: () => number = Date.now, windowMs: number = MINUTE_MS) {
     this.limit = limit;
     this.now = now;
+    this.windowMs = windowMs;
   }
 
   /**
@@ -38,7 +47,7 @@ export class SlidingWindowRateLimiter {
    */
   take(key: string): RateLimitDecision {
     const now = this.now();
-    const cutoff = now - WINDOW_MS;
+    const cutoff = now - this.windowMs;
     const recent = (this.hits.get(key) ?? []).filter((at) => at > cutoff);
 
     if (recent.length >= this.limit) {
@@ -46,7 +55,7 @@ export class SlidingWindowRateLimiter {
       const oldest = recent[0] ?? now;
       return {
         allowed: false,
-        retryAfterSeconds: Math.max(1, Math.ceil((oldest + WINDOW_MS - now) / 1000)),
+        retryAfterSeconds: Math.max(1, Math.ceil((oldest + this.windowMs - now) / 1000)),
       };
     }
 

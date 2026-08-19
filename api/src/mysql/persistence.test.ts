@@ -296,6 +296,109 @@ describe.skipIf(!config)('MySQL persistence', () => {
     }
   });
 
+  /*
+   * Guests, and the two things about them that only a real database can prove:
+   * that the name sequence is atomic, and that an installation credential is
+   * two halves rather than one.
+   */
+  it('makes a guest a real user with a name and its own sequence', async () => {
+    const guest = await db.createGuestUser('QuietCedar-1', {
+      creationMethod: 'GUEST_OPT_IN',
+      creationSource: 'REFLECTION_CREATE',
+      platform: 'WEB',
+      deviceClass: 'MOBILE',
+    });
+    userIds.push(guest.id);
+    expect(guest.accountType).toBe('ANONYMOUS');
+    expect(guest.guestName).toBe('QuietCedar-1');
+    expect(guest.registeredAt).toBeNull();
+  });
+
+  it('hands out each guest number once, even to callers arriving together', async () => {
+    const base = `TestName${randomUUID().slice(0, 8)}`;
+    const allocated = await Promise.all(
+      Array.from({ length: 8 }, () => db.nextGuestNameSequence(base)),
+    );
+    /* The point of a sequence: eight callers, eight different numbers. */
+    expect(new Set(allocated).size).toBe(8);
+    expect([...allocated].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+
+  it('registers a guest in place, keeping the id and the name', async () => {
+    const guest = await db.createGuestUser(`GentleRiver-${randomUUID().slice(0, 8)}`, {
+      creationMethod: 'GUEST_OPT_IN',
+      creationSource: 'REFLECTION_CREATE',
+      platform: 'WEB',
+      deviceClass: 'DESKTOP',
+    });
+    userIds.push(guest.id);
+    await db.setLocalCredentials(guest.id, `claim-${guest.id}@example.com`, 'a-long-password');
+    await db.markUserRegistered(guest.id);
+
+    const after = await db.getUserById(guest.id);
+    expect(after?.id).toBe(guest.id);
+    expect(after?.publicUuid).toBe(guest.publicUuid);
+    expect(after?.accountType).toBe('REGISTERED');
+    /* Kept for the audit trail: it is what they were called until now. */
+    expect(after?.guestName).toBe(guest.guestName);
+    expect(after?.registeredAt).not.toBeNull();
+  });
+
+  it('stores an installation as a hash, and revoking it ends its sessions', async () => {
+    const created = await user();
+    const installationId = randomUUID();
+    const secret = randomUUID();
+    await db.addInstallation({
+      userId: created.id,
+      installationId,
+      credentialHash: createHash('sha256').update(secret, 'utf8').digest('hex'),
+      persistenceType: 'GUEST_PERSISTENT',
+      platform: 'WEB',
+      deviceClass: 'DESKTOP',
+      browserFamily: 'Firefox',
+      osFamily: 'Linux',
+    });
+
+    const found = await db.findInstallation(installationId);
+    expect(found?.userId).toBe(created.id);
+    /* The secret is not in the row; only something derived from it is. */
+    expect(found?.credentialHash).not.toContain(secret);
+
+    const { token } = await db.createSession(created.id, 60_000, {
+      installationId,
+      sessionType: 'GUEST',
+    });
+    expect(await db.findActiveSession(token)).not.toBeNull();
+
+    await db.revokeInstallation(installationId);
+    expect(await db.findInstallation(installationId)).toBeNull();
+    /* Recognition and interaction end together when the browser is forgotten. */
+    expect(await db.findActiveSession(token)).toBeNull();
+  });
+
+  it('keeps a session alive when only the session is meant to end', async () => {
+    const created = await user();
+    const installationId = randomUUID();
+    await db.addInstallation({
+      userId: created.id,
+      installationId,
+      credentialHash: createHash('sha256').update('secret', 'utf8').digest('hex'),
+      persistenceType: 'GUEST_PERSISTENT',
+      platform: 'WEB',
+    });
+    const { session } = await db.createSession(created.id, 60_000, {
+      installationId,
+      sessionType: 'GUEST',
+    });
+    await db.revokeSession(session.id);
+
+    /*
+     * The whole reason these are two tables: signing a guest out must not be
+     * what destroys the only way back to what they wrote.
+     */
+    expect(await db.findInstallation(installationId)).not.toBeNull();
+  });
+
   it('does not create conversation-history tables in the live schema', async () => {
     const tables = await db.listTableNames();
     for (const table of FORBIDDEN_CENTRAL_TABLES) {
