@@ -503,6 +503,13 @@ export function createApp(
    */
   const profiles = createProfileStore(store);
 
+  /*
+   * Made once, not per route. Deleting a reflection has to reach it too — its
+   * shares are copies of that reflection and must not survive it — and two
+   * stores over one database would be two migrations racing on first use.
+   */
+  const communityStore = createCommunityStore(store);
+
   app.route(
     '/api/profiles',
     createProfileRoutes({
@@ -529,7 +536,7 @@ export function createApp(
     '/api',
     createCommunityRoutes({
       currentUser: (c) => registeredUser(c),
-      store: createCommunityStore(store),
+      store: communityStore,
       reflection: (userId, conversationId) => {
         const conversation = store.conversations.get(conversationId);
         if (!conversation || !userOwnsConversation(userId, conversation.id)) return null;
@@ -934,16 +941,24 @@ export function createApp(
    * The messages and the sections are the reflection, not satellites of it, so
    * they go too. Confirmation is the interface's job; by the time a request
    * arrives here the author has said yes.
+   *
+   * And so do its shares. A publication is a copy taken at the moment of
+   * sharing — that is what lets a community show a reflection without reaching
+   * into somebody's private writing — and the price of that copy is that it
+   * must not outlive the thing it was taken from. Without this, deleting a
+   * reflection left the copies standing: a community keeping something whose
+   * author had destroyed it and could no longer reach it.
    */
   app.delete('/api/conversations/:id', async (c) => {
-    const { conversation } = await ownedConversation(c, c.req.param('id'));
-    if (!conversation) {
+    const { conversation, owner } = await ownedConversation(c, c.req.param('id'));
+    if (!conversation || !owner) {
       return c.json({ error: 'Conversation not found.' }, 404);
     }
+    const shares = communityStore?.removeSharesOfConversation(conversation.id, owner.id) ?? 0;
     store.sections.delete(conversation.id);
     store.messages.delete(conversation.id);
     store.conversations.delete(conversation.id);
-    return c.json({ id: conversation.id, deleted: true });
+    return c.json({ id: conversation.id, deleted: true, sharesRemoved: shares });
   });
 
   app.post('/api/conversations/:id/messages', async (c) => {

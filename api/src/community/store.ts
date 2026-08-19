@@ -52,10 +52,15 @@ import {
   MEMBERSHIP_STATES,
   MODERATION_STATES,
   REPORT_STATES,
+  canModerate,
+  readCommunityRole,
+  readCommunitySettings,
   type Audience,
   type CommunityRole,
+  type CommunitySettings,
   type MembershipState,
   type ModerationState,
+  type ReflectionVisibility,
 } from '@chat/shared';
 
 /* ------------------------------------------------------------------- types */
@@ -65,9 +70,24 @@ export type StoredCommunity = {
   name: string;
   description: string;
   createdByUserId: string;
+  /** The four settings, read through the shared reader rather than raw. */
+  settings: CommunitySettings;
   createdAt: string;
   closedAt: string | null;
 };
+
+/** A row as it comes back, before the settings are read out of it. */
+function communityFromRow(row: Row): StoredCommunity {
+  return {
+    id: String(row['id']),
+    name: String(row['name']),
+    description: String(row['description'] ?? ''),
+    createdByUserId: String(row['createdByUserId']),
+    settings: readCommunitySettings(row),
+    createdAt: String(row['createdAt']),
+    closedAt: row['closedAt'] ? String(row['closedAt']) : null,
+  };
+}
 
 export type StoredMembership = {
   communityId: string;
@@ -128,6 +148,8 @@ export type NewPublication = {
   conversationId: string;
   audience: Audience;
   communityId: string | null;
+  /** Who may read this particular share, decided once and kept. */
+  shareVisibility: ReflectionVisibility;
   caption: string;
   /** Which section types the author chose to include, in order. */
   sectionTypes: readonly string[];
@@ -145,13 +167,33 @@ export type FeedQuery = {
 
 /* -------------------------------------------------------------- migration */
 
+/** Safe on every start: SQLite has no ADD COLUMN IF NOT EXISTS. */
+function addColumn(db: DatabaseSync, table: string, column: string, type: string): void {
+  const existing = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (existing.some((row) => row.name === column)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+}
+
 function migrate(db: DatabaseSync): void {
   db.exec(`
+    /*
+     * A community is four settings, not one isPrivate flag.
+     *
+     * Public and Private are what somebody chooses; they are presets over
+     * these columns and are not stored. That is what lets a church group be
+     * discoverable so newcomers can find it while everything shared inside
+     * stays members-only -- a combination a single flag would have forced
+     * somebody to name "semi-private".
+     */
     CREATE TABLE IF NOT EXISTS communities (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       createdByUserId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      discoverability TEXT NOT NULL DEFAULT 'hidden',
+      joinPolicy TEXT NOT NULL DEFAULT 'invite',
+      reflectionVisibility TEXT NOT NULL DEFAULT 'members',
+      approvalPolicy TEXT NOT NULL DEFAULT 'owner_admin',
       createdAt TEXT NOT NULL,
       closedAt TEXT
     );
@@ -198,6 +240,16 @@ function migrate(db: DatabaseSync): void {
       title TEXT NOT NULL,
       scriptureReference TEXT,
       caption TEXT NOT NULL DEFAULT '',
+      /*
+       * Who may read THIS share, fixed at the moment it was made.
+       *
+       * Deliberately a copy rather than a lookup through to the community's
+       * current setting. Somebody shared into a twelve-person group on the
+       * understanding that twelve people would read it; an owner changing a
+       * setting six months later must not be able to reach back and publish
+       * it. The setting decides what new shares get, and nothing else.
+       */
+      shareVisibility TEXT NOT NULL DEFAULT 'members',
       moderationState TEXT NOT NULL DEFAULT 'visible',
       hiddenByUserId TEXT,
       hiddenAt TEXT,
@@ -264,6 +316,27 @@ function migrate(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_pub_tags ON publication_tags(tag);
     CREATE INDEX IF NOT EXISTS idx_reports_open ON publication_reports(publicationId, state);
   `);
+
+  /*
+   * Columns added after these tables existed. Every default is the private
+   * answer, so a community written before there were settings does not become
+   * readable by acquiring them.
+   */
+  addColumn(db, 'communities', 'discoverability', "TEXT NOT NULL DEFAULT 'hidden'");
+  addColumn(db, 'communities', 'joinPolicy', "TEXT NOT NULL DEFAULT 'invite'");
+  addColumn(db, 'communities', 'reflectionVisibility', "TEXT NOT NULL DEFAULT 'members'");
+  addColumn(db, 'communities', 'approvalPolicy', "TEXT NOT NULL DEFAULT 'owner_admin'");
+  addColumn(db, 'publications', 'shareVisibility', "TEXT NOT NULL DEFAULT 'members'");
+
+  /*
+   * A public publication is public whatever a column says.
+   *
+   * Rows written before shares carried their own visibility take the default,
+   * which is `members` -- correct for a community share and wrong for one that
+   * was already on the public feed. Run once: afterwards no public row is
+   * marked members-only.
+   */
+  db.exec("UPDATE publications SET shareVisibility = 'public' WHERE audience = 'public'");
 }
 
 /* ---------------------------------------------------- the one predicate */
@@ -304,11 +377,22 @@ const VISIBLE_TO = `
         p.audience = 'public'
         OR (
           p.audience = 'community'
-          AND EXISTS (
-            SELECT 1 FROM community_members AS m
-             WHERE m.communityId = p.communityId
-               AND m.userId = ?1
-               AND m.state = 'active'
+          AND (
+            /*
+             * A community share that was made public when it was made.
+             *
+             * shareVisibility is the share's own copy, taken at publish
+             * time, which is why this cannot be turned on retroactively by an
+             * administrator changing a setting: existing rows keep the answer
+             * they were written with.
+             */
+            p.shareVisibility = 'public'
+            OR EXISTS (
+              SELECT 1 FROM community_members AS m
+               WHERE m.communityId = p.communityId
+                 AND m.userId = ?1
+                 AND m.state = 'active'
+            )
           )
         )
       )
@@ -344,6 +428,7 @@ export class CommunityStore {
     name: string;
     description: string;
     createdByUserId: string;
+    settings: CommunitySettings;
   }): StoredCommunity {
     const timestamp = new Date().toISOString();
     const community: StoredCommunity = {
@@ -351,6 +436,7 @@ export class CommunityStore {
       name: input.name,
       description: input.description,
       createdByUserId: input.createdByUserId,
+      settings: input.settings,
       createdAt: timestamp,
       closedAt: null,
     };
@@ -359,14 +445,20 @@ export class CommunityStore {
     try {
       this.db
         .prepare(
-          `INSERT INTO communities (id, name, description, createdByUserId, createdAt, closedAt)
-           VALUES (?, ?, ?, ?, ?, NULL)`,
+          `INSERT INTO communities
+             (id, name, description, createdByUserId, discoverability, joinPolicy,
+              reflectionVisibility, approvalPolicy, createdAt, closedAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
         )
         .run(
           community.id,
           community.name,
           community.description,
           community.createdByUserId,
+          input.settings.discoverability,
+          input.settings.joinPolicy,
+          input.settings.reflectionVisibility,
+          input.settings.approvalPolicy,
           community.createdAt,
         );
       /*
@@ -399,7 +491,7 @@ export class CommunityStore {
     const row = this.db.prepare('SELECT * FROM communities WHERE id = ?').get(id) as
       | Row
       | undefined;
-    return row ? (row as unknown as StoredCommunity) : null;
+    return row ? communityFromRow(row) : null;
   }
 
   /**
@@ -503,6 +595,123 @@ export class CommunityStore {
       );
   }
 
+  /**
+   * Change what a community is, without changing what it has already held.
+   *
+   * `shareVisibility` on existing publications is deliberately not touched.
+   * Turning a members-only community public is a decision about future shares;
+   * reaching back through it would publish, on somebody else's behalf, work
+   * they gave to twelve people. Reducing exposure the other way needs no such
+   * care and still does not rewrite rows -- a share that was public when it
+   * was made stays what its author chose.
+   */
+  updateSettings(communityId: string, settings: CommunitySettings): void {
+    this.db
+      .prepare(
+        `UPDATE communities
+            SET discoverability = ?, joinPolicy = ?, reflectionVisibility = ?, approvalPolicy = ?
+          WHERE id = ?`,
+      )
+      .run(
+        settings.discoverability,
+        settings.joinPolicy,
+        settings.reflectionVisibility,
+        settings.approvalPolicy,
+        communityId,
+      );
+  }
+
+  /**
+   * Communities somebody could find and ask to join.
+   *
+   * Discoverability only. Being able to see that a community exists is not
+   * being able to see what is written in it, which is the whole point of a
+   * discoverable private group -- so this returns names and descriptions and
+   * nothing that was shared inside.
+   */
+  discoverable(viewerUserId: string, query: string): (StoredCommunity & {
+    memberState: MembershipState | null;
+    memberCount: number;
+  })[] {
+    const like = `%${query.trim().toLowerCase()}%`;
+    const rows = this.db
+      .prepare(
+        `SELECT c.*,
+                (SELECT state FROM community_members
+                  WHERE communityId = c.id AND userId = ?1) AS memberState,
+                (SELECT COUNT(*) FROM community_members
+                  WHERE communityId = c.id AND state = 'active') AS memberCount
+           FROM communities AS c
+          WHERE c.closedAt IS NULL
+            AND c.discoverability = 'public'
+            AND (?2 = '%%' OR LOWER(c.name) LIKE ?2 OR LOWER(c.description) LIKE ?2)
+          ORDER BY c.name`,
+      )
+      .all(viewerUserId, like) as Row[];
+    return rows.map((row) => ({
+      ...communityFromRow(row),
+      memberState: row['memberState'] ? (String(row['memberState']) as MembershipState) : null,
+      memberCount: Number(row['memberCount'] ?? 0),
+    }));
+  }
+
+  /** Everybody waiting on a decision, oldest first. */
+  joinRequests(communityId: string): (StoredMembership & {
+    handle: string | null;
+    displayName: string | null;
+  })[] {
+    return this.db
+      .prepare(
+        `SELECT m.*, pr.handle AS handle, pr.displayName AS displayName
+           FROM community_members AS m
+           LEFT JOIN profiles AS pr ON pr.userId = m.userId
+          WHERE m.communityId = ? AND m.state = 'pending'
+          ORDER BY m.updatedAt`,
+      )
+      .all(communityId) as unknown as (StoredMembership & {
+      handle: string | null;
+      displayName: string | null;
+    })[];
+  }
+
+  /**
+   * Delete a community, and nothing that belongs to a person.
+   *
+   * Memberships, join requests and the sharing associations go. The
+   * reflections do not: a share was never the reflection, and closing a space
+   * cannot be a way to delete other people's writing. The publications are
+   * removed because they are this community's copies -- the authors' originals
+   * are in their own reflections, untouched.
+   */
+  deleteCommunity(communityId: string): void {
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare('DELETE FROM publications WHERE communityId = ?').run(communityId);
+      this.db.prepare('DELETE FROM community_members WHERE communityId = ?').run(communityId);
+      this.db.prepare('DELETE FROM communities WHERE id = ?').run(communityId);
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  /**
+   * The author deleted the reflection, so its shares go with it.
+   *
+   * A publication is a copy taken at share time, which is what lets a
+   * community show it without reaching into somebody's private writing. The
+   * price of that copy is this method: without it, deleting a reflection
+   * leaves the copies standing, and a community keeps something its author has
+   * destroyed and can no longer reach. Nothing may outlive the thing it was
+   * taken from.
+   */
+  removeSharesOfConversation(conversationId: string, authorUserId: string): number {
+    return this.db
+      .prepare('DELETE FROM publications WHERE conversationId = ? AND authorUserId = ?')
+      .run(conversationId, authorUserId).changes as number;
+  }
+
   /** How many owners a community has, so the last one cannot be demoted away. */
   ownerCount(communityId: string): number {
     const row = this.db
@@ -543,9 +752,9 @@ export class CommunityStore {
         .prepare(
           `INSERT INTO publications
              (id, authorUserId, conversationId, audience, communityId, format, title,
-              scriptureReference, caption, moderationState, hiddenByUserId, hiddenAt,
-              deletedAt, createdAt, updatedAt)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?)`,
+              scriptureReference, caption, shareVisibility, moderationState, hiddenByUserId,
+              hiddenAt, deletedAt, createdAt, updatedAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?)`,
         )
         .run(
           id,
@@ -557,6 +766,13 @@ export class CommunityStore {
           source.title,
           source.scriptureReference,
           input.caption,
+          /*
+           * Fixed here, at the moment of sharing, from what the community was
+           * when the author chose to share into it. Never read back through to
+           * the community afterwards -- that is what makes a later settings
+           * change unable to publish this.
+           */
+          input.shareVisibility,
           MODERATION_STATES.VISIBLE,
           timestamp,
           timestamp,
@@ -895,10 +1111,8 @@ export class CommunityStore {
       /* Per-viewer by construction. No aggregate of this table exists. */
       savedByViewer: Number(row['savedByViewer'] ?? 0) > 0,
       moderationState: String(row['moderationState']) as ModerationState,
-      canModerate:
-        isAuthor ||
-        viewerRole === COMMUNITY_ROLES.OWNER ||
-        viewerRole === COMMUNITY_ROLES.MODERATOR,
+      /* Rows still say `moderator`; the role is read, not compared raw. */
+      canModerate: isAuthor || canModerate(readCommunityRole(viewerRole)),
       createdAt: String(row['createdAt']),
       updatedAt: String(row['updatedAt']),
     };

@@ -79,10 +79,14 @@ async function writeReflection(
   return id;
 }
 
-async function makeCommunity(cookie: string, name: string): Promise<string> {
+async function makeCommunity(
+  cookie: string,
+  name: string,
+  preset: 'public' | 'private' = 'private',
+): Promise<string> {
   const created = await call<{ id: string }>(cookie, '/api/communities', {
     method: 'POST',
-    body: JSON.stringify({ name, description: 'A small circle.' }),
+    body: JSON.stringify({ name, description: 'A small circle.', preset }),
   });
   expect(created.status).toBe(201);
   return created.body.id;
@@ -781,5 +785,266 @@ describe('communities are not a directory', () => {
 
     const attempt = await invite(member, community, 'eve@example.com');
     expect(attempt.status).toBe(403);
+  });
+});
+
+/*
+ * Communities are shared spaces, not broadcast channels.
+ *
+ * The rules below are the ones that decide whether that sentence is true in
+ * the code or only in the documentation. Each is written from the position of
+ * the person it protects: somebody who shared into a small group, somebody a
+ * community asked to leave, somebody who deleted what they wrote.
+ */
+describe('what a community is', () => {
+  test('Public and Private are two doors into one set of settings', async () => {
+    const cookie = await register('presets@example.com');
+
+    const open = await call<{ settings: Record<string, string> }>(cookie, '/api/communities', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Open circle', preset: 'public' }),
+    });
+    expect(open.body.settings).toMatchObject({
+      discoverability: 'public',
+      joinPolicy: 'open',
+      reflectionVisibility: 'public',
+      approvalPolicy: 'owner_admin',
+    });
+
+    const closed = await call<{ settings: Record<string, string> }>(cookie, '/api/communities', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Study group', preset: 'private' }),
+    });
+    /* Findable, so a newcomer can ask. That is not the same as joinable. */
+    expect(closed.body.settings).toMatchObject({
+      discoverability: 'public',
+      joinPolicy: 'approval',
+      reflectionVisibility: 'members',
+    });
+  });
+
+  test('a hidden community is not in the directory, and a discoverable one shows nothing written in it', async () => {
+    const owner = await register('owner-discover@example.com');
+    const stranger = await register('stranger-discover@example.com');
+
+    const hidden = await call<{ id: string }>(owner, '/api/communities', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Hidden circle', preset: 'private', settings: { discoverability: 'hidden' } }),
+    });
+    const found = await makeCommunity(owner, 'Findable circle', 'private');
+    const reflection = await writeReflection(owner, 'Written inside');
+    await publish(owner, reflection, AUDIENCES.COMMUNITY, { communityId: found });
+
+    const directory = await call<{ communities: { id: string; name: string }[] }>(
+      stranger,
+      '/api/communities/discover',
+    );
+    const ids = directory.body.communities.map((entry) => entry.id);
+    expect(ids).toContain(found);
+    expect(ids).not.toContain(hidden.body.id);
+
+    /* Seeing that it exists is not seeing what is in it. */
+    const feed = await call<{ items: Publication[] }>(stranger, '/api/publications?scope=shared');
+    expect(feed.body.items).toHaveLength(0);
+  });
+});
+
+describe('joining', () => {
+  test('an open community lets somebody in; a private one takes their request once', async () => {
+    const owner = await register('owner-join@example.com');
+    const joiner = await register('joiner@example.com');
+    const open = await makeCommunity(owner, 'Anyone welcome', 'public');
+    const approval = await makeCommunity(owner, 'Ask first', 'private');
+
+    const joined = await call<{ state: string }>(joiner, `/api/communities/${open}/join`, {
+      method: 'POST',
+    });
+    expect(joined.body.state).toBe('active');
+
+    const asked = await call<{ state: string }>(joiner, `/api/communities/${approval}/join`, {
+      method: 'POST',
+    });
+    expect(asked.body.state).toBe('pending');
+
+    /* Pressing again is not a second request. */
+    await call(joiner, `/api/communities/${approval}/join`, { method: 'POST' });
+    const requests = await call<{ requests: unknown[] }>(
+      owner,
+      `/api/communities/${approval}/join-requests`,
+    );
+    expect(requests.body.requests).toHaveLength(1);
+  });
+
+  test('by default a member cannot approve, and the community can say otherwise', async () => {
+    const owner = await register('owner-approve@example.com');
+    const member = await register('member-approve@example.com');
+    const asker = await register('asker-approve@example.com');
+    const id = await makeCommunity(owner, 'Ask first', 'private');
+    await invite(owner, id, 'member-approve@example.com');
+    await accept(member, id);
+    await call(asker, `/api/communities/${id}/join`, { method: 'POST' });
+
+    /*
+     * The default matters: with every member able to approve, one approved
+     * person can let in everybody they know and the control the community was
+     * created for is gone in an afternoon.
+     */
+    const refused = await call(member, `/api/communities/${id}/join-requests/${'x'}`, {
+      method: 'POST',
+      body: JSON.stringify({ decision: 'approve' }),
+    });
+    expect(refused.status).toBe(403);
+
+    await call(owner, `/api/communities/${id}/settings`, {
+      method: 'PATCH',
+      body: JSON.stringify({ approvalPolicy: 'members' }),
+    });
+    const requests = await call<{ requests: { userId: string }[] }>(
+      member,
+      `/api/communities/${id}/join-requests`,
+    );
+    expect(requests.status).toBe(200);
+    const decided = await call(
+      member,
+      `/api/communities/${id}/join-requests/${requests.body.requests[0]!.userId}`,
+      { method: 'POST', body: JSON.stringify({ decision: 'approve' }) },
+    );
+    expect(decided.status).toBe(200);
+  });
+
+  test('declining is not banning: the person may ask again', async () => {
+    const owner = await register('owner-decline@example.com');
+    const asker = await register('asker-decline@example.com');
+    const id = await makeCommunity(owner, 'Ask first', 'private');
+    await call(asker, `/api/communities/${id}/join`, { method: 'POST' });
+    const requests = await call<{ requests: { userId: string }[] }>(
+      owner,
+      `/api/communities/${id}/join-requests`,
+    );
+    await call(owner, `/api/communities/${id}/join-requests/${requests.body.requests[0]!.userId}`, {
+      method: 'POST',
+      body: JSON.stringify({ decision: 'decline' }),
+    });
+
+    const again = await call<{ state: string }>(asker, `/api/communities/${id}/join`, {
+      method: 'POST',
+    });
+    expect(again.body.state).toBe('pending');
+  });
+});
+
+describe('a ban is not a stronger removal', () => {
+  async function banned() {
+    const owner = await register('owner-ban@example.com');
+    const person = await register('banned@example.com');
+    const id = await makeCommunity(owner, 'Open circle', 'public');
+    await call(person, `/api/communities/${id}/join`, { method: 'POST' });
+    const members = await call<{ userId: string; role: string }[]>(
+      owner,
+      `/api/communities/${id}/members`,
+    );
+    const subject = members.body.find((m) => m.role !== 'owner')!;
+    const done = await call(owner, `/api/communities/${id}/members/${subject.userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ state: 'banned' }),
+    });
+    expect(done.status).toBe(200);
+    return { owner, person, id };
+  }
+
+  test('they cannot simply rejoin an open community', async () => {
+    const { person, id } = await banned();
+    const rejoined = await call(person, `/api/communities/${id}/join`, { method: 'POST' });
+    expect(rejoined.status).toBe(404);
+  });
+
+  test('and an invitation cannot quietly undo it', async () => {
+    const { owner, id } = await banned();
+    const invited = await invite(owner, id, 'banned@example.com');
+    expect(invited.status).toBe(409);
+  });
+});
+
+describe('membership includes the right to participate', () => {
+  test('an ordinary member may share, not only the owner', async () => {
+    const owner = await register('owner-share@example.com');
+    const member = await register('member-share@example.com');
+    const id = await makeCommunity(owner, 'Shared space', 'private');
+    await invite(owner, id, 'member-share@example.com');
+    await accept(member, id);
+
+    const reflection = await writeReflection(member, 'Mine to share');
+    const shared = await publish(member, reflection, AUDIENCES.COMMUNITY, { communityId: id });
+    expect(shared.status).toBe(201);
+  });
+});
+
+describe('a setting change cannot publish what is already there', () => {
+  test('members-only to public leaves existing shares members-only', async () => {
+    const owner = await register('owner-expose@example.com');
+    const stranger = await register('stranger-expose@example.com');
+    const id = await makeCommunity(owner, 'Study group', 'private');
+    const reflection = await writeReflection(owner, 'Said to twelve people');
+    const shared = await publish(owner, reflection, AUDIENCES.COMMUNITY, { communityId: id });
+    const publicationId = shared.body.id;
+
+    const changed = await call<{ existingSharesUnchanged?: boolean }>(
+      owner,
+      `/api/communities/${id}/settings`,
+      { method: 'PATCH', body: JSON.stringify({ reflectionVisibility: 'public' }) },
+    );
+    expect(changed.status).toBe(200);
+    /* And it says so, rather than leaving it to be discovered. */
+    expect(changed.body.existingSharesUnchanged).toBe(true);
+
+    const peek = await call(stranger, `/api/publications/${publicationId}`);
+    expect(peek.status).toBe(404);
+
+    /* What it does change is what happens next. */
+    const later = await writeReflection(owner, 'Shared after the change');
+    const openly = await publish(owner, later, AUDIENCES.COMMUNITY, { communityId: id });
+    const visible = await call(stranger, `/api/publications/${openly.body.id}`);
+    expect(visible.status).toBe(200);
+  });
+});
+
+describe('sharing is not giving away', () => {
+  test('deleting the reflection takes its shares with it', async () => {
+    const owner = await register('owner-delete@example.com');
+    const member = await register('member-delete@example.com');
+    const id = await makeCommunity(owner, 'Circle', 'private');
+    await invite(owner, id, 'member-delete@example.com');
+    await accept(member, id);
+
+    const reflection = await writeReflection(owner, 'Shared then deleted');
+    const shared = await publish(owner, reflection, AUDIENCES.COMMUNITY, { communityId: id });
+    expect((await call(member, `/api/publications/${shared.body.id}`)).status).toBe(200);
+
+    const deleted = await call<{ sharesRemoved: number }>(
+      owner,
+      `/api/conversations/${reflection}`,
+      { method: 'DELETE' },
+    );
+    expect(deleted.body.sharesRemoved).toBe(1);
+    /* A community must never keep a copy of something its author destroyed. */
+    expect((await call(member, `/api/publications/${shared.body.id}`)).status).toBe(404);
+  });
+
+  test('deleting the community keeps everybody’s reflections', async () => {
+    const owner = await register('owner-close@example.com');
+    const member = await register('member-close@example.com');
+    const id = await makeCommunity(owner, 'Circle', 'private');
+    await invite(owner, id, 'member-close@example.com');
+    await accept(member, id);
+    const reflection = await writeReflection(member, 'Written by a member');
+    await publish(member, reflection, AUDIENCES.COMMUNITY, { communityId: id });
+
+    const closed = await call(owner, `/api/communities/${id}`, { method: 'DELETE' });
+    expect(closed.status).toBe(200);
+
+    /* The share is gone; the reflection is exactly where its author left it. */
+    const mine = await call<{ id: string }>(member, `/api/conversations/${reflection}`);
+    expect(mine.status).toBe(200);
+    expect(mine.body.id).toBe(reflection);
   });
 });

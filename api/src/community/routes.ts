@@ -49,21 +49,34 @@ import type { Context } from 'hono';
 import {
   AUDIENCES,
   CAPTION_MAX,
+  COMMUNITY_PRESETS,
   CHAT_FORMATS,
   COMMUNITY_LIMITS,
   COMMUNITY_ROLES,
   MEMBERSHIP_STATES,
   MODERATION_STATES,
   PUBLICATION_REPORT_REASONS,
+  JOIN_POLICY,
+  PRESET_SETTINGS,
+  canApproveMembers,
   canModerate,
   canShareExternally,
   grantsAccess,
   isAudience,
   isCommunityRole,
+  DISCOVERABILITY,
+  REFLECTION_VISIBILITY,
+  increasesExposure,
+  isBanned,
+  isPending,
   isReportReason,
   parseHashtags,
+  readCommunityRole,
+  readCommunitySettings,
   validateChat,
   type Audience,
+  type MembershipState,
+  type ReflectionVisibility,
 } from '@chat/shared';
 import type { CommunityStore, PublicationView } from './store.ts';
 
@@ -213,8 +226,11 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     if (!user || !db) return response;
 
     const body = await c.req
-      .json<{ name?: string; description?: string }>()
-      .catch(() => ({}) as { name?: string; description?: string });
+      .json<{ name?: string; description?: string; preset?: string; settings?: unknown }>()
+      .catch(
+        () =>
+          ({}) as { name?: string; description?: string; preset?: string; settings?: unknown },
+      );
 
     const name = (body.name ?? '').trim();
     if (!name) return c.json({ error: 'A community needs a name.', field: 'name' }, 400);
@@ -226,23 +242,64 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     }
     const description = (body.description ?? '').trim().slice(0, COMMUNITY_LIMITS.description);
 
+    /*
+     * Public or Private is what somebody chooses; the four settings are what
+     * gets stored. A community may then adjust one of them without having to
+     * be renamed into a third category nobody can define.
+     */
+    const preset =
+      body.preset === COMMUNITY_PRESETS.PUBLIC
+        ? COMMUNITY_PRESETS.PUBLIC
+        : COMMUNITY_PRESETS.PRIVATE;
+    const settings = readCommunitySettings({
+      ...PRESET_SETTINGS[preset],
+      ...(body.settings as Record<string, unknown> | undefined),
+    });
+
     ensureIdentity(user);
     const community = db.createCommunity({
       name,
       description,
       createdByUserId: user.id,
+      settings,
     });
     return c.json(
       {
         id: community.id,
         name: community.name,
         description: community.description,
+        settings: community.settings,
         role: COMMUNITY_ROLES.OWNER,
         memberCount: 1,
         closed: false,
       },
       201,
     );
+  });
+
+  /*
+   * Communities somebody could find and ask about.
+   *
+   * Discoverability is not readability: this lists names and descriptions of
+   * communities that chose to be findable, and nothing anybody wrote inside
+   * one. A discoverable private group is exactly that combination -- a
+   * newcomer can see it exists and ask, and sees no reflections until asked.
+   */
+  app.get('/communities/discover', async (c) => {
+    const { user, store: db, response } = await guard(c);
+    if (!user || !db) return response;
+    const query = c.req.query('q') ?? '';
+    return c.json({
+      communities: db.discoverable(user.id, query).map((community) => ({
+        id: community.id,
+        name: community.name,
+        description: community.description,
+        settings: community.settings,
+        memberCount: community.memberCount,
+        /* What this person's own relationship to it is, and nothing about anybody else's. */
+        state: community.memberState,
+      })),
+    });
   });
 
   /**
@@ -285,7 +342,7 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     const membership = activeMembership(db, id, user.id);
     if (!membership) return c.json({ error: 'No community found.' }, 404);
 
-    const moderator = canModerate(membership.role);
+    const moderator = canModerate(readCommunityRole(membership.role));
     return c.json(
       db
         .members(id)
@@ -313,8 +370,8 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     const id = c.req.param('id');
     const membership = activeMembership(db, id, user.id);
     if (!membership) return c.json({ error: 'No community found.' }, 404);
-    if (!canModerate(membership.role)) {
-      return c.json({ error: 'Only owners and moderators may invite.' }, 403);
+    if (!canModerate(readCommunityRole(membership.role))) {
+      return c.json({ error: 'Only owners and admins may invite.' }, 403);
     }
 
     const body = await c.req.json<{ email?: string }>().catch(() => ({}) as { email?: string });
@@ -338,6 +395,17 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     const existing = db.membership(id, invitedId);
     if (existing && grantsAccess(existing.state)) {
       return c.json({ error: 'They are already a member.' }, 409);
+    }
+    /*
+     * An invitation cannot undo a ban. This is the third way back in — after
+     * joining an open community and asking again — and a ban that one admin
+     * can reverse by accident, without knowing there was one, is not a ban.
+     */
+    if (isBanned(existing?.state)) {
+      return c.json(
+        { error: 'That person is banned from this community. Lift the ban first.' },
+        409,
+      );
     }
 
     db.setMembership({
@@ -386,16 +454,16 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     const subjectId = c.req.param('userId');
     const membership = activeMembership(db, id, user.id);
     if (!membership) return c.json({ error: 'No community found.' }, 404);
-    if (!canModerate(membership.role)) {
-      return c.json({ error: 'Only owners and moderators may change memberships.' }, 403);
+    if (!canModerate(readCommunityRole(membership.role))) {
+      return c.json({ error: 'Only owners and admins may change memberships.' }, 403);
     }
 
     const subject = db.membership(id, subjectId);
     if (!subject) return c.json({ error: 'No such member.' }, 404);
 
     const body = await c.req
-      .json<{ role?: string; state?: string; muted?: boolean }>()
-      .catch(() => ({}) as { role?: string; state?: string; muted?: boolean });
+      .json<{ role?: string; state?: string }>()
+      .catch(() => ({}) as { role?: string; state?: string });
 
     let role = subject.role;
     if (body.role !== undefined) {
@@ -419,17 +487,28 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
 
     let state = subject.state;
     if (body.state !== undefined) {
-      if (body.state !== MEMBERSHIP_STATES.REMOVED && body.state !== MEMBERSHIP_STATES.ACTIVE) {
-        return c.json({ error: 'A membership may be set active or removed.' }, 400);
+      /*
+       * Removed and banned are different decisions, and both are offered.
+       * Removal says "not now" and leaves the door open; a ban closes it,
+       * including against an invitation from somebody who was not part of
+       * whatever happened.
+       */
+      const settable: string[] = [
+        MEMBERSHIP_STATES.ACTIVE,
+        MEMBERSHIP_STATES.REMOVED,
+        MEMBERSHIP_STATES.BANNED,
+      ];
+      if (!settable.includes(body.state)) {
+        return c.json({ error: 'A membership may be set active, removed or banned.' }, 400);
       }
       if (
-        body.state === MEMBERSHIP_STATES.REMOVED &&
+        body.state !== MEMBERSHIP_STATES.ACTIVE &&
         subject.role === COMMUNITY_ROLES.OWNER &&
         db.ownerCount(id) <= 1
       ) {
         return c.json({ error: 'A community cannot be left without an owner.' }, 409);
       }
-      state = body.state;
+      state = body.state as MembershipState;
     }
 
     db.setMembership({
@@ -437,11 +516,189 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
       userId: subjectId,
       role,
       state,
-      ...(body.muted === undefined
-        ? {}
-        : { mutedAt: body.muted ? new Date().toISOString() : null }),
     });
-    return c.json({ ok: true, role, state, muted: body.muted ?? subject.mutedAt !== null });
+    return c.json({ ok: true, role, state });
+  });
+
+  /**
+   * Ask to join, or join outright where the community is open.
+   *
+   * One route for both, because from the asker's side it is one action: they
+   * pressed Join. What differs is what the community said should happen next,
+   * and that is the community's setting rather than a second endpoint the
+   * client has to know to call.
+   */
+  app.post('/communities/:id/join', async (c) => {
+    const { user, store: db, response } = await guard(c);
+    if (!user || !db) return response;
+
+    const id = c.req.param('id');
+    const community = db.community(id);
+    /*
+     * A hidden community answers 404 to somebody who is not in it, exactly as
+     * it does for a read: being able to confirm that a private group exists is
+     * the disclosure hiding it exists to prevent.
+     */
+    const existing = db.membership(id, user.id);
+    const maySee =
+      community &&
+      (community.settings.discoverability === DISCOVERABILITY.PUBLIC || existing !== null);
+    if (!community || !maySee) return c.json({ error: 'No community found.' }, 404);
+    if (community.closedAt) return c.json({ error: 'That community is closed.' }, 409);
+
+    /*
+     * A ban survives the attempt to come back. It is answered as though the
+     * community were not there, so a ban is not a thing to be argued with by
+     * pressing the button again.
+     */
+    if (isBanned(existing?.state)) return c.json({ error: 'No community found.' }, 404);
+    if (grantsAccess(existing?.state)) return c.json({ state: MEMBERSHIP_STATES.ACTIVE });
+    /* One request, not one per press. */
+    if (isPending(existing?.state)) return c.json({ state: MEMBERSHIP_STATES.PENDING });
+
+    if (community.settings.joinPolicy === JOIN_POLICY.INVITE) {
+      return c.json({ error: 'This community is invitation only.' }, 403);
+    }
+
+    ensureIdentity(user);
+    const state =
+      community.settings.joinPolicy === JOIN_POLICY.OPEN
+        ? MEMBERSHIP_STATES.ACTIVE
+        : MEMBERSHIP_STATES.PENDING;
+    db.setMembership({
+      communityId: id,
+      userId: user.id,
+      role: COMMUNITY_ROLES.MEMBER,
+      state,
+    });
+    return c.json({ state }, 201);
+  });
+
+  /** Who is waiting, for the people who may decide. */
+  app.get('/communities/:id/join-requests', async (c) => {
+    const { user, store: db, response } = await guard(c);
+    if (!user || !db) return response;
+
+    const id = c.req.param('id');
+    const membership = activeMembership(db, id, user.id);
+    const community = membership ? db.community(id) : null;
+    if (!membership || !community) return c.json({ error: 'No community found.' }, 404);
+    if (!canApproveMembers(readCommunityRole(membership.role), community.settings.approvalPolicy)) {
+      return c.json({ error: 'Only owners and admins may see join requests.' }, 403);
+    }
+
+    return c.json({
+      requests: db.joinRequests(id).map((request) => ({
+        userId: request.userId,
+        handle: request.handle,
+        displayName: request.displayName,
+        requestedAt: request.updatedAt,
+      })),
+    });
+  });
+
+  /** Approve or decline one. Deciding is a role's job, not a member's, by default. */
+  app.post('/communities/:id/join-requests/:userId', async (c) => {
+    const { user, store: db, response } = await guard(c);
+    if (!user || !db) return response;
+
+    const id = c.req.param('id');
+    const subjectId = c.req.param('userId');
+    const membership = activeMembership(db, id, user.id);
+    const community = membership ? db.community(id) : null;
+    if (!membership || !community) return c.json({ error: 'No community found.' }, 404);
+    if (!canApproveMembers(readCommunityRole(membership.role), community.settings.approvalPolicy)) {
+      return c.json({ error: 'Only owners and admins may decide on join requests.' }, 403);
+    }
+
+    const subject = db.membership(id, subjectId);
+    if (!subject || !isPending(subject.state)) {
+      return c.json({ error: 'No request from that person.' }, 404);
+    }
+
+    const body = await c.req
+      .json<{ decision?: string }>()
+      .catch(() => ({}) as { decision?: string });
+    if (body.decision !== 'approve' && body.decision !== 'decline') {
+      return c.json({ error: 'Decide approve or decline.' }, 400);
+    }
+    /*
+     * Declining is not banning. The person may ask again -- most declines are
+     * "we do not know you yet" rather than "never".
+     */
+    const state =
+      body.decision === 'approve' ? MEMBERSHIP_STATES.ACTIVE : MEMBERSHIP_STATES.REMOVED;
+    db.setMembership({
+      communityId: id,
+      userId: subjectId,
+      role: COMMUNITY_ROLES.MEMBER,
+      state,
+    });
+    return c.json({ userId: subjectId, state });
+  });
+
+  /**
+   * Change what the community is.
+   *
+   * The one change refused here is the one an administrator must not be able
+   * to make on somebody else's behalf: turning members-only into public
+   * applies to what is shared next, never to what is already there. The reply
+   * says so, because a setting that silently means less than it appears to is
+   * worse than one that is refused.
+   */
+  app.patch('/communities/:id/settings', async (c) => {
+    const { user, store: db, response } = await guard(c);
+    if (!user || !db) return response;
+
+    const id = c.req.param('id');
+    const membership = activeMembership(db, id, user.id);
+    const community = membership ? db.community(id) : null;
+    if (!membership || !community) return c.json({ error: 'No community found.' }, 404);
+    if (readCommunityRole(membership.role) !== COMMUNITY_ROLES.OWNER) {
+      return c.json({ error: 'Only an owner may change community settings.' }, 403);
+    }
+
+    const body = await c.req.json<Record<string, unknown>>().catch(() => ({}));
+    const next = readCommunitySettings({ ...community.settings, ...body });
+    db.updateSettings(id, next);
+
+    return c.json({
+      settings: next,
+      /*
+       * Said plainly rather than left to be discovered: the reflections that
+       * are already there kept the visibility they were shared with.
+       */
+      ...(increasesExposure(community.settings, next)
+        ? {
+            existingSharesUnchanged: true,
+            note: 'Reflections already shared here stay members-only. This applies to what is shared from now on.',
+          }
+        : {}),
+    });
+  });
+
+  /**
+   * Close a community.
+   *
+   * It takes the space, the memberships and this community's copies of what
+   * was shared into it. It does not take anybody's reflections: a share was
+   * never the reflection, and closing a room cannot be a way to delete other
+   * people's writing.
+   */
+  app.delete('/communities/:id', async (c) => {
+    const { user, store: db, response } = await guard(c);
+    if (!user || !db) return response;
+
+    const id = c.req.param('id');
+    const membership = activeMembership(db, id, user.id);
+    const community = membership ? db.community(id) : null;
+    if (!membership || !community) return c.json({ error: 'No community found.' }, 404);
+    if (readCommunityRole(membership.role) !== COMMUNITY_ROLES.OWNER) {
+      return c.json({ error: 'Only an owner may delete a community.' }, 403);
+    }
+
+    db.deleteCommunity(id);
+    return c.json({ id, deleted: true, reflectionsKept: true });
   });
 
   app.post('/communities/:id/leave', async (c) => {
@@ -578,6 +835,14 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     if (!source) return c.json({ error: 'Reflection not found.' }, 404);
 
     let communityId: string | null = null;
+    /*
+     * Who will be able to read this share, decided here and kept on the row.
+     *
+     * A public publication is public. A community share takes the community's
+     * current answer -- once -- so that a later change to the setting governs
+     * the next share and never this one.
+     */
+    let shareVisibility: ReflectionVisibility = REFLECTION_VISIBILITY.PUBLIC;
     if (audience === AUDIENCES.COMMUNITY) {
       communityId = body.communityId ? String(body.communityId) : null;
       if (!communityId) {
@@ -586,13 +851,20 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
       /*
        * The author must be an active member of the community they publish to,
        * checked now rather than trusted from whatever the picker showed.
+       *
+       * And that is the whole test. There is deliberately no owner-only mode,
+       * no approved-author list and no per-member posting restriction:
+       * membership includes the right to participate, and a community where
+       * one person speaks and the others may only read has stopped being a
+       * shared space. A community that does not want somebody posting removes
+       * or bans them, which is a decision it has to make out loud.
        */
       const membership = activeMembership(db, communityId, user.id);
-      if (!membership) return c.json({ error: 'No community found.' }, 404);
-      if (membership.mutedAt !== null) {
-        return c.json({ error: 'You cannot publish in this community at the moment.' }, 403);
-      }
+      const community = membership ? db.community(communityId) : null;
+      if (!membership || !community) return c.json({ error: 'No community found.' }, 404);
+      shareVisibility = community.settings.reflectionVisibility;
     }
+    if (audience === AUDIENCES.ONLY_ME) shareVisibility = REFLECTION_VISIBILITY.MEMBERS;
 
     /*
      * The same gate the reflection editor's publish button passes. A
@@ -651,6 +923,7 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
         authorUserId: user.id,
         conversationId,
         audience: audience as Audience,
+        shareVisibility,
         communityId,
         caption,
         sectionTypes,
@@ -802,7 +1075,7 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
       ? activeMembership(db, row.communityId, user.id)
       : null;
     const permitted =
-      row.authorUserId === user.id || (membership !== null && canModerate(membership.role));
+      row.authorUserId === user.id || (membership !== null && canModerate(readCommunityRole(membership.role)));
     if (!permitted) {
       /* 404 rather than 403 — see the note at the top of this file. */
       return c.json({ error: 'This publication is not available.' }, 404);
