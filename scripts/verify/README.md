@@ -80,18 +80,18 @@ inside, and reads back the computed `grid-template-columns` — because a
 viewport media query would keep answering "three columns" the whole way down,
 which is exactly the bug a collapsible sidebar otherwise produces.
 
-It creates its own fixtures and publishes some of them, so a development
-database it has been run against will contain published entries. That is where
+It creates its own fixtures and shares some of them, so a development
+database it has been run against will contain shared entries. That is where
 the rows on the Community page come from; they are real records, not seeded
 placeholders.
 
 ## `community.mjs` — membership is re-checked on the live payload
 
-Three real browser sessions. A member can read a community publication; a
+Three real browser sessions. A member can read a community share; a
 non-member gets 404 on the same URL and the body names nothing; a removed
 member loses access on the next request. Private reflections never appear in
 any Community response. Encouraged is one per user. Save stays invisible to
-the author. A public link works for a stranger; a community publication
+the author. A public link works for a stranger; a community share
 offers no external share URL.
 
 ## `readiness-tour.mjs` — every page, both widths, no assertions

@@ -128,9 +128,9 @@ When preparing long material for cards/carousels:
 - allow the user to review substantial reductions;
 - prefer splitting across cards when shortening would remove important meaning.
 
-## 10. Publication
+## 10. Share
 
-AI assistance does not change publication status.
+AI assistance does not change share status.
 
 A private C.H.A.T. remains private after:
 
@@ -141,13 +141,13 @@ A private C.H.A.T. remains private after:
 - AI background generation;
 - export.
 
-Only the explicit publication action changes internal platform visibility.
+Only the explicit share action changes internal platform visibility.
 
 ## 11. Provider abstraction
 
 Do not encode product rules only inside prompts for a specific AI provider.
 
-Authorship, privacy, publication, revision preservation, and content provenance are application rules and should be enforced in application/domain logic where appropriate.
+Authorship, privacy, share, revision preservation, and content provenance are application rules and should be enforced in application/domain logic where appropriate.
 
 ## 12. User control
 
@@ -157,6 +157,6 @@ The user should ultimately decide:
 - whether to accept an AI revision;
 - what becomes part of the structured C.H.A.T.;
 - what visual is exported;
-- what is published to the community.
+- what is shared to the community.
 
-AI should reduce friction without taking ownership of the user's words, faith experience, or publishing decisions.
+AI should reduce friction without taking ownership of the user's words, faith experience, or sharing decisions.

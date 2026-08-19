@@ -16,14 +16,14 @@
  *
  * ── The claims ────────────────────────────────────────────────────────────
  *
- *  1. A member sees a community publication; a non-member gets 404 on the very
+ *  1. A member sees a community share; a non-member gets 404 on the very
  *     same URL, and the 404 body names nothing.
  *  2. A removed member loses access immediately — same URL, next request.
  *  3. A private reflection never appears in any Community response, in any
  *     scope, for anyone.
  *  4. Encouraged is one per user, and pressing it twice does not make it two.
  *  5. Save is invisible to the author: no count in any payload they receive.
- *  6. A public link works for a stranger, while a community publication offers
+ *  6. A public link works for a stranger, while a community share offers
  *     no external share control at all — no flag, and no URL to render.
  *
  * Three browser sessions, because a cookie is the thing being tested and
@@ -108,7 +108,7 @@ const COMMUNITY_TITLE = 'COMMUNITY-ONLY-Trusting-while-I-cannot-see';
 const COMMUNITY_BODY = 'COMMUNITY-BODY-only-members-of-this-circle-may-read-this';
 const PUBLIC_TITLE = 'PUBLIC-Be-still-and-know';
 
-/** Write a complete Full C.H.A.T. so it passes the publication gate. */
+/** Write a complete Full C.H.A.T. so it passes the share gate. */
 const writeReflection = async (driver, title, reference, marker) =>
   driver.executeScript(
     async (t, ref, body) => {
@@ -191,7 +191,7 @@ try {
     'Romans 8:28',
     COMMUNITY_BODY,
   );
-  const communityPub = await call(author, 'POST', '/api/publications', {
+  const communityPub = await call(author, 'POST', '/api/shares', {
     conversationId: communitySource,
     audience: 'community',
     communityId,
@@ -202,7 +202,7 @@ try {
   const communityPubId = communityPub.body.id;
 
   const publicSource = await writeReflection(author, PUBLIC_TITLE, 'Psalm 46:10', 'public');
-  const publicPub = await call(author, 'POST', '/api/publications', {
+  const publicPub = await call(author, 'POST', '/api/shares', {
     conversationId: publicSource,
     audience: 'public',
     caption: 'For anyone who needs it.',
@@ -211,14 +211,14 @@ try {
   check('a reflection is shared publicly', publicPub.status === 201);
   const publicPubId = publicPub.body.id;
 
-  const url = `/api/publications/${communityPubId}`;
+  const url = `/api/shares/${communityPubId}`;
 
   /* --- 1. a member sees it; a non-member 404s on the same URL --------- */
 
   console.log('\nmembership decides access');
   const asMember = await call(member, 'GET', url);
   check(
-    'a member receives the community publication',
+    'a member receives the community share',
     asMember.status === 200 && asMember.body?.title === COMMUNITY_TITLE,
     `status ${asMember.status}`,
   );
@@ -249,7 +249,7 @@ try {
   ]) {
     for (const scope of ['shared', 'public', 'mine']) {
       for (const query of ['', `&q=${encodeURIComponent('PRIVATE')}`, '&q=uncertainty']) {
-        const feed = await call(driver, 'GET', `/api/publications?scope=${scope}${query}`);
+        const feed = await call(driver, 'GET', `/api/shares?scope=${scope}${query}`);
         const text = JSON.stringify(feed.body ?? {});
         if (text.includes(PRIVATE_TITLE) || text.includes(PRIVATE_BODY)) {
           privateLeaked = true;
@@ -268,7 +268,7 @@ try {
     !communityLeakedToStranger,
   );
 
-  const strangerTags = await call(stranger, 'GET', '/api/publications?scope=shared');
+  const strangerTags = await call(stranger, 'GET', '/api/shares?scope=shared');
   check(
     'tag chips never advertise a tag a non-member cannot reach',
     !JSON.stringify(strangerTags.body?.hashtags ?? []).includes('youngadults'),
@@ -298,7 +298,7 @@ try {
   check('a member may save privately', saved.body?.saved === true);
 
   const authorView = await call(author, 'GET', url);
-  const authorFeed = await call(author, 'GET', '/api/publications?scope=shared');
+  const authorFeed = await call(author, 'GET', '/api/shares?scope=shared');
   const authorPayloads = JSON.stringify([authorView.body, authorFeed.body]);
   check(
     'the author is told nothing about saves — no count, no names, no key',
@@ -313,7 +313,7 @@ try {
   console.log('\nexternal sharing');
   const memberView = await call(member, 'GET', url);
   check(
-    "another member's community publication offers no external share control",
+    "another member's community share offers no external share control",
     memberView.body?.canShareExternally === false,
   );
   check(
@@ -321,7 +321,7 @@ try {
     !Object.prototype.hasOwnProperty.call(memberView.body ?? {}, 'shareUrl'),
   );
 
-  const publicToStranger = await call(stranger, 'GET', `/api/publications/${publicPubId}`);
+  const publicToStranger = await call(stranger, 'GET', `/api/shares/${publicPubId}`);
   check(
     'a public link works for someone with no relationship to the author',
     publicToStranger.status === 200 && publicToStranger.body?.title === PUBLIC_TITLE,
@@ -343,7 +343,7 @@ try {
 
   const rendered = await member.findElement(By.css('body')).getText();
   check(
-    'the member reads the community publication on the page, not only in the payload',
+    'the member reads the community share on the page, not only in the payload',
     rendered.includes('Trusting while I cannot see') || rendered.includes(COMMUNITY_TITLE),
   );
   check(
@@ -355,9 +355,9 @@ try {
     !/for you/i.test(rendered),
   );
 
-  await member.get(`${APP}/community/publications/${communityPubId}`);
+  await member.get(`${APP}/community/shares/${communityPubId}`);
   await wait(1200);
-  await shot(member, 'community-1280-publication');
+  await shot(member, 'community-1280-share');
 
   const detail = await member.findElement(By.css('body')).getText();
   check(
@@ -405,9 +405,9 @@ try {
   await narrow.get(`${APP}/community`);
   await wait(1800);
   await shot(narrow, 'community-390-shared');
-  await narrow.get(`${APP}/community/publications/${communityPubId}`);
+  await narrow.get(`${APP}/community/shares/${communityPubId}`);
   await wait(1500);
-  await shot(narrow, 'community-390-publication');
+  await shot(narrow, 'community-390-share');
 
   /* --- 2. removal takes effect immediately, on the same URL ----------- */
 
@@ -429,9 +429,9 @@ try {
     `status ${afterRemoval.status}`,
   );
 
-  const afterFeed = await call(member, 'GET', '/api/publications?scope=shared');
+  const afterFeed = await call(member, 'GET', '/api/shares?scope=shared');
   check(
-    'and the community publication is gone from their feed too',
+    'and the community share is gone from their feed too',
     !JSON.stringify(afterFeed.body ?? {}).includes(COMMUNITY_TITLE),
   );
 
@@ -443,7 +443,7 @@ try {
   );
 
   /* The page tells them, rather than showing a blank. */
-  await member.get(`${APP}/community/publications/${communityPubId}`);
+  await member.get(`${APP}/community/shares/${communityPubId}`);
   await wait(1200);
   const goneText = await member.findElement(By.css('body')).getText();
   check(

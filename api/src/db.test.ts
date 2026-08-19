@@ -26,7 +26,7 @@ async function register(app: ReturnType<typeof createApp>, email: string) {
 }
 
 /**
- * Fill the four sections so a reflection is publishable.
+ * Fill the four sections so a reflection is shareable.
  *
  * Publication now enforces the content-format rules, so a conversation with
  * empty sections is a draft by definition. Tests that want to publish have to
@@ -132,7 +132,7 @@ describe('SQLite store', () => {
     await completeChat(app, conversation.id, cookie);
 
     const published = await app.request(
-      `/api/conversations/${conversation.id}/publish`,
+      `/api/conversations/${conversation.id}/share`,
       { method: 'POST', headers: { cookie } },
     );
     expect(published.status).toBe(200);
@@ -140,7 +140,7 @@ describe('SQLite store', () => {
 
     const second = new SqliteStore(file);
     const state = second.conversations.get(conversation.id);
-    expect(state?.publicationState).toBe('published');
+    expect(state?.visibility).toBe('shared');
     second.close();
   });
 
@@ -184,6 +184,13 @@ describe('the Context → Content rename carries stored writing across', () => {
     seed.db
       .prepare('INSERT INTO users (id, email, passwordHash) VALUES (?, ?, ?)')
       .run('u1', `${name}@example.com`, 'x');
+    /*
+     * Written with the column this database would actually have had. The store
+     * creates `visibility`, so the old name is put back deliberately — these
+     * fixtures exist to be migrated, and one built with the new schema would
+     * prove nothing.
+     */
+    seed.db.exec('ALTER TABLE conversations RENAME COLUMN visibility TO publicationState');
     seed.db
       .prepare(
         `INSERT INTO conversations
@@ -264,6 +271,13 @@ describe('the Context → Content rename carries stored writing across', () => {
     seed.db
       .prepare('INSERT INTO users (id, email, passwordHash) VALUES (?, ?, ?)')
       .run('u1', 'draft@example.com', 'x');
+    /*
+     * Written with the column this database would actually have had. The store
+     * creates `visibility`, so the old name is put back deliberately — these
+     * fixtures exist to be migrated, and one built with the new schema would
+     * prove nothing.
+     */
+    seed.db.exec('ALTER TABLE conversations RENAME COLUMN visibility TO publicationState');
     seed.db
       .prepare(
         `INSERT INTO conversations
@@ -285,5 +299,76 @@ describe('the Context → Content rename carries stored writing across', () => {
     const store = new SqliteStore(file);
     expect(store.messages.get('c1')?.[0]?.draftSection).toBe('content');
     store.close();
+  });
+});
+
+/*
+ * The rename that carries a value with it.
+ *
+ * `publicationState` said a reflection moved along a publishing lifecycle. It
+ * never did: two values, both answers to "who can see this". Renaming the
+ * column without moving `published` to `shared` would leave every shared
+ * reflection reading as private — a data-loss bug wearing a rename's clothes.
+ */
+describe('publicationState → visibility', () => {
+  /** A database as it stood before sharing was called sharing. */
+  function beforeTheRename(name: string): string {
+    const file = join(dir, name);
+    const seed = new SqliteStore(file);
+    seed.db.exec('ALTER TABLE conversations RENAME COLUMN visibility TO publicationState');
+    seed.db
+      .prepare('INSERT INTO users (id, email, passwordHash) VALUES (?, ?, ?)')
+      .run('u1', `${name}@example.com`, 'x');
+    const rows: [string, string][] = [
+      ['shared-one', 'published'],
+      ['private-one', 'private'],
+    ];
+    for (const [id, state] of rows) {
+      seed.db
+        .prepare(
+          `INSERT INTO conversations
+             (id, userId, format, title, scriptureReference, publicationState, createdAt, updatedAt)
+           VALUES (?, 'u1', 'full', ?, NULL, ?, '2026-01-01', '2026-01-01')`,
+        )
+        .run(id, `Reflection ${id}`, state);
+    }
+    seed.close();
+    return file;
+  }
+
+  it('a reflection that was published is still shared afterwards', () => {
+    const file = beforeTheRename('rename-values.sqlite');
+    const store = new SqliteStore(file);
+    try {
+      expect(store.conversations.get('shared-one')?.visibility).toBe('shared');
+      expect(store.conversations.get('private-one')?.visibility).toBe('private');
+    } finally {
+      store.close();
+    }
+  });
+
+  it('the old column is gone, and the new one holds the value', () => {
+    const file = beforeTheRename('rename-column.sqlite');
+    const store = new SqliteStore(file);
+    try {
+      const columns = (store.db.prepare('PRAGMA table_info(conversations)').all() as {
+        name: string
+      }[]).map((column) => column.name);
+      expect(columns).toContain('visibility');
+      expect(columns).not.toContain('publicationState');
+    } finally {
+      store.close();
+    }
+  });
+
+  it('running again on an already-migrated database changes nothing', () => {
+    const file = beforeTheRename('rename-twice.sqlite');
+    new SqliteStore(file).close();
+    const store = new SqliteStore(file);
+    try {
+      expect(store.conversations.get('shared-one')?.visibility).toBe('shared');
+    } finally {
+      store.close();
+    }
   });
 });

@@ -6,7 +6,7 @@
  * reference. That is the condition in which a model does not decline: asked to
  * prepare a Content section for "Habakkuk 3:17-19 NLT" it reconstructs the
  * verse from memory and names the translation, and the writer is one paste away
- * from publishing a false attribution of Scripture.
+ * from sharing a false attribution of Scripture.
  *
  * This is the only check in the repository that puts that question to the real
  * model, so it is opt-in twice over, exactly like `ai-live-smoke.mjs`: it needs

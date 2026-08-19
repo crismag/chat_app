@@ -141,7 +141,7 @@ describe('publication and community', () => {
     }
 
     const published = await app.request(
-      `/api/conversations/${conversation.id}/publish`,
+      `/api/conversations/${conversation.id}/share`,
       { method: 'POST', headers: { Cookie: owner.cookie } },
     );
     expect(published.status).toBe(200);
@@ -149,10 +149,10 @@ describe('publication and community', () => {
     const after = await app.request('/api/community', {
       headers: { Cookie: neighbor.cookie },
     });
-    expect(await json<Array<{ id: string; publicationState: string }>>(after)).toEqual([
+    expect(await json<Array<{ id: string; visibility: string }>>(after)).toEqual([
       expect.objectContaining({
         id: conversation.id,
-        publicationState: 'published',
+        visibility: 'shared',
       }),
     ]);
   });
@@ -218,7 +218,7 @@ describe('C.H.A.T. extraction authorship', () => {
     const created = await app.request('/api/conversations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Cookie: cookie },
-      body: JSON.stringify({ title: 'Romans 8' }),
+      body: JSON.stringify({ title: 'Romans 8', scriptureReference: 'Romans 8:28' }),
     });
     const conversation = await json<{ id: string }>(created);
 
@@ -704,11 +704,11 @@ describe('unpublish', () => {
     });
     const conversation = await json<{ id: string }>(created);
 
-    await app.request(`/api/conversations/${conversation.id}/publish`, {
+    await app.request(`/api/conversations/${conversation.id}/share`, {
       method: 'POST',
       headers: { Cookie: owner.cookie },
     });
-    await app.request(`/api/conversations/${conversation.id}/unpublish`, {
+    await app.request(`/api/conversations/${conversation.id}/make-private`, {
       method: 'POST',
       headers: { Cookie: owner.cookie },
     });
@@ -822,5 +822,97 @@ describe('GET /api/reflections, paged', () => {
       await app.request('/api/reflections?visibility=shared', { headers: { Cookie: cookie } }),
     );
     expect(shared.total).toBe(0);
+  });
+});
+
+/*
+ * The invariant the whole vocabulary change exists to protect.
+ *
+ * A reflection is private until somebody shares it. Not when it is saved, not
+ * when every section is written, not when it validates — only when a person
+ * asks. "Published" implied a lifecycle a reflection moved along; these say
+ * plainly that it does not move on its own.
+ */
+describe('sharing is always an explicit act', () => {
+  async function reflection(app: ReturnType<typeof createApp>, cookie: string) {
+    const created = await app.request('/api/conversations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ title: 'Romans 8', scriptureReference: 'Romans 8:28' }),
+    });
+    return json<{ id: string; visibility: string }>(created);
+  }
+
+  test('a new reflection is private', async () => {
+    const app = createApp(new MemoryStore());
+    const { cookie } = await register(app, 'private-by-default@example.com');
+    expect((await reflection(app, cookie)).visibility).toBe('private');
+  });
+
+  test('writing every section does not share it', async () => {
+    const app = createApp(new MemoryStore());
+    const { cookie } = await register(app, 'complete-stays-private@example.com');
+    const made = await reflection(app, cookie);
+
+    for (const type of ['content', 'heart', 'application', 'testimony']) {
+      await app.request(`/api/conversations/${made.id}/sections`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Cookie: cookie },
+        body: JSON.stringify({ type, content: `Something written in ${type}.` }),
+      });
+    }
+
+    const after = await json<{ visibility: string }>(
+      await app.request(`/api/conversations/${made.id}`, { headers: { Cookie: cookie } }),
+    );
+    expect(after.visibility).toBe('private');
+
+    /* And it is still absent from anything anyone else can read. */
+    const community = await json<unknown[]>(
+      await app.request('/api/community', { headers: { Cookie: cookie } }),
+    );
+    expect(community).toHaveLength(0);
+  });
+
+  test('sharing, and then taking it back', async () => {
+    const app = createApp(new MemoryStore());
+    const { cookie } = await register(app, 'share-then-private@example.com');
+    const made = await reflection(app, cookie);
+    for (const type of ['content', 'heart', 'application', 'testimony']) {
+      await app.request(`/api/conversations/${made.id}/sections`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Cookie: cookie },
+        body: JSON.stringify({ type, content: `Something written in ${type}.` }),
+      });
+    }
+
+    const response = await app.request(`/api/conversations/${made.id}/share`, {
+      method: 'POST',
+      headers: { Cookie: cookie },
+    });
+    expect(response.status, JSON.stringify(await response.clone().json())).toBe(200);
+    expect((await json<{ visibility: string }>(response)).visibility).toBe('shared');
+
+    const back = await json<{ visibility: string }>(
+      await app.request(`/api/conversations/${made.id}/make-private`, {
+        method: 'POST',
+        headers: { Cookie: cookie },
+      }),
+    );
+    expect(back.visibility).toBe('private');
+  });
+
+  /* The old verbs are gone, not aliased. */
+  test('the publish routes no longer exist', async () => {
+    const app = createApp(new MemoryStore());
+    const { cookie } = await register(app, 'no-publish-route@example.com');
+    const made = await reflection(app, cookie);
+    for (const path of ['publish', 'unpublish']) {
+      const response = await app.request(`/api/conversations/${made.id}/${path}`, {
+        method: 'POST',
+        headers: { Cookie: cookie },
+      });
+      expect(response.status).toBe(404);
+    }
   });
 });

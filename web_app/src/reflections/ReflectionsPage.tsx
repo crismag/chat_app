@@ -145,9 +145,9 @@ const DENSITIES: { id: Density; label: string; hint: string }[] = [
 ]
 
 /*
- * Nothing here says "published".
+ * Nothing here says "shared".
  *
- * A reflection is shared with an audience or it is private; "published" was
+ * A reflection is shared with an audience or it is private; "shared" was
  * the old word and it implied a public act the product does not have. The API
  * uses the same two words.
  */
@@ -525,7 +525,7 @@ function Tile({
       /* Reading, not editing. The editor is a press away on the reader. */
       href={`/reflections/${item.id}`}
       featured={featured}
-      state={item.publicationState}
+      state={item.visibility}
       emptyExcerpt="Nothing written yet — open it and begin."
       actions={<Overflow item={item} />}
     />
@@ -563,7 +563,7 @@ function Row({
       </div>
       <div className={styles.rowMeta}>
         <ChatProgress format={item.format} written={enrichment?.written} />
-        <StateBadge state={item.publicationState} />
+        <StateBadge state={item.visibility} />
         <span className={styles.date}>
           <span className="sr-only">Last updated </span>
           {formatDate(item.updatedAt, now)}

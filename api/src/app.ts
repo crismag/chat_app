@@ -19,7 +19,7 @@ import {
   AI_ACTIONS,
   CREATE_LAYOUTS,
   CREATE_STYLES,
-  PUBLICATION_STATES,
+  VISIBILITY,
   TITLE_SOURCES,
   type AiAction,
   type CreateLayout,
@@ -68,7 +68,7 @@ function summaryOf(conversation: StoredConversation) {
     format: conversation.format,
     title: conversation.title,
     scriptureReference: conversation.scriptureReference,
-    publicationState: conversation.publicationState,
+    visibility: conversation.visibility,
     tags: conversation.tags ?? [],
     updatedAt: conversation.updatedAt,
   };
@@ -486,7 +486,7 @@ export function createApp(
       format,
       title: body.title?.trim() || reference || 'New reflection',
       scriptureReference: reference,
-      publicationState: PUBLICATION_STATES.PRIVATE,
+      visibility: VISIBILITY.PRIVATE,
       tags: [],
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -672,7 +672,14 @@ export function createApp(
     return c.json(message, 201);
   });
 
-  app.post('/api/conversations/:id/publish', async (c) => {
+  /*
+   * Sharing a reflection inside C.H.A.T.
+   *
+   * Was `/publish`. The path changed with the idea: nothing is published, a
+   * reflection is shared, and it is shared because somebody asked for it here
+   * — never because they finished writing or pressed Save.
+   */
+  app.post('/api/conversations/:id/share', async (c) => {
     const { error, conversation } = await ownedConversation(c, c.req.param('id'));
     if (error === 401) {
       return c.json({ error: 'Unauthenticated.' }, 401);
@@ -691,17 +698,18 @@ export function createApp(
       extensionAcknowledged: c.req.query('acknowledgeExtension') === 'true',
     });
 
-    if (!validation.publishable) {
-      return c.json({ error: 'This reflection is not ready to publish.', validation }, 422);
+    if (!validation.shareable) {
+      return c.json({ error: 'This reflection is not ready to share.', validation }, 422);
     }
 
-    conversation.publicationState = PUBLICATION_STATES.PUBLISHED;
+    conversation.visibility = VISIBILITY.SHARED;
     conversation.updatedAt = nowIso();
     store.conversations.set(conversation.id, conversation);
     return c.json(summaryOf(conversation));
   });
 
-  app.post('/api/conversations/:id/unpublish', async (c) => {
+  /* Taking it back. Was `/unpublish`; nothing was ever published. */
+  app.post('/api/conversations/:id/make-private', async (c) => {
     const { error, conversation } = await ownedConversation(c, c.req.param('id'));
     if (error === 401) {
       return c.json({ error: 'Unauthenticated.' }, 401);
@@ -709,7 +717,7 @@ export function createApp(
     if (!conversation) {
       return c.json({ error: 'Conversation not found.' }, 404);
     }
-    conversation.publicationState = PUBLICATION_STATES.PRIVATE;
+    conversation.visibility = VISIBILITY.PRIVATE;
     conversation.updatedAt = nowIso();
     store.conversations.set(conversation.id, conversation);
     return c.json(summaryOf(conversation));
@@ -1020,7 +1028,7 @@ export function createApp(
 
       /* Shared means it has been given an audience. Everything else is yours. */
       if (parsed.visibility !== 'all') {
-        const shared = conversation.publicationState === PUBLICATION_STATES.PUBLISHED;
+        const shared = conversation.visibility === VISIBILITY.SHARED;
         if (parsed.visibility === 'shared' && !shared) return false;
         if (parsed.visibility === 'private' && shared) return false;
       }
@@ -1075,7 +1083,7 @@ export function createApp(
       return c.json({ error: 'Unauthenticated.' }, 401);
     }
     const items = [...store.conversations.values()]
-      .filter((conversation) => conversation.publicationState === PUBLICATION_STATES.PUBLISHED)
+      .filter((conversation) => conversation.visibility === VISIBILITY.SHARED)
       .map(summaryOf);
     return c.json(items);
   });

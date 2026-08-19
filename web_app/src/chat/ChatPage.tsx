@@ -39,6 +39,7 @@ import {
   SparkIcon,
   TrashIcon,
 } from '../shared/ui/icons.tsx'
+import { shareWithPlatform } from '../shared/native/share.ts'
 import { ChatArtifact } from './ChatArtifact.tsx'
 import { ChatHelper } from './ChatHelper.tsx'
 import {
@@ -423,7 +424,7 @@ export function ChatPage() {
    *
    * A failure here is silence rather than an error: not being able to list
    * communities should not stop someone writing, and the sheet simply says
-   * there is no community to share into. The publish request would refuse
+   * there is no community to share into. The share request would refuse
    * anyway if this list were wrong.
    */
   useEffect(() => {
@@ -1213,6 +1214,41 @@ export function ChatPage() {
     }
   }
 
+  /**
+   * Hand the reflection to the device, and change nothing here.
+   *
+   * The third destination in the Share sheet, and the only one that is not an
+   * audience: the OS decides where it goes — Messages, WhatsApp, whatever is
+   * installed — and C.H.A.T. learns nothing about it. Crucially it does not
+   * touch visibility. A reflection sent to a friend is still private here,
+   * which is the distinction the old "publish" language could not express.
+   */
+  async function shareToAnotherApp() {
+    if (!detail) return
+    setError(null)
+    /* The fields this format actually has, so a Condensed reflection shares
+     * its verse and reflection rather than four empty C.H.A.T. headings. */
+    const written = fieldsFor(format).map((field) => {
+      const text = valueOf(field.type).trim()
+      return text ? `${field.name}\n${text}` : ''
+    }).filter(Boolean)
+    const heading = detail.scriptureReference
+      ? `${displayTitle(detail.title, detail.scriptureReference)}\n${detail.scriptureReference}`
+      : displayTitle(detail.title, detail.scriptureReference)
+    try {
+      const outcome = await shareWithPlatform({
+        title: displayTitle(detail.title, detail.scriptureReference),
+        text: [heading, ...written].join('\n\n'),
+      })
+      setShareOpen(false)
+      if (outcome === 'copied') {
+        setError('Copied to the clipboard — this browser offered no share sheet.')
+      }
+    } catch (caught: unknown) {
+      setError(caught instanceof Error ? caught.message : 'Sharing is not available here.')
+    }
+  }
+
   async function share(
     audience: ShareAudience,
     acknowledgeExtension: boolean,
@@ -1224,12 +1260,12 @@ export function ChatPage() {
     const acknowledge = acknowledgeExtension ? '?acknowledgeExtension=true' : ''
     try {
       if (audience === 'only-me') {
-        await api(`/conversations/${activeId}/unpublish`, { method: 'POST' })
+        await api(`/conversations/${activeId}/make-private`, { method: 'POST' })
       } else if (audience === 'community') {
         /*
-         * A community publication, and nothing else. The reflection's own
-         * `publicationState` is deliberately left alone: it means "this has a
-         * public publication", and it drives the public profile. Setting it
+         * A community share, and nothing else. The reflection's own
+         * `visibility` is deliberately left alone: it means "this has a
+         * public share", and it drives the public profile. Setting it
          * here would put a private community's reflection on a public page,
          * which is the exact conversion the rules forbid.
          */
@@ -1242,7 +1278,7 @@ export function ChatPage() {
           }),
         })
       } else {
-        await api(`/conversations/${activeId}/publish${acknowledge}`, { method: 'POST' })
+        await api(`/conversations/${activeId}/share${acknowledge}`, { method: 'POST' })
         await api(`/publications${acknowledge}`, {
           method: 'POST',
           body: JSON.stringify({ conversationId: activeId, audience: 'public' }),
@@ -1647,15 +1683,16 @@ export function ChatPage() {
 
             {detail ? (
               <span className={styles.privacy}>
-                {detail.publicationState === 'published' ? (
+                {/* The two words the whole product uses for this. */}
+                {detail.visibility === 'shared' ? (
                   <>
                     <GlobeIcon className={styles.tinyIcon} />
-                    Public
+                    Shared
                   </>
                 ) : (
                   <>
                     <LockIcon className={styles.tinyIcon} />
-                    Only me
+                    Private
                   </>
                 )}
               </span>
@@ -1866,7 +1903,8 @@ export function ChatPage() {
       {shareOpen && detail ? (
         <ShareSheet
           communities={communities}
-          currentlyPublished={detail.publicationState === 'published'}
+          currentlyShared={detail.visibility === 'shared'}
+          onShareExternally={shareToAnotherApp}
           validation={validation}
           format={format}
           onClose={() => {

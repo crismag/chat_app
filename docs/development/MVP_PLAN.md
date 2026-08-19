@@ -109,7 +109,7 @@ only as an alias of `GET /api/reflections`, and `/library` in the web app
 redirects.
 
 Status: **done.** The list, its filters (`all` / `drafts` / `completed` /
-`published`), its sorts (`recent` / `title`) and a text query are built and
+`shared`), its sorts (`recent` / `title`) and a text query are built and
 open back into the right reflection. Search also understands a Scripture
 book, chapter or verse (so `Jn 15` finds `John 15:5`), a UTC date range,
 a written C/H/A/T section, and tags — both tags saved on the reflection and
@@ -193,35 +193,35 @@ Exit criteria:
 
 AI artwork enhances the composition without being responsible for rendering Scripture or user text.
 
-## Phase 7 — Internal publication/community
+## Phase 7 — Internal share/community
 
 Status: **done for V1.** Sharing is an explicit action from a reflection. A
-publication is a copy with one audience — public, or one community the author
+share is a copy with one audience — public, or one community the author
 belongs to. Membership is stored in SQLite and re-checked on every read.
 Authorisation is a single SQL visibility predicate applied before retrieval,
 not a filter after the list is loaded.
 
 The Community page is a reading feed (Shared, Public, Communities) with
-openable publication cards and a dedicated `/community/publications/:id`
+openable share cards and a dedicated `/community/shares/:id`
 address. Possessing that URL grants nothing: a member reads it; someone who
 has left the community gets the same 404 as a missing record. Encouraged and
 private Save exist; comment threads, following, and ranking do not.
 
-`GET /api/community` remains as a published-conversation listing for older
-callers. The live feed is `GET /api/publications`.
+`GET /api/community` remains as a shared-conversation listing for older
+callers. The live feed is `GET /api/shares`.
 
 Deliverables:
 
-- explicit Publish to Community action;
-- publication state stored server-side;
-- community feed/query returning published entries only;
-- published entry view;
+- explicit Share to Community action;
+- share state stored server-side;
+- community feed/query returning shared entries only;
+- shared entry view;
 - basic Scripture/topic discovery;
-- unpublish if included in V1 publication model.
+- make private if included in V1 share model.
 
 Exit criteria:
 
-A user can have many private entries and selectively publish one without exposing the rest of the library.
+A user can have many private entries and selectively share one without exposing the rest of the library.
 
 ## Phase 8 — Mobile packaging
 

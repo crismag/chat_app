@@ -149,9 +149,9 @@ try {
       }
       created.push(conversation.id);
     }
-    // One published reflection, so the page shows both publication states.
-    const publish = await post(`/api/conversations/${created[1]}/publish`);
-    return { created: created.length, published: publish.publicationState ?? publish.error };
+    // One shared reflection, so the page shows both share states.
+    const share = await post(`/api/conversations/${created[1]}/share`);
+    return { created: created.length, shared: share.visibility ?? share.error };
   });
   console.log('seeded', seeded);
 

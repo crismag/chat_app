@@ -62,9 +62,9 @@ the browser, not a second token.
 
 ## Deep links
 
-Scheme: `chat:`. Example: `chat://community/publications/<id>` opens
-`/community/publications/<id>`. Possessing the URL is not a permission; the
-API still decides whether the publication is visible.
+Scheme: `chat:`. Example: `chat://community/shares/<id>` opens
+`/community/shares/<id>`. Possessing the URL is not a permission; the
+API still decides whether the share is visible.
 
 HTTPS universal links and Play App Links are not configured here. Add the
 association files and team/SHA fingerprints when a public web host exists.

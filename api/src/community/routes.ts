@@ -610,7 +610,7 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
       },
       { extensionAcknowledged: c.req.query('acknowledgeExtension') === 'true' },
     );
-    if (!validation.publishable) {
+    if (!validation.shareable) {
       return c.json({ error: 'This reflection is not ready to share.', validation }, 422);
     }
 

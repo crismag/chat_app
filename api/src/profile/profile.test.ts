@@ -70,7 +70,7 @@ async function writeReflection(
   }
 
   if (publish) {
-    const published = await send(app, `/api/conversations/${id}/publish`, cookie, 'POST');
+    const published = await send(app, `/api/conversations/${id}/share`, cookie, 'POST');
     expect(published.status).toBe(200);
   }
   return id;
@@ -144,7 +144,7 @@ for (const backing of backings) {
         publish: true,
       });
 
-      await send(app, `/api/conversations/${id}/unpublish`, author, 'POST');
+      await send(app, `/api/conversations/${id}/make-private`, author, 'POST');
 
       const response = await send(app, '/api/profiles/author', stranger);
       const body = (await response.json()) as { shares: unknown[]; publicChatCount: number };

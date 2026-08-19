@@ -1,10 +1,35 @@
-export const PUBLICATION_STATES = {
+/*
+ * Whether a reflection has been shared, and nothing else.
+ *
+ * This was `PUBLICATION_STATES`, with the values `private` and `published`,
+ * which read as a publishing lifecycle a reflection moved along. It never was
+ * one: there are two values, they are visibility, and a finished reflection
+ * may stay private forever. Completing a C.H.A.T. does not propose sharing it
+ * and never sets this — only an explicit act of sharing does.
+ *
+ * Sharing to a device or another app does not change it either. Handing
+ * something to WhatsApp is an export; it says nothing about who can see the
+ * reflection inside C.H.A.T.
+ */
+export const VISIBILITY = {
   PRIVATE: 'private',
-  PUBLISHED: 'published',
+  SHARED: 'shared',
 } as const;
 
-export type PublicationState =
-  (typeof PUBLICATION_STATES)[keyof typeof PUBLICATION_STATES];
+export type Visibility = (typeof VISIBILITY)[keyof typeof VISIBILITY];
+
+/**
+ * Read a stored value, including rows written when the value was `published`.
+ *
+ * Kept deliberately rather than renamed in place: existing rows say
+ * `published`, and a reader that did not understand them would quietly turn
+ * every shared reflection private.
+ */
+export function readVisibility(value: unknown): Visibility {
+  return value === VISIBILITY.SHARED || value === 'published'
+    ? VISIBILITY.SHARED
+    : VISIBILITY.PRIVATE;
+}
 
 export const CHAT_SECTION_TYPES = {
   CONTENT: 'content',
@@ -113,13 +138,13 @@ export type ConversationSummary = {
   id: string;
   title: string;
   scriptureReference: string | null;
-  publicationState: PublicationState;
+  visibility: Visibility;
   updatedAt: string;
   tags: { tag: string; label: string }[];
 };
 
-export function isCommunityVisible(state: PublicationState): boolean {
-  return state === PUBLICATION_STATES.PUBLISHED;
+export function isCommunityVisible(state: Visibility): boolean {
+  return state === VISIBILITY.SHARED;
 }
 
 export function emptyChatSections(): Record<ChatSectionType, ChatSection> {
