@@ -1,9 +1,11 @@
-import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { cors } from 'hono/cors';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { sessionCookieOptions } from './auth/session-cookie.ts';
+import { SqliteAuthStore, type AuthStore } from './auth/store.ts';
+import { hashPassword, verifyPassword } from './auth/local-password.ts';
 import { webOrigins } from './http/origins.ts';
 import {
   AUTHOR_ORIGINS,
@@ -55,20 +57,6 @@ import { readStoredTags } from './reflections/tags.ts';
 
 const SESSION_COOKIE = 'chat_session';
 
-function hashPassword(password: string, salt = randomBytes(16).toString('hex')): string {
-  const hash = scryptSync(password, salt, 32).toString('hex');
-  return `${salt}:${hash}`;
-}
-
-function verifyPassword(password: string, stored: string): boolean {
-  const [salt, expected] = stored.split(':');
-  if (!salt || !expected) {
-    return false;
-  }
-  const actual = scryptSync(password, salt, 32);
-  const expectedBuffer = Buffer.from(expected, 'hex');
-  return actual.length === expectedBuffer.length && timingSafeEqual(actual, expectedBuffer);
-}
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -143,6 +131,12 @@ export function createApp(
   store: MemoryStore | SqliteStore = new SqliteStore(),
   ai: AiServiceOptions = {},
   studioImages: { provider?: StudioImageProvider } = {},
+  /*
+   * Where accounts live. Defaults to the SQLite tables so a checkout with no
+   * database still runs and the suite still passes without one; `index.ts`
+   * hands in the MariaDB store when MYSQL_* is configured.
+   */
+  auth: AuthStore = new SqliteAuthStore(store, hashPassword, verifyPassword),
 ) {
   const app = new Hono();
   const aiService = new AiService(ai);
@@ -192,27 +186,18 @@ export function createApp(
     }),
   );
 
-  const currentUser = (c: Context) => {
-    const token = getCookie(c, SESSION_COOKIE);
-    if (!token) {
-      return null;
-    }
-    const session = store.sessions.get(token);
-    if (!session) {
-      return null;
-    }
-    return store.users.get(session.userId) ?? null;
-  };
+  /*
+   * Asynchronous, because accounts are in MariaDB now.
+   *
+   * That is the whole reason the earlier "one synchronous store interface"
+   * idea could not work: node:sqlite is synchronous and mysql2 is not, so a
+   * seam either awaits or it can only ever have one implementation.
+   */
+  const currentUser = async (c: Context) => auth.userForToken(getCookie(c, SESSION_COOKIE) ?? '');
 
-  const requireUser = (c: Parameters<typeof currentUser>[0]) => {
-    const user = currentUser(c);
-    if (!user) {
-      return null;
-    }
-    return user;
-  };
+  const requireUser = async (c: Parameters<typeof currentUser>[0]) => currentUser(c);
 
-  app.get('/api/health', (c) => {
+  app.get('/api/health', async (c) => {
     const body: HealthResponse = {
       status: 'ok',
       service: 'chat-api',
@@ -439,18 +424,11 @@ export function createApp(
     if (!email || password.length < 8) {
       return c.json({ error: 'Email and a password of at least 8 characters are required.' }, 400);
     }
-    if (store.usersByEmail.has(email)) {
+    const user = await auth.register(email, password);
+    if (!user) {
       return c.json({ error: 'An account with that email already exists.' }, 409);
     }
-    const user = {
-      id: randomUUID(),
-      email,
-      passwordHash: hashPassword(password),
-    };
-    store.users.set(user.id, user);
-    store.usersByEmail.set(email, user.id);
-    const token = randomUUID();
-    store.sessions.set(token, { token, userId: user.id });
+    const token = await auth.startSession(user.id);
     setCookie(c, SESSION_COOKIE, token, sessionCookieOptions(c.req.header('origin')));
     return c.json({ id: user.id, email: user.email }, 201);
   });
@@ -458,28 +436,26 @@ export function createApp(
   app.post('/api/auth/login', async (c) => {
     const body = await c.req.json<{ email?: string; password?: string }>();
     const email = body.email?.trim().toLowerCase() ?? '';
-    const userId = store.usersByEmail.get(email);
-    const user = userId ? store.users.get(userId) : undefined;
-    if (!user || !verifyPassword(body.password ?? '', user.passwordHash)) {
+    const user = await auth.verify(email, body.password ?? '');
+    if (!user) {
       return c.json({ error: 'Invalid email or password.' }, 401);
     }
-    const token = randomUUID();
-    store.sessions.set(token, { token, userId: user.id });
+    const token = await auth.startSession(user.id);
     setCookie(c, SESSION_COOKIE, token, sessionCookieOptions(c.req.header('origin')));
     return c.json({ id: user.id, email: user.email });
   });
 
-  app.post('/api/auth/logout', (c) => {
+  app.post('/api/auth/logout', async (c) => {
     const token = getCookie(c, SESSION_COOKIE);
     if (token) {
-      store.sessions.delete(token);
+      await auth.endSession(token);
     }
     deleteCookie(c, SESSION_COOKIE, { path: '/' });
     return c.json({ ok: true });
   });
 
-  app.get('/api/auth/me', (c) => {
-    const user = currentUser(c);
+  app.get('/api/auth/me', async (c) => {
+    const user = await currentUser(c);
     if (!user) {
       return c.json({ error: 'Unauthenticated.' }, 401);
     }
@@ -487,7 +463,7 @@ export function createApp(
   });
 
   app.post('/api/conversations', async (c) => {
-    const user = requireUser(c);
+    const user = await requireUser(c);
     if (!user) {
       return c.json({ error: 'Unauthenticated.' }, 401);
     }
@@ -519,8 +495,8 @@ export function createApp(
     return c.json(summaryOf(conversation), 201);
   });
 
-  app.get('/api/conversations', (c) => {
-    const user = requireUser(c);
+  app.get('/api/conversations', async (c) => {
+    const user = await requireUser(c);
     if (!user) {
       return c.json({ error: 'Unauthenticated.' }, 401);
     }
@@ -531,8 +507,8 @@ export function createApp(
     return c.json(items);
   });
 
-  const ownedConversation = (c: Parameters<typeof currentUser>[0], id: string) => {
-    const user = requireUser(c);
+  const ownedConversation = async (c: Parameters<typeof currentUser>[0], id: string) => {
+    const user = await requireUser(c);
     if (!user) {
       return { error: 401 as const, user: null, conversation: null };
     }
@@ -551,8 +527,8 @@ export function createApp(
     now: nowIso,
   }));
 
-  app.get('/api/conversations/:id', (c) => {
-    const { error, conversation } = ownedConversation(c, c.req.param('id'));
+  app.get('/api/conversations/:id', async (c) => {
+    const { error, conversation } = await ownedConversation(c, c.req.param('id'));
     if (error === 401) {
       return c.json({ error: 'Unauthenticated.' }, 401);
     }
@@ -581,7 +557,7 @@ export function createApp(
    * changing format leaves both drafts in place.
    */
   app.patch('/api/conversations/:id', async (c) => {
-    const { error, conversation } = ownedConversation(c, c.req.param('id'));
+    const { error, conversation } = await ownedConversation(c, c.req.param('id'));
     if (error === 401) {
       return c.json({ error: 'Unauthenticated.' }, 401);
     }
@@ -654,8 +630,8 @@ export function createApp(
    * they go too. Confirmation is the interface's job; by the time a request
    * arrives here the author has said yes.
    */
-  app.delete('/api/conversations/:id', (c) => {
-    const { error, conversation } = ownedConversation(c, c.req.param('id'));
+  app.delete('/api/conversations/:id', async (c) => {
+    const { error, conversation } = await ownedConversation(c, c.req.param('id'));
     if (error === 401) {
       return c.json({ error: 'Unauthenticated.' }, 401);
     }
@@ -669,7 +645,7 @@ export function createApp(
   });
 
   app.post('/api/conversations/:id/messages', async (c) => {
-    const { error, conversation } = ownedConversation(c, c.req.param('id'));
+    const { error, conversation } = await ownedConversation(c, c.req.param('id'));
     if (error === 401) {
       return c.json({ error: 'Unauthenticated.' }, 401);
     }
@@ -696,8 +672,8 @@ export function createApp(
     return c.json(message, 201);
   });
 
-  app.post('/api/conversations/:id/publish', (c) => {
-    const { error, conversation } = ownedConversation(c, c.req.param('id'));
+  app.post('/api/conversations/:id/publish', async (c) => {
+    const { error, conversation } = await ownedConversation(c, c.req.param('id'));
     if (error === 401) {
       return c.json({ error: 'Unauthenticated.' }, 401);
     }
@@ -725,8 +701,8 @@ export function createApp(
     return c.json(summaryOf(conversation));
   });
 
-  app.post('/api/conversations/:id/unpublish', (c) => {
-    const { error, conversation } = ownedConversation(c, c.req.param('id'));
+  app.post('/api/conversations/:id/unpublish', async (c) => {
+    const { error, conversation } = await ownedConversation(c, c.req.param('id'));
     if (error === 401) {
       return c.json({ error: 'Unauthenticated.' }, 401);
     }
@@ -740,7 +716,7 @@ export function createApp(
   });
 
   app.patch('/api/conversations/:id/sections', async (c) => {
-    const { error, conversation } = ownedConversation(c, c.req.param('id'));
+    const { error, conversation } = await ownedConversation(c, c.req.param('id'));
     if (error === 401) {
       return c.json({ error: 'Unauthenticated.' }, 401);
     }
@@ -805,7 +781,7 @@ export function createApp(
   });
 
   app.post('/api/conversations/:id/ai', async (c) => {
-    const { error, user, conversation } = ownedConversation(c, c.req.param('id'));
+    const { error, user, conversation } = await ownedConversation(c, c.req.param('id'));
     if (error === 401) {
       return c.json({ error: 'Unauthenticated.' }, 401);
     }
@@ -1012,8 +988,8 @@ export function createApp(
    * and a rename that breaks the running client for one commit is a rename done
    * badly. The old path is an alias and goes when the page moves.
    */
-  const reflections = (c: Context) => {
-    const user = requireUser(c);
+  const reflections = async (c: Context) => {
+    const user = await requireUser(c);
     if (!user) {
       return c.json({ error: 'Unauthenticated.' }, 401);
     }
@@ -1073,8 +1049,8 @@ export function createApp(
   app.get('/api/reflections', reflections);
   app.get('/api/library', reflections);
 
-  app.get('/api/community', (c) => {
-    const user = requireUser(c);
+  app.get('/api/community', async (c) => {
+    const user = await requireUser(c);
     if (!user) {
       return c.json({ error: 'Unauthenticated.' }, 401);
     }
@@ -1089,15 +1065,15 @@ export function createApp(
    * canonical document and release metadata; they never render, interpret a
    * reflection, or expose another user's creation.
    */
-  app.get('/api/studio-creations/:conversationId', (c) => {
-    const { error, conversation } = ownedConversation(c, c.req.param('conversationId'));
+  app.get('/api/studio-creations/:conversationId', async (c) => {
+    const { error, conversation } = await ownedConversation(c, c.req.param('conversationId'));
     if (error === 401) return c.json({ error: 'Unauthenticated.' }, 401);
     if (!conversation) return c.json({ error: 'Conversation not found.' }, 404);
     return c.json({ creation: studioCreations.get(conversation.id) });
   });
 
   app.put('/api/studio-creations/:conversationId', async (c) => {
-    const { error, conversation } = ownedConversation(c, c.req.param('conversationId'));
+    const { error, conversation } = await ownedConversation(c, c.req.param('conversationId'));
     if (error === 401) return c.json({ error: 'Unauthenticated.' }, 401);
     if (!conversation) return c.json({ error: 'Conversation not found.' }, 404);
     const previous = studioCreations.get(conversation.id);
@@ -1118,7 +1094,7 @@ export function createApp(
   });
 
   app.post('/api/creations', async (c) => {
-    const user = requireUser(c);
+    const user = await requireUser(c);
     if (!user) {
       return c.json({ error: 'Unauthenticated.' }, 401);
     }
@@ -1130,7 +1106,7 @@ export function createApp(
     if (!body.conversationId) {
       return c.json({ error: 'conversationId is required.' }, 400);
     }
-    const { error, conversation } = ownedConversation(c, body.conversationId);
+    const { error, conversation } = await ownedConversation(c, body.conversationId);
     if (error === 401) {
       return c.json({ error: 'Unauthenticated.' }, 401);
     }

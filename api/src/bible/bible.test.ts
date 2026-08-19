@@ -1045,7 +1045,7 @@ describe('the endpoints', () => {
     const service = serviceWith(fakeFetch());
     const app = createBibleRoutes({
       service,
-      currentUser: () => ({ id: 'u1' }),
+      currentUser: () => Promise.resolve({ id: 'u1' }),
       ownsConversation: () => true,
       passages,
       ...overrides,

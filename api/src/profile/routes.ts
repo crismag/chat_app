@@ -55,7 +55,7 @@ const REPORT_DETAIL_LIMIT = 500;
 export type ProfileUser = { id: string; email: string };
 
 export type ProfileRouteOptions = {
-  currentUser: (c: Context) => ProfileUser | null;
+  currentUser: (c: Context) => Promise<ProfileUser | null>;
   profiles: ProfileStore;
 };
 
@@ -120,15 +120,15 @@ export function createProfileRoutes({ currentUser, profiles }: ProfileRouteOptio
 
   const requireUser = (c: Context) => currentUser(c);
 
-  app.get('/me', (c) => {
-    const user = requireUser(c);
+  app.get('/me', async (c) => {
+    const user = await requireUser(c);
     if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
     const profile = ensureProfile(profiles, user);
     return c.json(ownView(profile, profiles.publicShareCount(user.id)));
   });
 
   app.patch('/me', async (c) => {
-    const user = requireUser(c);
+    const user = await requireUser(c);
     if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
 
     type Patch = {
@@ -225,8 +225,8 @@ export function createProfileRoutes({ currentUser, profiles }: ProfileRouteOptio
   /** The profile named in the path, or a 404 that says nothing else. */
   const subjectOf = (c: Context) => profiles.byHandle(c.req.param('handle') ?? '');
 
-  app.get('/:handle', (c) => {
-    const user = requireUser(c);
+  app.get('/:handle', async (c) => {
+    const user = await requireUser(c);
     if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
 
     const subject = subjectOf(c);
@@ -273,7 +273,7 @@ export function createProfileRoutes({ currentUser, profiles }: ProfileRouteOptio
   });
 
   app.post('/:handle/report', async (c) => {
-    const user = requireUser(c);
+    const user = await requireUser(c);
     if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
 
     const subject = subjectOf(c);
@@ -311,7 +311,7 @@ export function createProfileRoutes({ currentUser, profiles }: ProfileRouteOptio
   });
 
   const setBlock = (blocked: boolean) => async (c: Context) => {
-    const user = requireUser(c);
+    const user = await requireUser(c);
     if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
 
     const subject = subjectOf(c);

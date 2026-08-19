@@ -377,6 +377,16 @@ export class MysqlPersistence {
     return row ? asBigIntId(row.user_id) : null;
   }
 
+  /** The login handle for a user, which is what the session hands back. */
+  async getLocalUsername(userId: number): Promise<string | null> {
+    const [rows] = await this.pool.execute<RowDataPacket[]>(
+      'SELECT username FROM local_credentials WHERE user_id = ?',
+      [userId],
+    );
+    const username = rows[0]?.username;
+    return typeof username === 'string' ? username : null;
+  }
+
   async upsertProfile(
     userId: number,
     profile: {

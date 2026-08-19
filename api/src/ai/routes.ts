@@ -82,7 +82,7 @@ function addressOf(c: Context): string {
 export interface AiRouteDeps {
   service: AiService;
   /** The app's existing authentication. Assistance requires a signed-in user. */
-  currentUser: (c: Context) => { id: string } | null;
+  currentUser: (c: Context) => Promise<{ id: string } | null>;
   /**
    * The whole capability answer, composed by the caller.
    *
@@ -148,10 +148,10 @@ export function createAiRoutes(deps: AiRouteDeps) {
    * about anyone. It is also the endpoint the Suggest-title work already calls,
    * so its existing fields are preserved and the new ones sit beside them.
    */
-  routes.get('/status', (c) => c.json(deps.status()));
+  routes.get('/status', async (c) => c.json(deps.status()));
 
   routes.post('/reflection-guidance', async (c) => {
-    const user = deps.currentUser(c);
+    const user = await deps.currentUser(c);
     if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
 
     let request;
@@ -189,7 +189,7 @@ export function createAiRoutes(deps: AiRouteDeps) {
   });
 
   routes.post('/improve-writing', async (c) => {
-    const user = deps.currentUser(c);
+    const user = await deps.currentUser(c);
     if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
 
     let request;
@@ -262,7 +262,7 @@ export function createAiRoutes(deps: AiRouteDeps) {
    * reply. No streaming, no polling loop, no second socket.
    */
   routes.post('/reflection-chat', async (c) => {
-    const user = deps.currentUser(c);
+    const user = await deps.currentUser(c);
     if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
 
     let parsed;
