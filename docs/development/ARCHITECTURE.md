@@ -183,11 +183,20 @@ membership, publications and their copied sections, tags, reactions, saves and
 reports, the Create Studio document and its image bytes, and the passage a
 reflection was written against.
 
-It does **not** store AI conversation transcripts, prompts, or responses. Those
-remain device-local working data (IndexedDB on the web), and that is the one
-table SQLite still holds which will never have a MariaDB equivalent — moving
-the transcript to the device is product work that has to happen before SQLite
-can be retired.
+Migration `004` adds `reflection_messages`: the conversation held beside a
+reflection, which **is** stored centrally.
+
+That reverses what this document said before, and the reversal is recorded
+rather than quietly applied. The rule used to be that AI conversation content
+never reached the server. The published Privacy Policy says the opposite — *"we
+may collect ... AI conversations"* — and of the two, a policy the product does
+not follow is the worse thing to leave standing. The owner chose the policy.
+
+The rule beside it is unchanged, because it was never the same rule.
+`ai_usage_events` meters cost and abuse and holds **no content**; a prompt
+copied into it would be a second copy the author was never shown and cannot
+reach. `schema.privacy.test.ts` still fails on that, and now also asserts the
+conversation cascades from the reflection its author owns.
 
 `schema.privacy.test.ts` reads every migration in the directory, so a table or
 column that would turn telemetry into an archive fails the suite rather than

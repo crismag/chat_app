@@ -7,7 +7,7 @@ import { FORBIDDEN_CENTRAL_TABLES, FORBIDDEN_USAGE_COLUMNS } from './privacy.ts'
 const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), 'migrations');
 
 describe('MySQL schema privacy boundary', () => {
-  it('does not create central tables for AI conversation content', () => {
+  it('does not create a second, unreachable copy of what people wrote', () => {
     const sql = readdirSync(migrationsDir)
       .filter((name) => name.endsWith('.sql'))
       .sort()
@@ -24,8 +24,19 @@ describe('MySQL schema privacy boundary', () => {
     expect(sql).toContain('create table users');
     expect(sql).toContain('create table reflections');
     expect(sql).toContain('create table ai_usage_events');
-    expect(sql).not.toMatch(/prompt\s+(text|varchar|json)/i);
     expect(sql).not.toMatch(/conversation_transcript/);
+  });
+
+  /*
+   * The conversation IS stored now, and the Privacy Policy says so. What this
+   * asserts is that it is stored in one place the author owns and can delete —
+   * cascading from their reflection — rather than copied somewhere they cannot
+   * reach.
+   */
+  it('keeps the conversation with the reflection it belongs to', () => {
+    const sql = readFileSync(join(migrationsDir, '004_reflection_messages.sql'), 'utf8');
+    expect(sql).toMatch(/CREATE TABLE reflection_messages/);
+    expect(sql).toMatch(/REFERENCES reflections\(id\)\s*\n\s*ON DELETE CASCADE/);
   });
 
   it('keeps usage telemetry free of conversation column names', () => {
