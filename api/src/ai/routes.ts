@@ -13,6 +13,8 @@
  * in `@chat/shared`.
  */
 
+import { addressOf } from '../http/address.ts';
+import { CAPABILITIES, isEnabled, unavailableReason } from '../http/capabilities.ts';
 import { ANONYMOUS_MAX_INPUT_CHARS, AnonymousAiAllowance } from './anonymous-allowance.ts';
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
@@ -65,19 +67,6 @@ function fail(c: Context, outcome: AiOutcome, extra: Record<string, unknown> = {
     outcome,
   };
   return c.json({ ...body, ...extra }, STATUS[outcome]);
-}
-
-/**
- * The caller's address, for rate limiting only.
- *
- * Not logged, not stored, not returned. `x-forwarded-for` is trusted only as a
- * bucketing hint — it is spoofable, which is why it sits *behind* the per-user
- * limit rather than in front of it.
- */
-function addressOf(c: Context): string {
-  const forwarded = c.req.header('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0]?.trim() || 'unknown';
-  return c.req.header('x-real-ip')?.trim() || 'unknown';
 }
 
 export interface AiRouteDeps {
@@ -167,6 +156,19 @@ export function createAiRoutes(deps: AiRouteDeps) {
    * being shown a login form they were not expecting.
    */
   const spender = async (c: Context) => {
+    /*
+     * The switch comes before anything else, including who is asking. When
+     * assistance is paused it is paused for everybody, and a person is told
+     * that rather than being told they are over a limit they are not over.
+     * Their writing is untouched either way, which is the point of being able
+     * to switch this off at all.
+     */
+    if (!isEnabled(CAPABILITIES.AI_REQUESTS)) {
+      return {
+        ok: false as const,
+        response: c.json({ error: unavailableReason(CAPABILITIES.AI_REQUESTS) }, 503),
+      };
+    }
     const user = await deps.currentUser(c);
     if (user) return { ok: true as const, userId: user.id, anonymous: false };
     if (!deps.anonymousAllowance || !deps.currentOwner) {

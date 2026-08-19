@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { Hono } from 'hono'
 import type { Context } from 'hono'
+import { CAPABILITIES, isEnabled, unavailableReason } from '../http/capabilities.ts'
 import type { StudioImageProvider, StudioImageProviderRequest } from './image-provider.ts'
 import type { StudioImageAssetStore } from './image-store.ts'
 
@@ -76,6 +77,14 @@ export function createStudioImageRoutes(deps: StudioImageRouteDependencies) {
   routes.get('/status', async (c) => c.json({ enabled: Boolean(deps.provider) }))
 
   routes.post('/:conversationId/generate', async (c) => {
+    /*
+     * Image generation is billed per call, so it is switchable on its own —
+     * an incident here must not be a reason to stop anybody writing, and it
+     * must not require a deploy to stop.
+     */
+    if (!isEnabled(CAPABILITIES.IMAGE_GENERATION)) {
+      return c.json({ error: unavailableReason(CAPABILITIES.IMAGE_GENERATION) }, 503)
+    }
     const user = await deps.currentUser(c)
     if (!user) return c.json({ error: 'Unauthenticated.' }, 401)
     const conversationId = c.req.param('conversationId')

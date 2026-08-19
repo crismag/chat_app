@@ -22,10 +22,26 @@ import { cookieHeader } from '../http/set-cookie.ts';
 type App = ReturnType<typeof createApp>;
 
 let app: App;
+let store: SqliteStore;
 
 beforeEach(() => {
-  app = createApp(new SqliteStore());
+  store = new SqliteStore();
+  app = createApp(store);
 });
+
+/*
+ * Backdate an account, because some ceilings only apply to a new one.
+ *
+ * A registered account is minutes old in a test and days old in the cases
+ * worth testing — the cross-posting rule, for instance, is deliberately behind
+ * the new-account rule, so with a fresh account it can never be the reason
+ * anybody is refused.
+ */
+function ageAccount(email: string, days: number): void {
+  store.db
+    .prepare('UPDATE users SET createdAt = ? WHERE email = ?')
+    .run(new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString(), email);
+}
 
 /* ------------------------------------------------------------- utilities */
 
@@ -79,10 +95,14 @@ async function writeReflection(
   return id;
 }
 
-async function makeCommunity(cookie: string, name: string): Promise<string> {
+async function makeCommunity(
+  cookie: string,
+  name: string,
+  preset: 'public' | 'private' = 'private',
+): Promise<string> {
   const created = await call<{ id: string }>(cookie, '/api/communities', {
     method: 'POST',
-    body: JSON.stringify({ name, description: 'A small circle.' }),
+    body: JSON.stringify({ name, description: 'A small circle.', preset }),
   });
   expect(created.status).toBe(201);
   return created.body.id;
@@ -781,5 +801,493 @@ describe('communities are not a directory', () => {
 
     const attempt = await invite(member, community, 'eve@example.com');
     expect(attempt.status).toBe(403);
+  });
+});
+
+/*
+ * Communities are shared spaces, not broadcast channels.
+ *
+ * The rules below are the ones that decide whether that sentence is true in
+ * the code or only in the documentation. Each is written from the position of
+ * the person it protects: somebody who shared into a small group, somebody a
+ * community asked to leave, somebody who deleted what they wrote.
+ */
+describe('what a community is', () => {
+  test('Public and Private are two doors into one set of settings', async () => {
+    const cookie = await register('presets@example.com');
+
+    const open = await call<{ settings: Record<string, string> }>(cookie, '/api/communities', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Open circle', preset: 'public' }),
+    });
+    expect(open.body.settings).toMatchObject({
+      discoverability: 'public',
+      joinPolicy: 'open',
+      reflectionVisibility: 'public',
+      approvalPolicy: 'owner_admin',
+    });
+
+    const closed = await call<{ settings: Record<string, string> }>(cookie, '/api/communities', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Study group', preset: 'private' }),
+    });
+    /* Findable, so a newcomer can ask. That is not the same as joinable. */
+    expect(closed.body.settings).toMatchObject({
+      discoverability: 'public',
+      joinPolicy: 'approval',
+      reflectionVisibility: 'members',
+    });
+  });
+
+  test('a hidden community is not in the directory, and a discoverable one shows nothing written in it', async () => {
+    const owner = await register('owner-discover@example.com');
+    const stranger = await register('stranger-discover@example.com');
+
+    const hidden = await call<{ id: string }>(owner, '/api/communities', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Hidden circle', preset: 'private', settings: { discoverability: 'hidden' } }),
+    });
+    const found = await makeCommunity(owner, 'Findable circle', 'private');
+    const reflection = await writeReflection(owner, 'Written inside');
+    await publish(owner, reflection, AUDIENCES.COMMUNITY, { communityId: found });
+
+    const directory = await call<{ communities: { id: string; name: string }[] }>(
+      stranger,
+      '/api/communities/discover',
+    );
+    const ids = directory.body.communities.map((entry) => entry.id);
+    expect(ids).toContain(found);
+    expect(ids).not.toContain(hidden.body.id);
+
+    /* Seeing that it exists is not seeing what is in it. */
+    const feed = await call<{ items: Publication[] }>(stranger, '/api/publications?scope=shared');
+    expect(feed.body.items).toHaveLength(0);
+  });
+});
+
+describe('joining', () => {
+  test('an open community lets somebody in; a private one takes their request once', async () => {
+    const owner = await register('owner-join@example.com');
+    const joiner = await register('joiner@example.com');
+    const open = await makeCommunity(owner, 'Anyone welcome', 'public');
+    const approval = await makeCommunity(owner, 'Ask first', 'private');
+
+    const joined = await call<{ state: string }>(joiner, `/api/communities/${open}/join`, {
+      method: 'POST',
+    });
+    expect(joined.body.state).toBe('active');
+
+    const asked = await call<{ state: string }>(joiner, `/api/communities/${approval}/join`, {
+      method: 'POST',
+    });
+    expect(asked.body.state).toBe('pending');
+
+    /* Pressing again is not a second request. */
+    await call(joiner, `/api/communities/${approval}/join`, { method: 'POST' });
+    const requests = await call<{ requests: unknown[] }>(
+      owner,
+      `/api/communities/${approval}/join-requests`,
+    );
+    expect(requests.body.requests).toHaveLength(1);
+  });
+
+  test('by default a member cannot approve, and the community can say otherwise', async () => {
+    const owner = await register('owner-approve@example.com');
+    const member = await register('member-approve@example.com');
+    const asker = await register('asker-approve@example.com');
+    const id = await makeCommunity(owner, 'Ask first', 'private');
+    await invite(owner, id, 'member-approve@example.com');
+    await accept(member, id);
+    await call(asker, `/api/communities/${id}/join`, { method: 'POST' });
+
+    /*
+     * The default matters: with every member able to approve, one approved
+     * person can let in everybody they know and the control the community was
+     * created for is gone in an afternoon.
+     */
+    const refused = await call(member, `/api/communities/${id}/join-requests/${'x'}`, {
+      method: 'POST',
+      body: JSON.stringify({ decision: 'approve' }),
+    });
+    expect(refused.status).toBe(403);
+
+    await call(owner, `/api/communities/${id}/settings`, {
+      method: 'PATCH',
+      body: JSON.stringify({ approvalPolicy: 'members' }),
+    });
+    const requests = await call<{ requests: { userId: string }[] }>(
+      member,
+      `/api/communities/${id}/join-requests`,
+    );
+    expect(requests.status).toBe(200);
+    const decided = await call(
+      member,
+      `/api/communities/${id}/join-requests/${requests.body.requests[0]!.userId}`,
+      { method: 'POST', body: JSON.stringify({ decision: 'approve' }) },
+    );
+    expect(decided.status).toBe(200);
+  });
+
+  test('declining is not banning: the person may ask again', async () => {
+    const owner = await register('owner-decline@example.com');
+    const asker = await register('asker-decline@example.com');
+    const id = await makeCommunity(owner, 'Ask first', 'private');
+    await call(asker, `/api/communities/${id}/join`, { method: 'POST' });
+    const requests = await call<{ requests: { userId: string }[] }>(
+      owner,
+      `/api/communities/${id}/join-requests`,
+    );
+    await call(owner, `/api/communities/${id}/join-requests/${requests.body.requests[0]!.userId}`, {
+      method: 'POST',
+      body: JSON.stringify({ decision: 'decline' }),
+    });
+
+    const again = await call<{ state: string }>(asker, `/api/communities/${id}/join`, {
+      method: 'POST',
+    });
+    expect(again.body.state).toBe('pending');
+  });
+});
+
+describe('a ban is not a stronger removal', () => {
+  async function banned() {
+    const owner = await register('owner-ban@example.com');
+    const person = await register('banned@example.com');
+    const id = await makeCommunity(owner, 'Open circle', 'public');
+    await call(person, `/api/communities/${id}/join`, { method: 'POST' });
+    const members = await call<{ userId: string; role: string }[]>(
+      owner,
+      `/api/communities/${id}/members`,
+    );
+    const subject = members.body.find((m) => m.role !== 'owner')!;
+    const done = await call(owner, `/api/communities/${id}/members/${subject.userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ state: 'banned' }),
+    });
+    expect(done.status).toBe(200);
+    return { owner, person, id };
+  }
+
+  test('they cannot simply rejoin an open community', async () => {
+    const { person, id } = await banned();
+    const rejoined = await call(person, `/api/communities/${id}/join`, { method: 'POST' });
+    expect(rejoined.status).toBe(404);
+  });
+
+  test('and an invitation cannot quietly undo it', async () => {
+    const { owner, id } = await banned();
+    const invited = await invite(owner, id, 'banned@example.com');
+    expect(invited.status).toBe(409);
+  });
+});
+
+describe('membership includes the right to participate', () => {
+  test('an ordinary member may share, not only the owner', async () => {
+    const owner = await register('owner-share@example.com');
+    const member = await register('member-share@example.com');
+    const id = await makeCommunity(owner, 'Shared space', 'private');
+    await invite(owner, id, 'member-share@example.com');
+    await accept(member, id);
+
+    const reflection = await writeReflection(member, 'Mine to share');
+    const shared = await publish(member, reflection, AUDIENCES.COMMUNITY, { communityId: id });
+    expect(shared.status).toBe(201);
+  });
+});
+
+describe('a setting change cannot publish what is already there', () => {
+  test('members-only to public leaves existing shares members-only', async () => {
+    const owner = await register('owner-expose@example.com');
+    const stranger = await register('stranger-expose@example.com');
+    const id = await makeCommunity(owner, 'Study group', 'private');
+    const reflection = await writeReflection(owner, 'Said to twelve people');
+    const shared = await publish(owner, reflection, AUDIENCES.COMMUNITY, { communityId: id });
+    const publicationId = shared.body.id;
+
+    const changed = await call<{ existingSharesUnchanged?: boolean }>(
+      owner,
+      `/api/communities/${id}/settings`,
+      { method: 'PATCH', body: JSON.stringify({ reflectionVisibility: 'public' }) },
+    );
+    expect(changed.status).toBe(200);
+    /* And it says so, rather than leaving it to be discovered. */
+    expect(changed.body.existingSharesUnchanged).toBe(true);
+
+    const peek = await call(stranger, `/api/publications/${publicationId}`);
+    expect(peek.status).toBe(404);
+
+    /* What it does change is what happens next. */
+    const later = await writeReflection(owner, 'Shared after the change');
+    const openly = await publish(owner, later, AUDIENCES.COMMUNITY, { communityId: id });
+    const visible = await call(stranger, `/api/publications/${openly.body.id}`);
+    expect(visible.status).toBe(200);
+  });
+});
+
+describe('sharing is not giving away', () => {
+  test('deleting the reflection takes its shares with it', async () => {
+    const owner = await register('owner-delete@example.com');
+    const member = await register('member-delete@example.com');
+    const id = await makeCommunity(owner, 'Circle', 'private');
+    await invite(owner, id, 'member-delete@example.com');
+    await accept(member, id);
+
+    const reflection = await writeReflection(owner, 'Shared then deleted');
+    const shared = await publish(owner, reflection, AUDIENCES.COMMUNITY, { communityId: id });
+    expect((await call(member, `/api/publications/${shared.body.id}`)).status).toBe(200);
+
+    const deleted = await call<{ sharesRemoved: number }>(
+      owner,
+      `/api/conversations/${reflection}`,
+      { method: 'DELETE' },
+    );
+    expect(deleted.body.sharesRemoved).toBe(1);
+    /* A community must never keep a copy of something its author destroyed. */
+    expect((await call(member, `/api/publications/${shared.body.id}`)).status).toBe(404);
+  });
+
+  test('deleting the community keeps everybody’s reflections', async () => {
+    const owner = await register('owner-close@example.com');
+    const member = await register('member-close@example.com');
+    const id = await makeCommunity(owner, 'Circle', 'private');
+    await invite(owner, id, 'member-close@example.com');
+    await accept(member, id);
+    const reflection = await writeReflection(member, 'Written by a member');
+    await publish(member, reflection, AUDIENCES.COMMUNITY, { communityId: id });
+
+    const closed = await call(owner, `/api/communities/${id}`, { method: 'DELETE' });
+    expect(closed.status).toBe(200);
+
+    /* The share is gone; the reflection is exactly where its author left it. */
+    const mine = await call<{ id: string }>(member, `/api/conversations/${reflection}`);
+    expect(mine.status).toBe(200);
+    expect(mine.body.id).toBe(reflection);
+  });
+});
+
+/*
+ * Distribution is limited; writing is not.
+ *
+ * The two tests that matter here are the evasion and the survival: unsharing
+ * must not refund a share, and somebody who has reached a ceiling must still
+ * be able to write. Everything else about the numbers is tested against the
+ * rule itself in share-limits.test.ts, where it does not need a database.
+ */
+describe('sharing limits', () => {
+  test('unsharing and resharing does not refund the share', async () => {
+    const cookie = await register('evade@example.com');
+    ageAccount('evade@example.com', 30);
+    const id = await makeCommunity(cookie, 'One room', 'private');
+
+    /* Five into one community in an hour is the ceiling. */
+    const published: string[] = [];
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const reflection = await writeReflection(cookie, `Reflection ${attempt}`);
+      const shared = await publish(cookie, reflection, AUDIENCES.COMMUNITY, { communityId: id });
+      expect(shared.status).toBe(201);
+      published.push(shared.body.id);
+    }
+
+    const sixth = await writeReflection(cookie, 'One too many');
+    const refused = await publish(cookie, sixth, AUDIENCES.COMMUNITY, { communityId: id });
+    expect(refused.status).toBe(429);
+
+    /*
+     * Deleting a publication removes it from the community. It does not give
+     * back the share — otherwise share, unshare, share would be free forever
+     * and the ceiling would only ever have limited what is visible.
+     */
+    await call(cookie, `/api/publications/${published[0]}`, { method: 'DELETE' });
+    const again = await publish(cookie, sixth, AUDIENCES.COMMUNITY, { communityId: id });
+    expect(again.status).toBe(429);
+  });
+
+  test('one reflection cannot be carpet-bombed across communities', async () => {
+    /*
+     * Six communities, made by somebody else, because creating them is itself
+     * limited — this test is about where one reflection may go, not about how
+     * many rooms one person may build in an afternoon.
+     */
+    const hosts = [
+      await register('crosspost-host-a@example.com'),
+      await register('crosspost-host-b@example.com'),
+    ];
+    const cookie = await register('crossposter@example.com');
+    ageAccount('crossposter@example.com', 30);
+    const communities: string[] = [];
+    for (let index = 0; index < 6; index += 1) {
+      const id = await makeCommunity(hosts[index % 2]!, `Circle ${index}`, 'public');
+      await call(cookie, `/api/communities/${id}/join`, { method: 'POST' });
+      communities.push(id);
+    }
+    const reflection = await writeReflection(cookie, 'Everywhere at once');
+
+    for (let index = 0; index < 5; index += 1) {
+      const shared = await publish(cookie, reflection, AUDIENCES.COMMUNITY, {
+        communityId: communities[index],
+      });
+      expect(shared.status).toBe(201);
+    }
+
+    const refused = await call<{ refusal: string; error: string }>(cookie, '/api/publications', {
+      method: 'POST',
+      body: JSON.stringify({
+        conversationId: reflection,
+        audience: AUDIENCES.COMMUNITY,
+        communityId: communities[5],
+      }),
+    });
+    expect(refused.status).toBe(429);
+    expect(refused.body.refusal).toBe('reflection_in_too_many_communities');
+    /* And it names the honest alternative rather than only refusing. */
+    expect(refused.body.error).toMatch(/share it publicly instead/i);
+
+    /* A different reflection is not held to that reflection's history. */
+    const another = await writeReflection(cookie, 'Something else');
+    const allowed = await publish(cookie, another, AUDIENCES.COMMUNITY, {
+      communityId: communities[5],
+    });
+    expect(allowed.status).toBe(201);
+  });
+
+  test('reaching a limit stops distribution and nothing else', async () => {
+    const cookie = await register('still-writing@example.com');
+    ageAccount('still-writing@example.com', 30);
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const reflection = await writeReflection(cookie, `Public ${attempt}`);
+      expect((await publish(cookie, reflection, AUDIENCES.PUBLIC)).status).toBe(201);
+    }
+    const blocked = await writeReflection(cookie, 'Sixth');
+    expect((await publish(cookie, blocked, AUDIENCES.PUBLIC)).status).toBe(429);
+
+    /*
+     * A social-platform problem must not become a private-writing problem.
+     * Writing, editing and keeping a reflection all carry on untouched.
+     */
+    const written = await call(cookie, `/api/conversations/${blocked}/sections`, {
+      method: 'PATCH',
+      body: JSON.stringify({ type: 'heart', content: 'Still writing, regardless.' }),
+    });
+    expect(written.status).toBe(200);
+    const created = await call(cookie, '/api/conversations', {
+      method: 'POST',
+      body: JSON.stringify({ title: 'A new one' }),
+    });
+    expect(created.status).toBe(201);
+  });
+});
+
+/*
+ * A new account's first day, which is a different ceiling from the others and
+ * has a different thing to say. It is also the one that must never read as an
+ * accusation: somebody who has just joined and shared five times is far more
+ * likely to be enthusiastic than automated.
+ */
+describe('a new account’s first day', () => {
+  test('gets a few shares, and is told it is temporary and not about their writing', async () => {
+    const cookie = await register('brand-new@example.com');
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const reflection = await writeReflection(cookie, `Early ${attempt}`);
+      expect((await publish(cookie, reflection, AUDIENCES.PUBLIC)).status).toBe(201);
+    }
+
+    const reflection = await writeReflection(cookie, 'One more');
+    const refused = await call<{ refusal: string; error: string }>(cookie, '/api/publications', {
+      method: 'POST',
+      body: JSON.stringify({ conversationId: reflection, audience: AUDIENCES.PUBLIC }),
+    });
+    expect(refused.status).toBe(429);
+    expect(refused.body.refusal).toBe('new_account');
+    expect(refused.body.error).toMatch(/eases off after your first day/i);
+    expect(refused.body.error).toMatch(/everything you write stays yours/i);
+  });
+});
+
+/*
+ * Personal controls are not moderation, and the difference is the whole point:
+ * a reader gets what they want immediately, nobody is accused of anything, and
+ * no moderator has to agree first.
+ */
+describe('hide and mute', () => {
+  async function twoPeopleAndAPublication() {
+    const author = await register('author-hide@example.com');
+    const reader = await register('reader-hide@example.com');
+    const reflection = await writeReflection(author, 'Something shared');
+    const shared = await publish(author, reflection, AUDIENCES.PUBLIC);
+    return { author, reader, publicationId: shared.body.id };
+  }
+
+  test('hiding takes a publication out of one reader’s sight and nobody else’s', async () => {
+    const { author, reader, publicationId } = await twoPeopleAndAPublication();
+
+    const hidden = await call(reader, `/api/publications/${publicationId}/hide-for-me`, {
+      method: 'POST',
+      body: JSON.stringify({ hidden: true }),
+    });
+    expect(hidden.status).toBe(200);
+
+    /* Gone for them, including by direct link — that is what hiding means. */
+    expect((await call(reader, `/api/publications/${publicationId}`)).status).toBe(404);
+    const feed = await call<{ items: Publication[] }>(reader, '/api/publications?scope=public');
+    expect(feed.body.items.map((item) => item.id)).not.toContain(publicationId);
+
+    /* Untouched for everybody else, and for its author. */
+    expect((await call(author, `/api/publications/${publicationId}`)).status).toBe(200);
+    const third = await register('third-hide@example.com');
+    expect((await call(third, `/api/publications/${publicationId}`)).status).toBe(200);
+  });
+
+  test('and it is reversible, because it was never a punishment', async () => {
+    const { reader, publicationId } = await twoPeopleAndAPublication();
+    await call(reader, `/api/publications/${publicationId}/hide-for-me`, {
+      method: 'POST',
+      body: JSON.stringify({ hidden: true }),
+    });
+    await call(reader, `/api/publications/${publicationId}/hide-for-me`, {
+      method: 'POST',
+      body: JSON.stringify({ hidden: false }),
+    });
+    expect((await call(reader, `/api/publications/${publicationId}`)).status).toBe(200);
+  });
+
+  test('muting an author hides what they share from that reader alone', async () => {
+    const { author, reader, publicationId } = await twoPeopleAndAPublication();
+    const muted = await call(reader, `/api/publications/${publicationId}/mute-author`, {
+      method: 'POST',
+      body: JSON.stringify({ muted: true }),
+    });
+    expect(muted.status).toBe(200);
+
+    /* Everything of theirs, not only the one that prompted it. */
+    const second = await writeReflection(author, 'Another one');
+    const alsoShared = await publish(author, second, AUDIENCES.PUBLIC);
+    expect((await call(reader, `/api/publications/${alsoShared.body.id}`)).status).toBe(404);
+
+    /* The author notices nothing: their own work is exactly where it was. */
+    expect((await call(author, `/api/publications/${alsoShared.body.id}`)).status).toBe(200);
+  });
+});
+
+describe('reporting', () => {
+  test('“Something else” needs a sentence somebody can act on', async () => {
+    const author = await register('reported@example.com');
+    const reader = await register('reporter@example.com');
+    const reflection = await writeReflection(author, 'Shared publicly');
+    const shared = await publish(author, reflection, AUDIENCES.PUBLIC);
+
+    const empty = await call(reader, `/api/publications/${shared.body.id}/report`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: 'other', detail: '' }),
+    });
+    expect(empty.status).toBe(400);
+
+    const explained = await call(reader, `/api/publications/${shared.body.id}/report`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: 'other', detail: 'It links to a phishing page.' }),
+    });
+    expect(explained.status).toBe(201);
+
+    /* And a report is an allegation: nothing about the publication changed. */
+    expect((await call(reader, `/api/publications/${shared.body.id}`)).status).toBe(200);
   });
 });

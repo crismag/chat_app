@@ -1,46 +1,75 @@
 /*
- * Sharing is the identity-required action, and it asks at the point of use.
+ * Three sharing concepts, and which of them needs an account.
  *
- * The whole change is that an account is not needed to write. It is needed to
- * share, because Public and Community both put a name to something — so the
- * ask happens when somebody reaches for it, saying first that their reflection
- * is already safe.
+ * Handing a reflection to another app is an export: it creates no record in
+ * C.H.A.T., puts nobody's name to anything, and a guest may do it. Publishing
+ * to Public or into a community is different in kind — both put an author
+ * beside the writing where other people can see it — and that is what an
+ * account is for.
+ *
+ * The failure this guards against is the tidy-looking one: refusing a guest
+ * the whole sheet. That takes away the destination they were always entitled
+ * to, in order to protect the two they were not.
  */
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
-import { afterEach, expect, test } from 'vitest'
-import { SignInToShare } from './ChatSheets.tsx'
+import { afterEach, expect, test, vi } from 'vitest'
+import { ShareSheet } from './ChatSheets.tsx'
 
 afterEach(cleanup)
 
-function renderSheet() {
-  return render(
+function renderSheet(canPublish: boolean) {
+  const onShare = vi.fn(async () => {})
+  const onShareExternally = vi.fn(async () => {})
+  render(
     <MemoryRouter>
-      <SignInToShare reflectionId="r1" onClose={() => {}} />
+      <ShareSheet
+        currentlyShared={false}
+        validation={null}
+        format="full"
+        communities={[]}
+        reflectionId="r1"
+        canPublish={canPublish}
+        onClose={() => {}}
+        onShare={onShare}
+        onShareExternally={onShareExternally}
+      />
     </MemoryRouter>,
   )
+  return { onShare, onShareExternally }
 }
 
-test('it says the reflection is already saved before it asks for anything', () => {
-  renderSheet()
-  expect(screen.getByRole('heading', { name: 'Sign in to share' })).toBeInTheDocument()
-  expect(screen.getByText(/already saved on this device/i)).toBeInTheDocument()
+test('a guest can still hand their reflection to another app', () => {
+  const { onShareExternally } = renderSheet(false)
+  /* And it is what the sheet opens on, since it is what they can do. */
+  fireEvent.click(screen.getByRole('button', { name: /Share to another app/ }))
+  expect(onShareExternally).toHaveBeenCalledOnce()
 })
 
-/*
- * Where they came from travels with them. Signing in must return somebody to
- * the reflection they were sharing, not to a dashboard.
- */
-test('it carries the reflection back to itself after signing in', () => {
-  renderSheet()
-  const link = screen.getByRole('link', { name: /Sign in or create an account/ })
+test('the platform destinations send a guest to sign in, not away', () => {
+  const { onShare } = renderSheet(false)
+  fireEvent.click(screen.getByRole('radio', { name: /Public/ }))
+
+  /* Nothing is published, and nothing is refused either. */
+  expect(onShare).not.toHaveBeenCalled()
+  const link = screen.getByRole('link', { name: 'Sign in to share' })
   const url = new URL(link.getAttribute('href')!, 'http://localhost')
   expect(url.pathname).toBe('/login')
+  /* Where they came from travels with them: back to this reflection. */
   expect(url.searchParams.get('next')).toBe('/?c=r1')
   expect(url.searchParams.get('intent')).toBe('share')
 })
 
-test('and says what signing in gets them, rather than only what it costs', () => {
-  renderSheet()
-  expect(screen.getByText(/brings everything you have written here with you/i)).toBeInTheDocument()
+test('and it says the reflection is untouched before it asks for anything', () => {
+  renderSheet(false)
+  fireEvent.click(screen.getByRole('radio', { name: /Public/ }))
+  expect(screen.getByText(/saved and stays exactly as it is/i)).toBeInTheDocument()
+  expect(screen.getByText(/brings everything you have written with you/i)).toBeInTheDocument()
+})
+
+test('a registered person gets the ordinary sheet, with no sign-in anywhere in it', () => {
+  const { onShare } = renderSheet(true)
+  expect(screen.queryByRole('link', { name: 'Sign in to share' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Share publicly' }))
+  expect(onShare).toHaveBeenCalledOnce()
 })

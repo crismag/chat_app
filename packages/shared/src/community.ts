@@ -47,9 +47,18 @@ export function isAudience(value: unknown): value is Audience {
 
 /* ------------------------------------------------------------------- roles */
 
+/*
+ * Three roles, and deliberately no fourth.
+ *
+ * `ADMIN` was called `moderator`, which quietly claimed more than it is:
+ * community management is not platform moderation, and somebody who can remove
+ * a member from their study group cannot remove anybody from C.H.A.T. The
+ * stored value is unchanged — rows say `moderator` — and `readCommunityRole`
+ * is what keeps that from being a second meaning.
+ */
 export const COMMUNITY_ROLES = {
   OWNER: 'owner',
-  MODERATOR: 'moderator',
+  ADMIN: 'admin',
   MEMBER: 'member',
 } as const;
 
@@ -63,9 +72,187 @@ export function isCommunityRole(value: unknown): value is CommunityRole {
   return COMMUNITY_ROLE_VALUES.includes(value as CommunityRole);
 }
 
-/** Owners and moderators may hide, invite and remove. Members may not. */
+/** Rows written before the role was called Admin say `moderator`. */
+export function readCommunityRole(value: unknown): CommunityRole {
+  if (value === 'moderator') return COMMUNITY_ROLES.ADMIN;
+  return isCommunityRole(value) ? value : COMMUNITY_ROLES.MEMBER;
+}
+
+/**
+ * Owners and admins may hide, invite, approve and remove. Members may not.
+ *
+ * What this does NOT gate is sharing. Membership includes the right to
+ * participate: there is no owner-only posting, no approved-author list and no
+ * broadcast mode, because a community here is a shared space and the moment
+ * one person can speak and the others can only listen it has become something
+ * else. Ownership carries responsibility for the space, not exclusive use of
+ * it.
+ */
 export function canModerate(role: CommunityRole | null | undefined): boolean {
-  return role === COMMUNITY_ROLES.OWNER || role === COMMUNITY_ROLES.MODERATOR;
+  return role === COMMUNITY_ROLES.OWNER || role === COMMUNITY_ROLES.ADMIN;
+}
+
+/**
+ * Whether this person may decide on a join request.
+ *
+ * Two inputs, because the answer is not a property of the role alone: a
+ * community may open approvals to its members, and until it says so the
+ * default is the safer one.
+ */
+export function canApproveMembers(
+  role: CommunityRole | null | undefined,
+  policy: ApprovalPolicy,
+): boolean {
+  if (canModerate(role)) return true;
+  return policy === APPROVAL_POLICY.MEMBERS && role === COMMUNITY_ROLES.MEMBER;
+}
+
+/* ------------------------------------------------------ community settings */
+
+/*
+ * What a community is, expressed as four independent settings rather than one
+ * `isPrivate` flag.
+ *
+ * A single flag looks simpler right up until somebody wants a church small
+ * group that strangers can *find* and ask to join while everything written
+ * inside it stays members-only. With one flag that group has to be called
+ * "semi-private", and the next request invents "semi-public", and the meaning
+ * of the flag is then whatever the last person to touch it assumed.
+ *
+ * So: who can find it, who can join it, who can read what is shared there, and
+ * who decides on requests. Public and Private remain the two things a person
+ * chooses at creation — they are presets over these four, not a field.
+ */
+export const DISCOVERABILITY = {
+  /** Listed, searchable, and readable *as a community* by anyone. */
+  PUBLIC: 'public',
+  /** Reachable only by people who already know it exists. */
+  HIDDEN: 'hidden',
+} as const;
+
+export type Discoverability = (typeof DISCOVERABILITY)[keyof typeof DISCOVERABILITY];
+
+export const JOIN_POLICY = {
+  /** Any registered person may join, immediately. */
+  OPEN: 'open',
+  /** They may ask; somebody has to say yes. */
+  APPROVAL: 'approval',
+  /** They cannot ask. Somebody has to invite them. */
+  INVITE: 'invite',
+} as const;
+
+export type JoinPolicy = (typeof JOIN_POLICY)[keyof typeof JOIN_POLICY];
+
+/**
+ * Who can read what is shared into this community.
+ *
+ * This is the *default for new shares*, and deliberately not a description of
+ * the shares that already exist. Every share carries its own copy of this,
+ * fixed at the moment it was made, so that changing the setting here can never
+ * reach backwards into something somebody wrote when the answer was different.
+ */
+export const REFLECTION_VISIBILITY = {
+  PUBLIC: 'public',
+  MEMBERS: 'members',
+} as const;
+
+export type ReflectionVisibility =
+  (typeof REFLECTION_VISIBILITY)[keyof typeof REFLECTION_VISIBILITY];
+
+/**
+ * Who may approve a join request.
+ *
+ * Defaults to owner and admins, and that default matters: with every member
+ * able to approve, one approved person can let in everybody they know, and the
+ * membership control the community was created for is gone in an afternoon.
+ * A community may choose otherwise, but it has to choose it.
+ */
+export const APPROVAL_POLICY = {
+  OWNER_ADMIN: 'owner_admin',
+  MEMBERS: 'members',
+} as const;
+
+export type ApprovalPolicy = (typeof APPROVAL_POLICY)[keyof typeof APPROVAL_POLICY];
+
+export type CommunitySettings = {
+  discoverability: Discoverability;
+  joinPolicy: JoinPolicy;
+  reflectionVisibility: ReflectionVisibility;
+  approvalPolicy: ApprovalPolicy;
+};
+
+/**
+ * The two things somebody actually chooses when they make a community.
+ *
+ * Presets over the settings above, not a stored kind. Nothing reads a
+ * community back and asks "is this the Public preset?" — it asks the four
+ * questions, which is why a community can later sit between the presets
+ * without needing a third name.
+ */
+export const COMMUNITY_PRESETS = {
+  PUBLIC: 'public',
+  PRIVATE: 'private',
+} as const;
+
+export type CommunityPreset = (typeof COMMUNITY_PRESETS)[keyof typeof COMMUNITY_PRESETS];
+
+export const PRESET_SETTINGS: Record<CommunityPreset, CommunitySettings> = {
+  [COMMUNITY_PRESETS.PUBLIC]: {
+    discoverability: DISCOVERABILITY.PUBLIC,
+    joinPolicy: JOIN_POLICY.OPEN,
+    reflectionVisibility: REFLECTION_VISIBILITY.PUBLIC,
+    approvalPolicy: APPROVAL_POLICY.OWNER_ADMIN,
+  },
+  /*
+   * Discoverable, because a group nobody can find is a different and rarer
+   * thing than a group not everybody can join. Hidden remains available; it is
+   * not what "Private" means by default.
+   */
+  [COMMUNITY_PRESETS.PRIVATE]: {
+    discoverability: DISCOVERABILITY.PUBLIC,
+    joinPolicy: JOIN_POLICY.APPROVAL,
+    reflectionVisibility: REFLECTION_VISIBILITY.MEMBERS,
+    approvalPolicy: APPROVAL_POLICY.OWNER_ADMIN,
+  },
+};
+
+function oneOf<T extends string>(values: Record<string, T>, value: unknown, fallback: T): T {
+  return Object.values(values).includes(value as T) ? (value as T) : fallback;
+}
+
+/**
+ * Settings as they come back from a row or a request.
+ *
+ * Every fallback is the more private of the two options. A value nobody
+ * recognises must never be the reason something becomes readable.
+ */
+export function readCommunitySettings(value: unknown): CommunitySettings {
+  const source = (value ?? {}) as Record<string, unknown>;
+  return {
+    discoverability: oneOf(DISCOVERABILITY, source['discoverability'], DISCOVERABILITY.HIDDEN),
+    joinPolicy: oneOf(JOIN_POLICY, source['joinPolicy'], JOIN_POLICY.INVITE),
+    reflectionVisibility: oneOf(
+      REFLECTION_VISIBILITY,
+      source['reflectionVisibility'],
+      REFLECTION_VISIBILITY.MEMBERS,
+    ),
+    approvalPolicy: oneOf(APPROVAL_POLICY, source['approvalPolicy'], APPROVAL_POLICY.OWNER_ADMIN),
+  };
+}
+
+/**
+ * Whether a settings change increases who can see what is already there.
+ *
+ * The one transition an administrator may not simply make: somebody shared
+ * into a twelve-person group on the understanding that twelve people would
+ * read it, and no later setting change is allowed to turn that into the open
+ * internet. Reducing exposure is always allowed and needs no ceremony.
+ */
+export function increasesExposure(before: CommunitySettings, after: CommunitySettings): boolean {
+  return (
+    before.reflectionVisibility === REFLECTION_VISIBILITY.MEMBERS &&
+    after.reflectionVisibility === REFLECTION_VISIBILITY.PUBLIC
+  );
 }
 
 /* -------------------------------------------------------------- membership */
@@ -92,6 +279,17 @@ export const MEMBERSHIP_STATES = {
   ACTIVE: 'active',
   REMOVED: 'removed',
   LEFT: 'left',
+  /*
+   * Banned is not a stronger word for removed; it is a different fact.
+   *
+   * A removed person may ask again, and an invitation still reaches them —
+   * removal says "not now" and often means a misunderstanding. A ban says the
+   * community has decided, and it has to survive the three ways people get
+   * back in: joining an open community, asking again, and being invited by
+   * somebody who was not in the argument. Collapsing the two would mean either
+   * removal is unforgiving or a ban is a formality.
+   */
+  BANNED: 'banned',
 } as const;
 
 export type MembershipState =
@@ -100,6 +298,16 @@ export type MembershipState =
 /** The single predicate every access check reduces to. */
 export function grantsAccess(state: MembershipState | null | undefined): boolean {
   return state === MEMBERSHIP_STATES.ACTIVE;
+}
+
+/** A ban outlives the way somebody tries to come back. */
+export function isBanned(state: MembershipState | null | undefined): boolean {
+  return state === MEMBERSHIP_STATES.BANNED;
+}
+
+/** Whether this person is waiting on a decision. Never two at once. */
+export function isPending(state: MembershipState | null | undefined): boolean {
+  return state === MEMBERSHIP_STATES.PENDING;
 }
 
 /* -------------------------------------------------------------- moderation */
@@ -137,15 +345,50 @@ export type ReportState = (typeof REPORT_STATES)[keyof typeof REPORT_STATES];
  */
 export const PUBLICATION_REPORT_REASONS = [
   { id: 'spam', label: 'Spam or advertising' },
-  { id: 'harassment', label: 'Harassment or hateful content' },
+  { id: 'scam', label: 'Scam or suspicious link' },
+  { id: 'harassment', label: 'Harassment or bullying' },
+  { id: 'hate', label: 'Hate or abusive content' },
   { id: 'sexual', label: 'Sexual or inappropriate content' },
-  { id: 'harm', label: 'Threat or encouragement of harm' },
+  { id: 'harm', label: 'Threats or dangerous content' },
   { id: 'private_information', label: 'Reveals private information' },
   { id: 'impersonation', label: 'Impersonation' },
   { id: 'not_a_reflection', label: 'Not a genuine C.H.A.T. reflection' },
   { id: 'copyright', label: 'Copyright or ownership' },
   { id: 'other', label: 'Something else' },
 ] as const;
+
+/**
+ * What is deliberately not on that list, and why.
+ *
+ * There is no "I disagree with this", no "false teaching", no "bad theology",
+ * no "wrong interpretation" and no denominational category. This application
+ * is for people writing about Scripture; strong disagreement about what a
+ * passage means is the ordinary substance of that, not an infraction, and a
+ * report button that offers to adjudicate it would turn moderation into a
+ * doctrinal court and every disagreement into a case.
+ *
+ * The line the categories above draw is between conduct and content: what
+ * somebody does to another person, or to the platform, rather than what they
+ * believe about a text.
+ */
+export const NOT_REPORTABLE = [
+  'disagreement with an interpretation',
+  'doctrine or denomination',
+  'a testimony somebody finds unlikely',
+  'a political opinion',
+] as const;
+
+/**
+ * Whether this report can be submitted as written.
+ *
+ * "Something else" needs a sentence — a category that means "none of these"
+ * with no explanation is a report nobody can act on, and asking for one is
+ * also a small brake on reporting somebody in a temper.
+ */
+export function reportIsSubmittable(reason: string, note: string): boolean {
+  if (!isReportReason(reason)) return false;
+  return reason !== 'other' || note.trim().length >= 10;
+}
 
 export type PublicationReportReason =
   (typeof PUBLICATION_REPORT_REASONS)[number]['id'];

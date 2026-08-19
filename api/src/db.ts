@@ -562,6 +562,7 @@ class AccountTable {
       displayName: row['displayName'] == null ? null : String(row['displayName']),
       guestName: row['guestName'] == null ? null : String(row['guestName']),
       registeredAt: row['registeredAt'] == null ? null : String(row['registeredAt']),
+      createdAt: row['createdAt'] == null ? null : String(row['createdAt']),
       mergedIntoUserId: row['mergedIntoUserId'] == null ? null : String(row['mergedIntoUserId']),
     };
   }

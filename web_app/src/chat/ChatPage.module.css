@@ -2719,3 +2719,19 @@
   font-size: 0.7rem;
   font-weight: 700;
 }
+
+
+/*
+ * A guest being told what an account is for, in the sheet rather than instead
+ * of it. Not a warning — nothing has gone wrong — so it reads in the ordinary
+ * voice and sits above the choice it is about.
+ */
+.sheetNotice {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  color: var(--ink-muted, var(--muted));
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}

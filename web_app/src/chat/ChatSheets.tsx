@@ -97,42 +97,13 @@ export type ShareAudience = 'only-me' | 'public' | 'community' | 'device'
  * means a second publication, which the copy says out loud rather than offering
  * a checkbox that quietly turns into "public".
  */
-/**
- * Sharing needs an account, and asks for one here rather than at the door.
- *
- * The reflection is already saved by the time anybody sees this, which is the
- * first thing it says — the fear a sign-in prompt creates is that the writing
- * is about to be lost. Where they came from is carried in the link, so signing
- * in returns them to this reflection rather than to a dashboard.
- */
-export function SignInToShare({ reflectionId, onClose }: { reflectionId: string; onClose: () => void }) {
-  return (
-    <Sheet title="Sign in to share" onClose={onClose}>
-      <p className={styles.sheetLead}>
-        Your reflection is already saved on this device. Sharing it publicly or with a community
-        needs an account, because both of them put your name to it.
-      </p>
-      <p className={styles.sheetLead}>
-        Signing in also brings everything you have written here with you, and makes it reachable
-        from your other devices.
-      </p>
-      <div className={styles.destinations}>
-        <Link
-          className="btn btn-primary"
-          to={`/login?next=${encodeURIComponent(`/?c=${reflectionId}`)}&intent=share`}
-        >
-          Sign in or create an account
-        </Link>
-      </div>
-    </Sheet>
-  )
-}
-
 export function ShareSheet({
   currentlyShared,
   validation,
   format,
   communities,
+  reflectionId,
+  canPublish,
   onClose,
   onShare,
   onShareExternally,
@@ -141,6 +112,17 @@ export function ShareSheet({
   validation: ValidationResult | null
   format: ChatFormat
   communities: { id: string; name: string }[]
+  reflectionId: string
+  /**
+   * Whether this person may publish into C.H.A.T.
+   *
+   * False for a guest. Sharing to another app is a different thing and stays
+   * available to them: it hands the words to WhatsApp and creates no record
+   * here, so it needs nobody's name on it. Public and Communities do — they
+   * put an author beside the writing where other people can see it — and that
+   * is what an account is for.
+   */
+  canPublish: boolean
   onClose: () => void
   onShare: (
     audience: ShareAudience,
@@ -156,8 +138,10 @@ export function ShareSheet({
    * could not perform.
    */
   const [audience, setAudience] = useState<ShareAudience>(
-    communities.length > 0 ? 'community' : 'public',
+    canPublish ? (communities.length > 0 ? 'community' : 'public') : 'device',
   )
+  /* True when the chosen destination is one only an account can reach. */
+  const needsAccount = !canPublish && (audience === 'public' || audience === 'community')
   const [communityId, setCommunityId] = useState<string | null>(communities[0]?.id ?? null)
   const [acknowledged, setAcknowledged] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -167,19 +151,21 @@ export function ShareSheet({
       id: 'public' as const,
       icon: <GlobeIcon className={styles.smallIcon} />,
       name: 'Public',
-      detail:
-        'Anyone who can see public C.H.A.T. content. May appear in feeds and search, and others may share it on.',
+      detail: canPublish
+        ? 'Anyone who can see public C.H.A.T. content. May appear in feeds and search, and others may share it on.'
+        : 'Anyone who can see public C.H.A.T. content. Needs an account, because it puts your name to it.',
       available: true,
     },
     {
       id: 'community' as const,
       icon: <CommunityIcon className={styles.smallIcon} />,
       name: 'A community',
-      detail:
-        communities.length > 0
+      detail: !canPublish
+        ? 'Members of one community only. Needs an account — communities are shared spaces, and yours is who you are in one.'
+        : communities.length > 0
           ? 'Members of one community only. Never public, never in public search, and only while someone is still a member.'
           : 'Members of one community only. You are not in a community yet — you can start one from Community.',
-      available: communities.length > 0,
+      available: canPublish ? communities.length > 0 : true,
     },
     {
       id: 'device' as const,
@@ -211,6 +197,19 @@ export function ShareSheet({
           <button type="button" className="btn btn-ghost" onClick={onClose}>
             Cancel
           </button>
+          {/*
+            A guest choosing Public or a community is not refused — they are
+            sent to sign in, and told the reflection stays exactly as it is.
+            Everything they have written comes with them.
+          */}
+          {needsAccount ? (
+            <Link
+              className="btn btn-primary"
+              to={`/login?next=${encodeURIComponent(`/?c=${reflectionId}`)}&intent=share`}
+            >
+              Sign in to share
+            </Link>
+          ) : (
           <button
             type="button"
             className="btn btn-primary"
@@ -238,9 +237,16 @@ export function ShareSheet({
                     ? 'Share to another app'
                     : 'Share publicly'}
           </button>
+          )}
         </>
       }
     >
+      {needsAccount ? (
+        <p className={styles.sheetNotice} role="status">
+          Your reflection is saved and stays exactly as it is. Signing in brings everything you
+          have written with you and makes it reachable from your other devices.
+        </p>
+      ) : null}
       <p className={styles.sheetLead}>
         A reflection goes to one audience at a time, and only when you say so — finishing one
         never shares it. Sharing it somewhere else later is a separate share; a community share

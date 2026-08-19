@@ -17,6 +17,7 @@ export type StoredAccount = {
   displayName: string | null;
   guestName: string | null;
   registeredAt: string | null;
+  createdAt: string | null;
   /** Set when this guest's work was moved into an account that existed. */
   mergedIntoUserId: string | null;
 };
@@ -211,6 +212,7 @@ export class MemoryAccountTable {
       displayName: null,
       guestName: null,
       registeredAt: null,
+      createdAt: new Date().toISOString(),
       mergedIntoUserId: null,
     };
   }
