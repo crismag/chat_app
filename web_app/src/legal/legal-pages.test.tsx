@@ -84,9 +84,24 @@ test('a document with blanks left in it says so on the page', async () => {
   expect(notice).toHaveTextContent(/\[.+\]/)
 })
 
-test('a page with no document at all says that instead', async () => {
+test('every page has a document now, and each one renders it', async () => {
+  for (const { slug } of LEGAL_PAGES) {
+    expect(LEGAL_PAGES.find((p) => p.slug === slug)!.markdown).toBeTruthy()
+  }
   renderAt('/support')
-  expect(await screen.findByRole('status')).toHaveTextContent(/has not been written yet/i)
+  expect(await screen.findByRole('heading', { level: 1, name: 'Support' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: /Found a Bug/i })).toBeInTheDocument()
+})
+
+/*
+ * Support is the page a reader is sent to when something is already wrong, so
+ * the way back to the others has to be on it.
+ */
+test('support reaches the policies it refers to', async () => {
+  renderAt('/support')
+  const nav = within(await screen.findByRole('navigation', { name: 'Policies' }))
+  expect(nav.getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute('href', '/privacy')
+  expect(nav.getByRole('link', { name: 'Data Deletion' })).toHaveAttribute('href', '/data-deletion')
 })
 
 describe('the renderer', () => {

@@ -18,6 +18,7 @@ import privacyMarkdown from './content/privacy.md?raw';
 import termsMarkdown from './content/terms.md?raw';
 import dataDeletionMarkdown from './content/data-deletion.md?raw';
 import disclaimerMarkdown from './content/disclaimer.md?raw';
+import supportMarkdown from './content/support.md?raw';
 
 export type LegalPageSlug =
   | 'privacy'
@@ -65,7 +66,7 @@ export const LEGAL_PAGES: readonly LegalPageMeta[] = [
     slug: 'support',
     label: 'Support',
     summary: 'How to get help, report a problem, or reach a person.',
-    markdown: null,
+    markdown: supportMarkdown,
   },
 ];
 
