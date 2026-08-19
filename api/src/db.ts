@@ -219,6 +219,13 @@ function migrate(db: DatabaseSync): void {
   carryOwnersIntoUsers(db);
   db.exec('CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(userId)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_installations_user ON account_installations(userId)');
+  /*
+   * Whatever exists by now. It runs again once the community and profile
+   * stores have made their own tables — this is idempotent, and running it
+   * here means a store used on its own is correct too, rather than only
+   * correct when it happens to be inside an application.
+   */
+  dropUserForeignKeys(db);
 }
 
 /**
@@ -297,6 +304,80 @@ function assertNothingDangling(db: DatabaseSync, what: string): void {
   if (broken.length > 0) {
     throw new Error(`${what} left ${broken.length} rows that no longer resolve.`);
   }
+}
+
+/**
+ * Every foreign key into the local `users` table, removed.
+ *
+ * Accounts moved to MariaDB. A registered person therefore has no row in this
+ * file's `users` table at all — and a dozen tables here still declared
+ * `REFERENCES users(id)`, so the first write on behalf of a real account
+ * failed with "FOREIGN KEY constraint failed". Creating a community did.
+ * So did saving a profile, publishing, encouraging, saving and reporting.
+ *
+ * `conversations` was fixed one at a time when it broke. That was treating a
+ * symptom: the constraint is wrong everywhere for the same reason, and the
+ * remaining eleven were each waiting for somebody to reach them in production.
+ * This finds them by reading the schema rather than by listing them, so a
+ * table added later with the same mistake is also repaired.
+ *
+ * Nothing else about a table changes. Its other constraints, defaults and
+ * indexes are preserved; only the reference to a table that no longer holds
+ * these people is dropped.
+ *
+ * Called after every store has built its own tables, not from `migrate()`:
+ * the community and profile tables are created by their own stores, so at
+ * `migrate()` time most of the offenders do not exist yet.
+ */
+export function dropUserForeignKeys(db: DatabaseSync): void {
+  const tables = db
+    .prepare("SELECT name, sql FROM sqlite_master WHERE type = @kind")
+    .all({ kind: 'table' }) as { name: string; sql: string | null }[];
+
+  const offenders = tables.filter(
+    (table) =>
+      table.sql &&
+      table.name !== 'users' &&
+      /REFERENCES\s+users\s*\(/i.test(table.sql),
+  );
+  if (offenders.length === 0) return;
+
+  /* Indexes go with the table they belong to, so they are put back after. */
+  const indexes = db
+    .prepare("SELECT name, tbl_name, sql FROM sqlite_master WHERE type = @kind")
+    .all({ kind: 'index' }) as { name: string; tbl_name: string; sql: string | null }[];
+
+  db.exec('PRAGMA foreign_keys = OFF');
+  db.exec('BEGIN');
+  try {
+    for (const table of offenders) {
+      const original = table.sql as string;
+      /*
+       * Only the reference is removed — the column, its type and its NOT NULL
+       * stay exactly as they were, along with any cascade action that was
+       * attached to the reference and now has nothing to cascade from.
+       */
+      const rebuilt = original
+        .replace(/REFERENCES\s+users\s*\([^)]*\)(\s+ON\s+(DELETE|UPDATE)\s+[A-Z ]+)*/gi, '')
+        .replace(new RegExp(`\\b${table.name}\\b`), `${table.name}_rebuilt`);
+
+      db.exec(rebuilt);
+      db.exec(`INSERT INTO ${table.name}_rebuilt SELECT * FROM ${table.name}`);
+      db.exec(`DROP TABLE ${table.name}`);
+      db.exec(`ALTER TABLE ${table.name}_rebuilt RENAME TO ${table.name}`);
+
+      for (const index of indexes) {
+        if (index.tbl_name === table.name && index.sql) db.exec(index.sql);
+      }
+    }
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    db.exec('PRAGMA foreign_keys = ON');
+    throw error;
+  }
+  db.exec('PRAGMA foreign_keys = ON');
+  assertNothingDangling(db, 'Removing the user foreign keys');
 }
 
 /**

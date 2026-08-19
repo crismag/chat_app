@@ -5,6 +5,7 @@ import { cors } from 'hono/cors';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { sessionCookieOptions } from './auth/session-cookie.ts';
 import { SqliteAuthStore, type AuthStore, type AuthUser } from './auth/store.ts';
+import { dropUserForeignKeys } from './db.ts';
 import {
   PERSISTENCE_TYPES,
   SESSION_TYPES,
@@ -513,6 +514,14 @@ export function createApp(
    * stores over one database would be two migrations racing on first use.
    */
   const communityStore = createCommunityStore(store);
+
+  /*
+   * Now that every store has made its tables, remove the foreign keys that
+   * point at a `users` table which no longer holds the people using this.
+   * Accounts are in MariaDB; a constraint saying otherwise fails the first
+   * write on behalf of a real account, which is what it was doing.
+   */
+  if ('db' in store) dropUserForeignKeys(store.db);
 
   app.route(
     '/api/profiles',

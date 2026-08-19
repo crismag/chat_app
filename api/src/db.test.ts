@@ -574,3 +574,63 @@ describe('older databases become accounts', () => {
     }
   });
 });
+
+/*
+ * Accounts live in MariaDB, so nothing here may require a row in this file's
+ * `users` table.
+ *
+ * `conversations` was fixed when it broke in production. That was treating a
+ * symptom: eleven other tables carried the same constraint for the same
+ * reason, each waiting for somebody to reach it — creating a community, saving
+ * a profile, publishing, encouraging, saving, reporting. This asserts the
+ * class rather than the instance.
+ */
+describe('no table requires a local user row', () => {
+  it('has no foreign key into users anywhere, and keeps every other one', () => {
+    const store = new SqliteStore();
+    try {
+      const tables = store.db
+        .prepare('SELECT name, sql FROM sqlite_master WHERE type = @kind')
+        .all({ kind: 'table' }) as { name: string; sql: string | null }[];
+
+      const offenders = tables
+        .filter(
+          (table) =>
+            table.sql && table.name !== 'users' && /REFERENCES\s+users\s*\(/i.test(table.sql),
+        )
+        .map((table) => table.name);
+      expect(offenders).toEqual([]);
+
+      /* The rebuild is surgical: the constraints that still mean something stay. */
+      const messages = tables.find((table) => table.name === 'messages');
+      expect(messages?.sql).toMatch(/REFERENCES\s+conversations/i);
+      expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      store.close();
+    }
+  });
+
+  it('lets an account that exists only in MariaDB own everything it should', () => {
+    const store = new SqliteStore();
+    const app = createApp(store);
+    try {
+      /* An id from another database entirely — which is what a real one is. */
+      const elsewhere = 'a-user-that-lives-in-mariadb';
+      store.conversations.set('c1', {
+        id: 'c1',
+        userId: elsewhere,
+        format: 'full',
+        title: 'Written by somebody the local users table has never heard of',
+        scriptureReference: null,
+        visibility: 'private',
+        tags: [],
+        createdAt: '2026-08-01',
+        updatedAt: '2026-08-01',
+      });
+      expect(store.conversations.get('c1')?.userId).toBe(elsewhere);
+      expect(app).toBeTruthy();
+    } finally {
+      store.close();
+    }
+  });
+});
