@@ -8,10 +8,6 @@ Well, not **excellent**.
 
 But you've found the right page.
 
----
-
-## Need Help?
-
 For problems with your account, reflections, Bible passages, sharing, AI features, or something that appears to have spontaneously combusted:
 
 **chat_app@crishub.com**
@@ -19,26 +15,35 @@ For problems with your account, reflections, Bible passages, sharing, AI feature
 Tell us:
 
 - what you were trying to do;
-- what happened instead; and
-- what device/browser you were using.
+- what happened instead;
+- what you expected to happen; and
+- what device or browser you were using.
 
-A screenshot is extremely helpful.
+Screenshots are welcome.
 
-**“It doesn't work”** is somewhat less helpful.
+**“It doesn't work.”**
+
+Technically a bug report.  
+Spiritually an expression of frustration.  
+Diagnostically not our strongest lead.
 
 ---
 
 ## Account or Login Problems
 
-Tell us the email or login method associated with your account.
+Tell us which login method you use and the email associated with your account.
 
 **Do not send your password.**
 
-Not even if we ask.
+Not your Google password.  
+Not your Facebook password.  
+Not your password with the last three characters replaced by `***`.
 
-Especially if we ask.
+We don't need any of them.
 
-If “Support” suddenly requests your Facebook password, we have either been compromised or made a spectacular career change.
+If Support ever asks for your password, **do not send it.**
+
+At that point, something has gone very wrong and we may need Support for Support.
 
 ---
 
@@ -46,62 +51,163 @@ If “Support” suddenly requests your Facebook password, we have either been c
 
 Please report it.
 
-If you pressed a button and:
+Especially if:
 
-**nothing happened,  
-everything disappeared,  
-the page went blank,  
-something appeared twice,  
-or Revelation suddenly appeared when you requested Genesis...**
+- a button does nothing;
+- a page suddenly goes blank;
+- something disappears;
+- something appears seventeen times;
+- your reflection refuses to save;
+- the wrong Bible passage appears; or
+- the application achieves a state that can best be described as **“well, that's new.”**
 
-we would like to know.
+Tell us what happened and, if possible, how to make it happen again.
 
-Software has many ways of asking for prayer.
+Software bugs dislike witnesses.
 
 ---
 
-## Bible or AI Error?
+## Bible Passage Looks Wrong?
 
-If a Bible passage, reference, translation, or AI response appears incorrect, tell us.
+Tell us the:
 
-**Acts 17:11 applies here too.**
+**passage · translation · what appears wrong**
 
-The Bereans checked Paul.
+Bible text may come from third-party translation providers, so the problem could be ours, theirs, or somewhere along the journey between the two.
 
-Please check our software.
+Either way, we'd like to know.
+
+### The Berean Rule Applies
+
+**Acts 17:11** tells us the Bereans examined the Scriptures to verify what Paul and Silas were teaching.
+
+They checked **Paul**.
+
+You are absolutely allowed to check Reflections.
 
 If Scripture and Reflections disagree, **we debug Reflections.**
 
----
-
-## Privacy or Deletion
-
-For privacy questions, see our **Privacy Policy**.
-
-To delete your account or personal information, see **Data Deletion**.
-
-Please don't disguise a deletion request as a bug report.
-
-**“BUG: I still exist”** is creative, but unnecessary.
+We do not file a bug against Scripture.
 
 ---
 
-## Response Time
+## AI Said Something Weird?
 
-Reflections is independently operated.
+Entirely possible.
 
-We'll respond as soon as reasonably possible.
+AI can misunderstand Scripture, misunderstand you, misunderstand context, invent details, or deliver nonsense with magnificent confidence.
+
+If something seems wrong:
+
+**Check it. Challenge it. Report it if necessary.**
+
+As **1 Thessalonians 5:21** puts it:
+
+> *Test everything; hold fast what is good.*
+
+This may be one of the finest AI usage policies written roughly two thousand years before AI existed.
+
+For more about what the AI is and emphatically **isn't**, see our **Disclaimer**.
+
+---
+
+## Something Offensive or Abusive?
+
+If public or community content violates our rules, please use the available reporting feature or contact Support.
+
+Include enough information for us to locate the content.
+
+Please don't retaliate.
+
+Please don't start a crusade.
+
+Please **especially** don't name the crusade after Reflections.
+
+We'll review it.
+
+---
+
+## Privacy
+
+For questions about how Reflections handles personal information, see our **Privacy Policy**.
+
+For privacy concerns that aren't answered there:
+
+**chat_app@crishub.com**
+
+Please don't send additional sensitive information while asking us to protect your sensitive information.
+
+That makes the problem recursively interesting.
+
+---
+
+## Want Your Account Deleted?
+
+See **Data Deletion**.
+
+The process is approximately:
+
+**You ask → we verify → we delete.**
+
+Subject, of course, to legitimate backup, security, and legal retention requirements.
+
+There is no retention obstacle course.
+
+There is no:
+
+**“Before you leave, tell us 14 things we could have done better.”**
+
+You may depart in peace.
+
+---
+
+## Feature Request?
+
+Absolutely.
+
+Tell us what you think would make Reflections better.
+
+We may:
+
+**love it,  
+build it,  
+already be building it,  
+put it on the list,  
+discover it requires rewriting half the application,  
+or stare thoughtfully at your email for several minutes.**
+
+A suggestion is welcome.
+
+It is not, however, a binding development contract.
+
+---
+
+## When Will You Reply?
+
+As soon as reasonably possible.
+
+Reflections is independently built and operated.
+
+There is no global support center.
+
+No night shift.
+
+No Tier 1 representative named Steve who transfers you to Tier 2 representative also named Steve.
 
 The developer may currently be:
 
 **working,  
 at church,  
 at the gym,  
+sitting in a park,  
 sleeping,  
+eating,  
 touching grass,  
-or fixing the bug you are about to report.**
+or fixing the exact thing you are about to report.**
 
-Please allow a reasonable amount of time before concluding that your message has entered the void.
+Give us a reasonable amount of time.
+
+If it's been unusually long, feel free to follow up.
 
 ---
 
@@ -109,10 +215,12 @@ Please allow a reasonable amount of time before concluding that your message has
 
 **chat_app@crishub.com**
 
-Send it.
+Send us what happened.
 
 We'll take it from there.
 
-> *“Ask, and it will be given to you.”* — Matthew 7:7
->
-> **For legal clarity, this verse does not establish our support SLA.**
+> **“Ask, and it will be given to you.” — Matthew 7:7**
+
+**Legal clarification:** Matthew 7:7 does not establish a guaranteed response time, uptime commitment, support SLA, feature-delivery schedule, refund entitlement, or contractual obligation to fix your CSS before dinner.
+
+We checked.
