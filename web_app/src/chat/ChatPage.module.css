@@ -2659,13 +2659,11 @@
  * times, was twelve persistent controls on a page for writing — and on an
  * empty reflection, more interface than content. The actions are all still
  * here; they are behind a press, which is what progressive disclosure buys.
+ *
+ * The menu they open is `ActionMenu` and carries its own styles: it is a
+ * popover on a desktop and a sheet on a phone, and neither belongs to this
+ * page in particular.
  */
-.assistMenu,
-.moreMenu {
-  position: relative;
-  display: inline-flex;
-}
-
 .assistTrigger {
   display: inline-flex;
   align-items: center;
@@ -2706,54 +2704,6 @@
   .assistTrigger[data-busy='true'] {
     animation: none;
   }
-}
-
-.assistPopover,
-.morePopover {
-  position: absolute;
-  z-index: 30;
-  inset-inline-end: 0;
-  inset-block-start: calc(100% + 0.25rem);
-  display: grid;
-  min-inline-size: 13rem;
-  padding: 0.25rem;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  box-shadow: var(--shadow-md, 0 0.75rem 1.5rem rgb(0 0 0 / 12%));
-}
-
-.assistItem {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 0.45rem 0.6rem;
-  border: none;
-  border-radius: var(--radius-sm, 0.35rem);
-  background: transparent;
-  color: var(--ink);
-  font: inherit;
-  font-size: var(--text-sm);
-  text-align: start;
-  cursor: pointer;
-}
-
-.assistItem:hover:not(:disabled),
-.assistItem:focus-visible:not(:disabled) {
-  background: var(--surface-2);
-}
-
-/*
- * Disabled and still readable. An item that says why it cannot be used is
- * information; one that has silently vanished is a mystery.
- */
-.assistItem:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.assistItemDanger {
-  color: var(--danger);
 }
 
 /* The section's letter, carried into the conversation's scope banner. */

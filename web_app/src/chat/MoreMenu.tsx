@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { ActionMenu, type ActionItem } from '../shared/ui/ActionMenu.tsx'
 import styles from './ChatPage.module.css'
 
 /*
@@ -10,107 +10,20 @@ import styles from './ChatPage.module.css'
  * nothing and cost a row plus three controls competing with Share, which *is*
  * the one people reach for.
  *
- * A real menu, not a div with an onClick: Escape closes it and returns focus,
- * the arrows walk it, and a press elsewhere dismisses it.
+ * The menu itself is `ActionMenu`, which decides whether that is a popover or
+ * a sheet from the bottom of the screen. On a phone this control sits near the
+ * left edge, and a popover growing leftwards from it put its own labels off
+ * the screen.
  */
-export type MoreMenuItem = {
-  label: string
-  onSelect: () => void
-  /** Why it cannot be chosen, in words. `null` means it can. */
-  reason?: string | null
-  danger?: boolean
-  icon?: ReactNode
-}
+export type MoreMenuItem = ActionItem
 
 export function MoreMenu({ label, items }: { label: string; items: MoreMenuItem[] }) {
-  const [open, setOpen] = useState(false)
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
-  const menuId = useId()
-
-  function close(returnFocus = true) {
-    setOpen(false)
-    if (returnFocus) triggerRef.current?.focus()
-  }
-
-  useEffect(() => {
-    if (!open) return
-    menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])')?.focus()
-
-    function onPointerDown(event: MouseEvent) {
-      const target = event.target as Node
-      if (menuRef.current?.contains(target) || triggerRef.current?.contains(target)) return
-      setOpen(false)
-    }
-    document.addEventListener('mousedown', onPointerDown)
-    return () => document.removeEventListener('mousedown', onPointerDown)
-  }, [open])
-
-  function onMenuKeyDown(event: React.KeyboardEvent) {
-    if (event.key === 'Escape') {
-      event.stopPropagation()
-      close()
-      return
-    }
-    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
-    event.preventDefault()
-    const walkable = [...(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
-    if (walkable.length === 0) return
-    const current = walkable.indexOf(document.activeElement as HTMLElement)
-    const step = event.key === 'ArrowDown' ? 1 : -1
-    walkable[(current + step + walkable.length) % walkable.length]?.focus()
-  }
-
   return (
-    <span className={styles.moreMenu}>
-      <button
-        ref={triggerRef}
-        type="button"
-        className={styles.iconButton}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-controls={open ? menuId : undefined}
-        aria-label={label}
-        title={label}
-        onClick={() => setOpen((value) => !value)}
-        onKeyDown={(event) => {
-          if (event.key === 'ArrowDown') {
-            event.preventDefault()
-            setOpen(true)
-          }
-        }}
-      >
-        <span aria-hidden="true">⋯</span>
-      </button>
-
-      {open ? (
-        <div
-          ref={menuRef}
-          id={menuId}
-          role="menu"
-          aria-label={label}
-          className={styles.morePopover}
-          onKeyDown={onMenuKeyDown}
-        >
-          {items.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              role="menuitem"
-              className={`${styles.assistItem} ${item.danger ? styles.assistItemDanger : ''}`}
-              disabled={Boolean(item.reason)}
-              title={item.reason ?? undefined}
-              onClick={() => {
-                close(false)
-                item.onSelect()
-              }}
-            >
-              {item.icon}
-              {item.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </span>
+    <ActionMenu
+      label={label}
+      triggerClassName={styles.iconButton}
+      trigger={<span aria-hidden="true">⋯</span>}
+      items={items}
+    />
   )
 }

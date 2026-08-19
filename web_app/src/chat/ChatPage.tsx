@@ -43,6 +43,7 @@ import {
 import { shareWithPlatform } from '../shared/native/share.ts'
 import { ChatArtifact } from './ChatArtifact.tsx'
 import { MoreMenu } from './MoreMenu.tsx'
+import { NARROW_QUERY, useMediaQuery } from '../shared/ui/useMediaQuery.ts'
 import { ChatHelper } from './ChatHelper.tsx'
 import {
   DeleteSheet,
@@ -90,21 +91,6 @@ const SECTION_FIELDS: AiGuidanceSection[] = ['content', 'heart', 'application', 
 
 /** How long after the last keystroke the artifact writes itself down. */
 const AUTOSAVE_MS = 1200
-
-/** Small enough to be worth writing rather than depending on. */
-function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia(query).matches,
-  )
-  useEffect(() => {
-    const list = window.matchMedia(query)
-    const onChange = () => setMatches(list.matches)
-    onChange()
-    list.addEventListener('change', onChange)
-    return () => list.removeEventListener('change', onChange)
-  }, [query])
-  return matches
-}
 
 export function ChatPage() {
   /* Whether there is anybody to share as. Nothing else on this page needs it. */
@@ -265,7 +251,7 @@ export function ChatPage() {
    */
   const viewGeneration = useRef(0)
 
-  const isNarrow = useMediaQuery('(max-width: 899px)')
+  const isNarrow = useMediaQuery(NARROW_QUERY)
   /*
    * Below this the three panes cannot all have room, and the artifact is the
    * one that must not be squeezed — it is the thing being made. The history

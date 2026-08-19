@@ -1,0 +1,157 @@
+/*
+ * A menu that cannot open off the edge of the screen.
+ *
+ * The popover was anchored to the right of its trigger and grew leftwards,
+ * which is correct on a desktop and wrong on a phone: a control near the left
+ * of a narrow window put half its own labels past the edge, so the items read
+ * "a title", "from conversation", "sual". Nothing was clipped in a way the
+ * person could scroll to; the words were simply gone.
+ *
+ * So there are two presentations of the same menu. Wide: a popover beside the
+ * control, which is what a pointer expects. Narrow: a sheet from the bottom of
+ * the screen, which is where a thumb is and which has no edge to fall off.
+ */
+
+.root {
+  position: relative;
+  display: inline-flex;
+}
+
+/* --- wide: a popover beside the control --------------------------------- */
+
+.popover {
+  position: absolute;
+  z-index: 30;
+  inset-inline-end: 0;
+  inset-block-start: calc(100% + 0.25rem);
+  display: grid;
+  min-inline-size: 13rem;
+  /* Never wider than the window, whatever the labels turn out to be. */
+  max-inline-size: min(20rem, calc(100vw - 2rem));
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md, 0 0.75rem 1.5rem rgb(0 0 0 / 12%));
+}
+
+/* --- narrow: a sheet, from the bottom ----------------------------------- */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  background: color-mix(in srgb, var(--ink, #1b1b1f) 45%, transparent);
+}
+
+.sheet {
+  inline-size: 100%;
+  max-block-size: 80svh;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom));
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--surface);
+  box-shadow: 0 -0.5rem 1.5rem color-mix(in srgb, var(--ink, #1b1b1f) 22%, transparent);
+  animation: rise var(--normal, 200ms) var(--ease-out, ease-out);
+}
+
+@keyframes rise {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet {
+    animation: none;
+  }
+}
+
+/* A short grab handle, so it reads as something that came up from the edge. */
+.handle {
+  inline-size: 2.5rem;
+  block-size: 0.25rem;
+  margin: 0 auto var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--line-strong);
+}
+
+.sheetTitle {
+  margin: 0 0 var(--space-2);
+  padding-inline: 0.6rem;
+  font-size: var(--text-xs);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* --- the items, which are the same in both ------------------------------ */
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  inline-size: 100%;
+  padding: 0.45rem 0.6rem;
+  border: none;
+  border-radius: var(--radius-sm, 0.35rem);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: start;
+  cursor: pointer;
+}
+
+/* A thumb needs more than a pointer does. */
+.sheet .item {
+  padding-block: 0.75rem;
+  font-size: var(--text-base);
+}
+
+.item:hover:not(:disabled),
+.item:focus-visible:not(:disabled) {
+  background: var(--surface-2);
+}
+
+/*
+ * Disabled and still readable. An item that says why it cannot be used is
+ * information; one that has silently vanished is a mystery.
+ */
+.item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.danger {
+  color: var(--danger);
+}
+
+/*
+ * The reason, on the sheet, in words rather than in a tooltip.
+ * A phone has no hover, so a title attribute is invisible there — which is
+ * where the explanation is needed most.
+ */
+.reason {
+  display: block;
+  margin: -0.35rem 0 0.35rem;
+  padding-inline: 0.6rem;
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  color: var(--muted);
+  white-space: normal;
+}
+
+/* The item and, under it on a sheet, why it cannot be chosen. */
+.itemRow {
+  display: grid;
+  min-inline-size: 0;
+}
+
+.close {
+  inline-size: 100%;
+  margin-top: var(--space-2);
+}

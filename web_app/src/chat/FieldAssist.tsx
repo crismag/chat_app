@@ -1,5 +1,5 @@
-import { useEffect, useId, useRef, useState } from 'react'
 import type { AiGuidanceSection } from '@chat/shared'
+import { ActionMenu } from '../shared/ui/ActionMenu.tsx'
 import { SparkIcon } from '../shared/ui/icons.tsx'
 import { Sheet } from './ChatSheets.tsx'
 import type { AssistBusy, FieldGuidance, FieldImprovement } from './types.ts'
@@ -61,28 +61,17 @@ export type FieldAssistProps = {
  * information; an item that has quietly disappeared is a mystery.
  */
 export function AssistMenu({
-  field,
   name,
   available,
   unavailableReason,
   hasText,
   busy,
-  guidance,
-  improvement,
-  undoable,
   onAsk,
   onImprove,
   onDiscuss,
   onUndo,
+  undoable,
 }: FieldAssistProps) {
-  const [open, setOpen] = useState(false)
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
-  const menuId = useId()
-  const reasonId = `assist-reason-${field}`
-  const guidanceId = `assist-questions-${field}`
-  const improveId = `assist-improve-${field}`
-
   /*
    * Why a control cannot be pressed, in words. `null` means it can. A greyed
    * control with nothing attached to it is the failure this page already fixed
@@ -106,100 +95,28 @@ export function AssistMenu({
     ? `Write something in ${name} first — there is nothing to discuss yet.`
     : null
 
-  function close(returnFocus = true) {
-    setOpen(false)
-    if (returnFocus) triggerRef.current?.focus()
-  }
-
-  useEffect(() => {
-    if (!open) return
-    menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])')?.focus()
-
-    function onPointerDown(event: MouseEvent) {
-      const target = event.target as Node
-      if (menuRef.current?.contains(target) || triggerRef.current?.contains(target)) return
-      setOpen(false)
-    }
-    document.addEventListener('mousedown', onPointerDown)
-    return () => document.removeEventListener('mousedown', onPointerDown)
-  }, [open])
-
-  /** Every item does its thing and gets out of the way. */
-  const item = (label: string, reason: string | null, run: () => void, controls?: string) => (
-    <button
-      type="button"
-      role="menuitem"
-      className={styles.assistItem}
-      disabled={reason !== null}
-      title={reason ?? undefined}
-      aria-describedby={reason ? reasonId : undefined}
-      aria-controls={controls}
-      onClick={() => {
-        close(false)
-        run()
-      }}
-    >
-      {label}
-    </button>
-  )
-
   return (
-    <span className={styles.assistMenu}>
-      <button
-        ref={triggerRef}
-        type="button"
-        className={styles.assistTrigger}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-controls={open ? menuId : undefined}
-        /* Named, because a sparkle is not a word. */
-        aria-label={`Assistance for ${name}`}
-        title={`Assistance for ${name}`}
-        data-busy={busy ? 'true' : 'false'}
-        onClick={() => setOpen((value: boolean) => !value)}
-        onKeyDown={(event) => {
-          if (event.key === 'ArrowDown') {
-            event.preventDefault()
-            setOpen(true)
-          }
-        }}
-      >
-        <SparkIcon className={styles.tinyIcon} />
-      </button>
-
-      {open ? (
-        <div
-          ref={menuRef}
-          id={menuId}
-          role="menu"
-          aria-label={`Assistance for ${name}`}
-          className={styles.assistPopover}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') {
-              event.stopPropagation()
-              close()
-            }
-          }}
-        >
-          {item('Ask me questions', askReason, onAsk, guidance ? guidanceId : undefined)}
-          {item('Improve wording', improveReason, onImprove, improvement ? improveId : undefined)}
-          {item('Discuss in Reflect', discussReason, onDiscuss)}
-          {/*
-            Undo survives acceptance. Taking a suggestion is a decision someone
-            is allowed to change their mind about a second later, and "the
-            original must remain recoverable" is not satisfied by a suggestion
-            that has already overwritten the only copy of it.
-          */}
-          {undoable ? item('Undo — put my words back', null, onUndo) : null}
-        </div>
-      ) : null}
-
-      {askReason || improveReason || discussReason ? (
-        <span className="sr-only" id={reasonId}>
-          {askReason ?? improveReason ?? discussReason}
-        </span>
-      ) : null}
-    </span>
+    <ActionMenu
+      /* Named, because a sparkle is not a word. */
+      label={`Assistance for ${name}`}
+      triggerClassName={styles.assistTrigger}
+      trigger={<SparkIcon className={styles.tinyIcon} />}
+      busy={busy !== null}
+      items={[
+        { label: 'Ask me questions', reason: askReason, onSelect: onAsk },
+        { label: 'Improve wording', reason: improveReason, onSelect: onImprove },
+        { label: 'Discuss in Reflect', reason: discussReason, onSelect: onDiscuss },
+        /*
+         * Undo survives acceptance. Taking a suggestion is a decision somebody
+         * is allowed to change their mind about a second later, and "the
+         * original must remain recoverable" is not satisfied by a suggestion
+         * that has already overwritten the only copy of it.
+         */
+        ...(undoable
+          ? [{ label: 'Undo — put my words back', onSelect: onUndo }]
+          : []),
+      ]}
+    />
   )
 }
 
