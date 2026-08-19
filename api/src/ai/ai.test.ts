@@ -24,6 +24,7 @@ import {
   AI_SECTION_MEANINGS,
   AI_TITLE_OPTIONS,
 } from '@chat/shared';
+import { ANONYMOUS_DAILY_MESSAGES, ANONYMOUS_MAX_INPUT_CHARS } from './anonymous-allowance.ts';
 import { createApp } from '../app.ts';
 import { MemoryStore } from '../store.ts';
 import { AI_PROVIDER_NAMES, readAiConfig } from './config.ts';
@@ -748,12 +749,25 @@ describe('the endpoints', () => {
       body: JSON.stringify(body),
     });
 
-  test('assistance requires the app’s existing authentication', async () => {
+  test('a visitor gets a few assists a day, then is asked to make an account', async () => {
     const { app } = await signedIn();
-    for (const path of ['/api/ai/reflection-guidance', '/api/ai/improve-writing']) {
-      const response = await post(app, path, '', { section: 'heart', text: 'x' });
-      expect(response.status).toBe(401);
+    const body = { passageReference: 'Romans 8:28', sections: ['heart'], written: {} };
+    for (let attempt = 0; attempt < ANONYMOUS_DAILY_MESSAGES; attempt += 1) {
+      const response = await post(app, '/api/ai/reflection-guidance', '', body);
+      expect(response.status).toBe(200);
     }
+    const exhausted = await post(app, '/api/ai/reflection-guidance', '', body);
+    expect(exhausted.status).toBe(429);
+    expect(await exhausted.json()).toMatchObject({ outcome: AI_OUTCOMES.RATE_LIMITED });
+  });
+
+  test('a visitor’s assists must be short', async () => {
+    const { app } = await signedIn();
+    const response = await post(app, '/api/ai/improve-writing', '', {
+      section: 'heart',
+      text: 'x'.repeat(ANONYMOUS_MAX_INPUT_CHARS + 1),
+    });
+    expect(response.status).toBe(413);
   });
 
   test('guidance returns one to three questions per requested section, and the notice', async () => {
@@ -1314,14 +1328,15 @@ describe('the conversation endpoint', () => {
     expect(response.status).toBe(404);
   });
 
-  test('a reply is refused without a session', async () => {
+  test('a reply is refused to someone the reflection does not belong to', async () => {
     const { app, id } = await conversationWith();
     const response = await app.request('/api/ai/reflection-chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ conversationId: id, message: 'Hello?' }),
     });
-    expect(response.status).toBe(401);
+    /* The same answer an absent reflection gets: ids stay undiscoverable. */
+    expect(response.status).toBe(404);
   });
 
   test('with AI off, the composer still stores messages as private notes', async () => {

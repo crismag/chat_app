@@ -6,6 +6,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { sessionCookieOptions } from './auth/session-cookie.ts';
 import { SqliteAuthStore, type AuthStore } from './auth/store.ts';
 import { ownerForRead, ownerForUser, ownerForWrite, ownerFromCookie } from './auth/owner.ts';
+import { AnonymousAiAllowance } from './ai/anonymous-allowance.ts';
 import { hashPassword, verifyPassword } from './auth/local-password.ts';
 import { webOrigins } from './http/origins.ts';
 import {
@@ -141,6 +142,8 @@ export function createApp(
 ) {
   const app = new Hono();
   const aiService = new AiService(ai);
+  /* One allowance for the life of the process, like the other rate limiters. */
+  const anonymousAllowance = new AnonymousAiAllowance();
   const bibleService = new BibleService();
   const biblePassages = createPassageStore(store);
   const studioCreations = createStudioCreationStore(store);
@@ -223,6 +226,13 @@ export function createApp(
     createAiRoutes({
       service: aiService,
       currentUser: (c) => currentUser(c),
+      /*
+       * Assistance without an account: a small daily allowance rather than a
+       * closed door. It is the one feature billed per call, so a visitor gets
+       * enough to see what it does and an account is what makes it ordinary.
+       */
+      currentOwner: async (c) => ownerForRead(c, store, await currentUser(c)),
+      anonymousAllowance,
       /*
        * The server builds the chat's context; the client never describes it.
        *
@@ -355,9 +365,11 @@ export function createApp(
     '/api/bible',
     createBibleRoutes({
       service: bibleService,
-      currentUser: (c) => currentUser(c),
-      ownsConversation: (userId, conversationId) =>
-        userOwnsConversation(userId, conversationId),
+      /* Scripture is reachable without an account; the reflection it is saved
+       * against still is not. */
+      currentOwner: async (c) => ownerForRead(c, store, await currentUser(c)),
+      ownsConversation: (ownerId, conversationId) =>
+        store.conversations.get(conversationId)?.ownerId === ownerId,
       passages: biblePassages,
     }),
   );

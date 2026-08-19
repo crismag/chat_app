@@ -13,6 +13,7 @@
  * in `@chat/shared`.
  */
 
+import { ANONYMOUS_MAX_INPUT_CHARS, AnonymousAiAllowance } from './anonymous-allowance.ts';
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
@@ -83,6 +84,13 @@ export interface AiRouteDeps {
   service: AiService;
   /** The app's existing authentication. Assistance requires a signed-in user. */
   currentUser: (c: Context) => Promise<{ id: string } | null>;
+  /*
+   * Who is asking when nobody has signed in. Assistance is the one feature
+   * that costs money per call, so a visitor gets a small daily allowance
+   * rather than the door being either open or shut.
+   */
+  currentOwner?: (c: Context) => Promise<{ id: string } | null>;
+  anonymousAllowance?: AnonymousAiAllowance;
   /**
    * The whole capability answer, composed by the caller.
    *
@@ -150,13 +158,60 @@ export function createAiRoutes(deps: AiRouteDeps) {
    */
   routes.get('/status', async (c) => c.json(deps.status()));
 
-  routes.post('/reflection-guidance', async (c) => {
+  /**
+   * Who this request spends against, and whether it may.
+   *
+   * A signed-in account spends its own budget under the ordinary limits. A
+   * visitor spends a small daily allowance counted against their owner and
+   * their address together, and is told plainly what has run out rather than
+   * being shown a login form they were not expecting.
+   */
+  const spender = async (c: Context) => {
     const user = await deps.currentUser(c);
-    if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
+    if (user) return { ok: true as const, userId: user.id, anonymous: false };
+    if (!deps.anonymousAllowance || !deps.currentOwner) {
+      return { ok: false as const, response: c.json({ error: 'Unauthenticated.' }, 401) };
+    }
+    const owner = await deps.currentOwner(c);
+    const address = addressOf(c);
+    const decision = deps.anonymousAllowance.take(owner?.id ?? null, address);
+    if (!decision.allowed) {
+      return {
+        ok: false as const,
+        response: c.json(
+          {
+            error:
+              'That is all the assistance a visit gets today. Create an account to keep going — everything you have written is already saved.',
+            outcome: AI_OUTCOMES.RATE_LIMITED,
+            retryAfterSeconds: decision.retryAfterSeconds,
+          },
+          429,
+        ),
+      };
+    }
+    return { ok: true as const, userId: owner?.id ?? `address:${address}`, anonymous: true };
+  };
+
+  /*
+   * "Short" is half of what the allowance is: five messages a day, each small
+   * enough to be a question rather than a manuscript. Enforced where every
+   * other length is enforced, so a visitor gets the same 400 and the same
+   * wording an account would.
+   */
+  const limitsFor = (caller: { anonymous?: boolean }) => {
+    const { maxInputChars } = deps.service.limits();
+    return caller.anonymous
+      ? { maxInputChars: Math.min(maxInputChars, ANONYMOUS_MAX_INPUT_CHARS) }
+      : { maxInputChars };
+  };
+
+  routes.post('/reflection-guidance', async (c) => {
+    const caller = await spender(c);
+    if (!caller.ok) return caller.response;
 
     let request;
     try {
-      request = parseGuidanceRequest(await c.req.json().catch(() => null), deps.service.limits());
+      request = parseGuidanceRequest(await c.req.json().catch(() => null), limitsFor(caller));
     } catch (caught: unknown) {
       if (caught instanceof AiRequestError) {
         return c.json({ error: caught.message, outcome: caught.outcome }, STATUS[caught.outcome]);
@@ -165,7 +220,7 @@ export function createAiRoutes(deps: AiRouteDeps) {
     }
 
     const result = await deps.service.reflectionGuidance(request, {
-      userId: user.id,
+      userId: caller.userId,
       address: addressOf(c),
       requestId: randomUUID(),
     });
@@ -189,12 +244,12 @@ export function createAiRoutes(deps: AiRouteDeps) {
   });
 
   routes.post('/improve-writing', async (c) => {
-    const user = await deps.currentUser(c);
-    if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
+    const caller = await spender(c);
+    if (!caller.ok) return caller.response;
 
     let request;
     try {
-      request = parseImproveRequest(await c.req.json().catch(() => null), deps.service.limits());
+      request = parseImproveRequest(await c.req.json().catch(() => null), limitsFor(caller));
     } catch (caught: unknown) {
       if (caught instanceof AiRequestError) {
         return c.json({ error: caught.message, outcome: caught.outcome }, STATUS[caught.outcome]);
@@ -203,7 +258,7 @@ export function createAiRoutes(deps: AiRouteDeps) {
     }
 
     const result = await deps.service.improveWriting(request, {
-      userId: user.id,
+      userId: caller.userId,
       address: addressOf(c),
       requestId: randomUUID(),
     });
@@ -262,12 +317,12 @@ export function createAiRoutes(deps: AiRouteDeps) {
    * reply. No streaming, no polling loop, no second socket.
    */
   routes.post('/reflection-chat', async (c) => {
-    const user = await deps.currentUser(c);
-    if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
+    const caller = await spender(c);
+    if (!caller.ok) return caller.response;
 
     let parsed;
     try {
-      parsed = parseChatRequest(await c.req.json().catch(() => null), deps.service.limits());
+      parsed = parseChatRequest(await c.req.json().catch(() => null), limitsFor(caller));
     } catch (caught: unknown) {
       if (caught instanceof AiRequestError) {
         return c.json({ error: caught.message, outcome: caught.outcome }, STATUS[caught.outcome]);
@@ -280,7 +335,7 @@ export function createAiRoutes(deps: AiRouteDeps) {
      * does not load, and the answer is the same 404 an absent one gets — so the
      * endpoint cannot be used to discover which conversation ids exist.
      */
-    const context = deps.conversation.load(user.id, parsed.conversationId);
+    const context = deps.conversation.load(caller.userId, parsed.conversationId);
     if (!context) {
       return c.json({ error: 'Conversation not found.' }, 404);
     }
@@ -299,7 +354,7 @@ export function createAiRoutes(deps: AiRouteDeps) {
         ...(parsed.action ? { action: parsed.action } : {}),
         ...(parsed.actionSection ? { actionSection: parsed.actionSection } : {}),
       },
-      { userId: user.id, address: addressOf(c), requestId: randomUUID() },
+      { userId: caller.userId, address: addressOf(c), requestId: randomUUID() },
     );
 
     if (!result.ok) {
