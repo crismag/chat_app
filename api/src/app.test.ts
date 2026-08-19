@@ -719,3 +719,108 @@ describe('unpublish', () => {
     expect(await json<unknown[]>(feed)).toEqual([]);
   });
 });
+
+/*
+ * Pagination is the server's job.
+ *
+ * The collection has to work with a thousand reflections, and it cannot do
+ * that by being sent a thousand and hiding rows. These assert that the page is
+ * cut here, and that `total` describes the whole matching set rather than the
+ * slice.
+ */
+describe('GET /api/reflections, paged', () => {
+  async function withReflections(count: number) {
+    const app = createApp(new MemoryStore());
+    const { cookie } = await register(app, 'pager@example.com');
+    for (let i = 0; i < count; i += 1) {
+      await app.request('/api/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: cookie },
+        body: JSON.stringify({ title: `Reflection ${String(i).padStart(3, '0')}` }),
+      });
+    }
+    return { app, cookie };
+  }
+
+  const page = (body: { items: { title: string }[] }) => body.items.map((item) => item.title);
+
+  test('returns one page and the size of the whole set', async () => {
+    const { app, cookie } = await withReflections(25);
+    const body = await json<{ items: unknown[]; total: number; page: number; pageCount: number; pageSize: number }>(
+      await app.request('/api/reflections?pageSize=10', { headers: { Cookie: cookie } }),
+    );
+    expect(body.items).toHaveLength(10);
+    expect(body.total).toBe(25);
+    expect(body.pageCount).toBe(3);
+    expect(body.page).toBe(1);
+    expect(body.pageSize).toBe(10);
+  });
+
+  test('a later page carries different reflections, and the last one is short', async () => {
+    const { app, cookie } = await withReflections(25);
+    const first = await json<{ items: { title: string }[] }>(
+      await app.request('/api/reflections?pageSize=10&page=1&sort=title', { headers: { Cookie: cookie } }),
+    );
+    const last = await json<{ items: { title: string }[] }>(
+      await app.request('/api/reflections?pageSize=10&page=3&sort=title', { headers: { Cookie: cookie } }),
+    );
+    expect(page(last)).toHaveLength(5);
+    expect(page(first).some((title) => page(last).includes(title))).toBe(false);
+  });
+
+  /* A stale link or a narrowed filter, which must not read as "you have none". */
+  test('a page past the end answers with the last page, not an empty one', async () => {
+    const { app, cookie } = await withReflections(12);
+    const body = await json<{ items: unknown[]; page: number }>(
+      await app.request('/api/reflections?pageSize=10&page=99', { headers: { Cookie: cookie } }),
+    );
+    expect(body.page).toBe(2);
+    expect(body.items).toHaveLength(2);
+  });
+
+  test('100 is the ceiling, and anything else falls back to the default', async () => {
+    const { app, cookie } = await withReflections(3);
+    const capped = await json<{ pageSize: number }>(
+      await app.request('/api/reflections?pageSize=500', { headers: { Cookie: cookie } }),
+    );
+    expect(capped.pageSize).toBe(20);
+    const odd = await json<{ pageSize: number }>(
+      await app.request('/api/reflections?pageSize=37', { headers: { Cookie: cookie } }),
+    );
+    expect(odd.pageSize).toBe(20);
+  });
+
+  /*
+   * Finished and private are independent questions. A single filter made them
+   * exclusive, which they never were.
+   */
+  test('status and visibility narrow separately', async () => {
+    const app = createApp(new MemoryStore());
+    const { cookie } = await register(app, 'facets@example.com');
+    await app.request('/api/conversations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ title: 'A draft' }),
+    });
+
+    const drafts = await json<{ total: number }>(
+      await app.request('/api/reflections?status=draft', { headers: { Cookie: cookie } }),
+    );
+    expect(drafts.total).toBe(1);
+
+    const complete = await json<{ total: number }>(
+      await app.request('/api/reflections?status=complete', { headers: { Cookie: cookie } }),
+    );
+    expect(complete.total).toBe(0);
+
+    const priv = await json<{ total: number }>(
+      await app.request('/api/reflections?visibility=private', { headers: { Cookie: cookie } }),
+    );
+    expect(priv.total).toBe(1);
+
+    const shared = await json<{ total: number }>(
+      await app.request('/api/reflections?visibility=shared', { headers: { Cookie: cookie } }),
+    );
+    expect(shared.total).toBe(0);
+  });
+});

@@ -37,10 +37,20 @@ function mockFetch(items: unknown[] = reflections) {
             (item as { title: string }).title.toLowerCase().includes(query.toLowerCase()),
           )
         : items
+      /* Paginated here because the server paginates: the page never sees more. */
+      const search = new URL(url, 'http://localhost').searchParams
+      const pageSize = Number(search.get('pageSize') ?? 20)
+      const pageCount = Math.max(1, Math.ceil(rows.length / pageSize))
+      const page = Math.min(Math.max(1, Number(search.get('page') ?? 1)), pageCount)
+      const start = (page - 1) * pageSize
       return Promise.resolve({
         ok: true,
         json: async () => ({
-          items: rows,
+          items: rows.slice(start, start + pageSize),
+          total: rows.length,
+          page,
+          pageCount,
+          pageSize,
           tags: [],
           books: [
             { usfm: 'ROM', name: 'Romans', count: 1 },
@@ -134,10 +144,81 @@ test('groups by Today, This week and month', () => {
   expect(groupLabel(new Date(now - 400 * DAY).toISOString(), now)).toBe('Older')
 })
 
-test('offers book and section filters once there is something to find', async () => {
+
+/* ------------------------------------------------------- pages and views */
+
+/** Enough reflections that one page cannot hold them. */
+function many(count: number) {
+  return Array.from({ length: count }, (_, i) => ({
+    id: `m${i}`,
+    format: 'full',
+    title: `Reflection number ${i}`,
+    scriptureReference: 'Romans 8:28',
+    publicationState: 'private',
+    tags: [],
+    updatedAt: new Date(now - i * 60_000).toISOString(),
+  }))
+}
+
+test('a title opens the reader, not the editor', async () => {
   vi.stubGlobal('fetch', mockFetch())
   renderPage()
-  expect(await screen.findByRole('button', { name: 'Romans' })).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Heart' })).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'This week' })).toBeInTheDocument()
+  const link = await screen.findByRole('link', { name: 'Trusting while I cannot see' })
+  expect(link).toHaveAttribute('href', '/reflections/r1')
+})
+
+test('results are paged, and the pager says where you are', async () => {
+  vi.stubGlobal('fetch', mockFetch(many(25)))
+  renderPage()
+  await screen.findByText(/Page 1 of 2/)
+
+  /* Twenty by default, so the twenty-first is on the next page. */
+  expect(screen.queryByRole('link', { name: 'Reflection number 20' })).toBeNull()
+
+  fireEvent.click(screen.getByRole('button', { name: /Next/ }))
+  await screen.findByText(/Page 2 of 2/)
+  expect(screen.getByRole('link', { name: 'Reflection number 20' })).toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: 'Reflection number 0' })).toBeNull()
+})
+
+test('page size changes how many are shown, and is remembered', async () => {
+  vi.stubGlobal('fetch', mockFetch(many(25)))
+  const view = renderPage()
+  await screen.findByText(/Page 1 of 2/)
+
+  fireEvent.change(screen.getByLabelText('Reflections per page'), { target: { value: '10' } })
+  await screen.findByText(/Page 1 of 3/)
+  expect(window.localStorage.getItem('chat.reflections.pageSize')).toBe('10')
+
+  /* A returning reader gets the size they chose. */
+  view.unmount()
+  renderPage()
+  await screen.findByText(/Page 1 of 3/)
+})
+
+test('one page of results shows no pager at all', async () => {
+  vi.stubGlobal('fetch', mockFetch())
+  renderPage()
+  await screen.findByRole('link', { name: 'Trusting while I cannot see' })
+  expect(screen.queryByRole('navigation', { name: 'Pages of reflections' })).toBeNull()
+})
+
+/*
+ * The excerpt says which reflection this is; the full view says what it says.
+ * Off by default, because four sections per result turns a list you scan into
+ * a page you read.
+ */
+test('full C.H.A.T. shows every written section, and only when asked', async () => {
+  vi.stubGlobal('fetch', mockFetch())
+  renderPage()
+  await screen.findByRole('link', { name: 'Trusting while I cannot see' })
+  await waitFor(() => expect(screen.getAllByText(/Paul writes to a suffering church/).length).toBeGreaterThan(0))
+  expect(screen.queryByText('It met my fear.')).toBeNull()
+
+  fireEvent.change(screen.getByLabelText('How much of each reflection to show'), {
+    target: { value: 'full' },
+  })
+  await waitFor(() => expect(screen.getAllByText('It met my fear.').length).toBeGreaterThan(0))
+  /* An empty section is not shown as an empty heading. */
+  expect(screen.queryByRole('heading', { name: /Testimony/ })).toBeNull()
 })

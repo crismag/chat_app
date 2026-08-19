@@ -19,7 +19,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import {
   CHAT_FORMATS,
   type ChatFormat,
@@ -54,10 +54,25 @@ type ReflectionDetail = ReflectionSummary & {
  * markers say *which* parts of the reflection exist, and filling the first n of
  * them would tell the reader something untrue about their own writing.
  */
-type Enrichment = { excerpt: string; written: ChatSectionType[] }
+type Enrichment = {
+  excerpt: string
+  written: ChatSectionType[]
+  /** Every written section, for when the reader asks to see them in full. */
+  sections: { type: ChatSectionType; letter: string; label: string; content: string }[]
+}
 
-type Display = 'auto' | 'tiles' | 'list'
-type Filter = 'all' | 'drafts' | 'completed' | 'published'
+/*
+ * Two view questions, not one.
+ *
+ * `Display` is the shape — cards or a list — and the responsive behaviour
+ * inside each is CSS's job rather than a third option somebody has to choose.
+ * `Density` is how much of each reflection is shown, which is a different
+ * question and used to be a permanent pair of buttons.
+ */
+type Display = 'cards' | 'list'
+type Density = 'compact' | 'preview' | 'full'
+type Status = 'all' | 'draft' | 'complete'
+type Visibility = 'all' | 'private' | 'shared'
 type Sort = 'recent' | 'title'
 type DatePreset = 'any' | 'today' | 'week' | 'month' | 'year' | 'custom'
 type TagFacet = { tag: string; label: string; count: number }
@@ -67,14 +82,12 @@ type ReflectionsPayload = {
   items: ReflectionSummary[]
   tags: TagFacet[]
   books: BookFacet[]
+  /** The whole matching set, not this page — the pager needs both. */
+  total: number
+  page: number
+  pageCount: number
 }
 
-const SECTIONS_FILTERS: { id: string; label: string }[] = [
-  { id: 'content', label: 'Content' },
-  { id: 'heart', label: 'Heart' },
-  { id: 'application', label: 'Application' },
-  { id: 'testimony', label: 'Testimony' },
-]
 
 const DATE_PRESETS: { id: DatePreset; label: string }[] = [
   { id: 'any', label: 'Any time' },
@@ -102,39 +115,67 @@ function rangeFor(preset: DatePreset): { from: string; to: string } {
 
 function readPayload(body: unknown): ReflectionsPayload {
   if (Array.isArray(body)) {
-    return { items: body as ReflectionSummary[], tags: [], books: [] }
+    const items = body as ReflectionSummary[]
+    return { items, tags: [], books: [], total: items.length, page: 1, pageCount: 1 }
   }
   const record = (body ?? {}) as Partial<ReflectionsPayload>
+  const items = Array.isArray(record.items) ? record.items : []
   return {
-    items: Array.isArray(record.items) ? record.items : [],
+    items,
     tags: Array.isArray(record.tags) ? record.tags : [],
     books: Array.isArray(record.books) ? record.books : [],
+    /* Falling back to the page's own length keeps an older API readable. */
+    total: typeof record.total === 'number' ? record.total : items.length,
+    page: typeof record.page === 'number' ? record.page : 1,
+    pageCount: typeof record.pageCount === 'number' ? record.pageCount : 1,
   }
 }
 
 const DISPLAY_KEY = 'chat.reflections.display'
 
 const DISPLAYS: { id: Display; label: string; hint: string }[] = [
-  { id: 'auto', label: 'Auto', hint: 'Layout follows the space available' },
-  { id: 'tiles', label: 'Tiles', hint: 'Always show reflection tiles' },
-  { id: 'list', label: 'List', hint: 'Always show a compact list' },
+  { id: 'cards', label: 'Cards', hint: 'Reflections as cards' },
+  { id: 'list', label: 'List', hint: 'A compact list' },
 ]
 
-const FILTERS: { id: Filter; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'drafts', label: 'Drafts' },
-  { id: 'completed', label: 'Completed' },
-  { id: 'published', label: 'Published' },
+const DENSITIES: { id: Density; label: string; hint: string }[] = [
+  { id: 'compact', label: 'Compact', hint: 'Title, reference and progress only' },
+  { id: 'preview', label: 'Preview', hint: 'A line of what it says' },
+  { id: 'full', label: 'Full C.H.A.T.', hint: 'Every written section' },
 ]
 
 /*
- * Beyond this many results an active search stops being browsing and starts
- * being looking-for-one-thing, and Auto switches to the denser list.
+ * Nothing here says "published".
+ *
+ * A reflection is shared with an audience or it is private; "published" was
+ * the old word and it implied a public act the product does not have. The API
+ * uses the same two words.
  */
-const DENSE_SEARCH_THRESHOLD = 8
+const STATUSES: { id: Status; label: string }[] = [
+  { id: 'all', label: 'Any' },
+  { id: 'draft', label: 'Draft' },
+  { id: 'complete', label: 'Complete' },
+]
+
+const VISIBILITIES: { id: Visibility; label: string }[] = [
+  { id: 'all', label: 'Any' },
+  { id: 'private', label: 'Private' },
+  { id: 'shared', label: 'Shared' },
+]
+
 
 /** Detail is fetched for what a person can plausibly scan, not for everything. */
-const ENRICH_LIMIT = 24
+/*
+ * How many reflections are on a page.
+ *
+ * 100 is the ceiling rather than a round number: every item on a page has its
+ * detail fetched so the C/H/A/T markers and excerpts are true, and a page of
+ * 100 is already 100 requests.
+ */
+const PAGE_SIZES = [10, 20, 50, 100] as const
+const DEFAULT_PAGE_SIZE = 20
+const PAGE_SIZE_KEY = 'chat.reflections.pageSize'
+const DENSITY_KEY = 'chat.reflections.density'
 
 /*
  * How long the first paint will wait for enrichment before giving up and
@@ -174,6 +215,13 @@ function excerptFrom(detail: ReflectionDetail): string {
     .map((message) => message.content.trim())
     .find((content) => content.length > 0)
   return fromMessages ?? ''
+}
+
+function fullSections(detail: ReflectionDetail) {
+  return SECTIONS.map((section) => ({
+    ...section,
+    content: (detail.sections?.[section.type]?.content ?? '').trim(),
+  })).filter((section) => section.content.length > 0)
 }
 
 function writtenSections(detail: ReflectionDetail): ChatSectionType[] {
@@ -230,24 +278,252 @@ function Overflow({ item }: { item: ReflectionSummary }) {
   )
 }
 
+/**
+ * Every written section, shown in place.
+ *
+ * The excerpt answers "which one is this"; this answers "what does it say",
+ * which is a different question and used to need the editor to answer.
+ */
+function FullChat({
+  sections,
+}: {
+  sections: NonNullable<Enrichment['sections']>
+}) {
+  return (
+    <div className={styles.fullChat}>
+      {sections.map((section) => (
+        <div className={styles.fullSection} data-section={section.type} key={section.type}>
+          <h4 className={styles.fullHeading}>
+            <span className={styles.fullLetter} aria-hidden="true">{section.letter}</span>
+            {section.label}
+          </h4>
+          {/* The author's own line breaks, kept. */}
+          <p className={styles.fullBody}>{section.content}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * Moving between pages.
+ *
+ * It says which page of how many, because "Next" on its own tells a reader
+ * nothing about where they are or whether it is worth pressing. It does not
+ * repeat the total — the line under the heading already gives it, and saying
+ * it twice is the kind of furniture this page is otherwise free of.
+ *
+ * Hidden entirely when everything fits on one page.
+ */
+/**
+ * Every secondary filter, behind one button.
+ *
+ * The page used to carry four rows of chips — status, dates, written section,
+ * Scripture book, tags — which is what made a personal library look like a
+ * database console. These three are the ones somebody reaches for; the rest is
+ * what the search is for, since it reads the whole reflection rather than one
+ * field.
+ */
+function FiltersPopover({
+  count,
+  status,
+  visibility,
+  datePreset,
+  from,
+  to,
+  onStatus,
+  onVisibility,
+  onDatePreset,
+  onFrom,
+  onTo,
+}: {
+  count: number
+  status: Status
+  visibility: Visibility
+  datePreset: DatePreset
+  from: string
+  to: string
+  onStatus: (next: Status) => void
+  onVisibility: (next: Visibility) => void
+  onDatePreset: (next: DatePreset) => void
+  onFrom: (value: string) => void
+  onTo: (value: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const wrapper = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onPointer(event: MouseEvent) {
+      if (!wrapper.current?.contains(event.target as Node)) setOpen(false)
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onPointer)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onPointer)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  return (
+    <div className={styles.filtersWrap} ref={wrapper}>
+      <button
+        type="button"
+        className={styles.filtersButton}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        onClick={() => setOpen((value) => !value)}
+      >
+        Filters
+        {/* Said on the button, so a narrowed list is never a mystery. */}
+        {count > 0 ? <span className={styles.filtersCount}>{count}</span> : null}
+      </button>
+
+      {open ? (
+        <div className={styles.filtersPanel} role="dialog" aria-label="Filters">
+          <fieldset className={styles.filterGroup}>
+            <legend className={styles.filterLegend}>Progress</legend>
+            <div className={styles.chips} role="group">
+              {STATUSES.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={styles.chip}
+                  aria-pressed={status === option.id}
+                  onClick={() => onStatus(option.id)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
+          <fieldset className={styles.filterGroup}>
+            <legend className={styles.filterLegend}>Who can see it</legend>
+            <div className={styles.chips} role="group">
+              {VISIBILITIES.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={styles.chip}
+                  aria-pressed={visibility === option.id}
+                  onClick={() => onVisibility(option.id)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
+          <fieldset className={styles.filterGroup}>
+            <legend className={styles.filterLegend}>Updated</legend>
+            <div className={styles.chips} role="group">
+              {DATE_PRESETS.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={styles.chip}
+                  aria-pressed={datePreset === option.id}
+                  onClick={() => onDatePreset(option.id)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            {datePreset === 'custom' ? (
+              <div className={styles.dateRow}>
+                <label className={styles.dateField}>
+                  From
+                  <input
+                    type="date"
+                    className={`input ${styles.dateInput}`}
+                    value={from}
+                    onChange={(event) => onFrom(event.target.value)}
+                  />
+                </label>
+                <label className={styles.dateField}>
+                  To
+                  <input
+                    type="date"
+                    className={`input ${styles.dateInput}`}
+                    value={to}
+                    onChange={(event) => onTo(event.target.value)}
+                  />
+                </label>
+              </div>
+            ) : null}
+          </fieldset>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function Pager({
+  page,
+  pageCount,
+  onPage,
+}: {
+  page: number
+  pageCount: number
+  onPage: (next: number) => void
+}) {
+  if (pageCount <= 1) return null
+  return (
+    <nav className={styles.pager} aria-label="Pages of reflections">
+      <button
+        type="button"
+        className="btn btn-secondary btn-sm"
+        disabled={page <= 1}
+        onClick={() => onPage(page - 1)}
+      >
+        ← Previous
+      </button>
+      <p className={styles.pagerCount} aria-live="polite">
+        Page {page} of {pageCount}
+      </p>
+      <button
+        type="button"
+        className="btn btn-secondary btn-sm"
+        disabled={page >= pageCount}
+        onClick={() => onPage(page + 1)}
+      >
+        Next →
+      </button>
+    </nav>
+  )
+}
+
 function Tile({
   item,
   enrichment,
   now,
   featured,
+  density,
 }: {
   item: ReflectionSummary
   enrichment: Enrichment | undefined
   now: number
   featured?: boolean
+  density: Density
 }) {
   return (
     <ReflectionCard
       item={item}
-      excerpt={enrichment?.excerpt}
+      excerpt={
+        density === 'full' && enrichment?.sections?.length
+          ? <FullChat sections={enrichment.sections} />
+          : density === 'compact'
+            ? ''
+            : enrichment?.excerpt
+      }
       written={enrichment?.written}
       now={now}
-      href={`/?c=${item.id}`}
+      /* Reading, not editing. The editor is a press away on the reader. */
+      href={`/reflections/${item.id}`}
       featured={featured}
       state={item.publicationState}
       emptyExcerpt="Nothing written yet — open it and begin."
@@ -260,10 +536,12 @@ function Row({
   item,
   enrichment,
   now,
+  density,
 }: {
   item: ReflectionSummary
   enrichment: Enrichment | undefined
   now: number
+  density: Density
 }) {
   return (
     <li className={styles.row}>
@@ -271,13 +549,17 @@ function Row({
       <div className={styles.rowBody}>
         <div className={styles.rowHead}>
           <h3 className={styles.rowTitle}>
-            <Link to={`/?c=${item.id}`}>{item.title}</Link>
+            <Link to={`/reflections/${item.id}`}>{item.title}</Link>
           </h3>
           <span className={`eyebrow ${styles.reference}`}>
             {item.scriptureReference || 'No Scripture reference'}
           </span>
         </div>
-        <p className={styles.rowExcerpt}>{enrichment?.excerpt || 'Nothing written yet.'}</p>
+        {density === 'full' && enrichment?.sections?.length ? (
+          <FullChat sections={enrichment.sections} />
+        ) : density === 'compact' ? null : (
+          <p className={styles.rowExcerpt}>{enrichment?.excerpt || 'Nothing written yet.'}</p>
+        )}
       </div>
       <div className={styles.rowMeta}>
         <ChatProgress format={item.format} written={enrichment?.written} />
@@ -295,31 +577,117 @@ function Row({
 /* -------------------------------------------------------------- the page */
 
 export function ReflectionsPage() {
-  const [query, setQuery] = useState('')
-  const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<Filter>('all')
-  const [sort, setSort] = useState<Sort>('recent')
-  const [datePreset, setDatePreset] = useState<DatePreset>('any')
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
-  const [section, setSection] = useState<string | null>(null)
-  const [tag, setTag] = useState<string | null>(null)
-  const [book, setBook] = useState<string | null>(null)
-  const [facets, setFacets] = useState<{ tags: TagFacet[]; books: BookFacet[] }>({
-    tags: [],
-    books: [],
-  })
+  /*
+   * Where you were, kept in the URL.
+   *
+   * Search, filters, sort and page live in the address rather than in state
+   * alone, so opening a reflection and coming back returns you to the page you
+   * were reading instead of to the top of an unfiltered list. It also makes a
+   * search worth sending to yourself.
+   */
+  const [params, setParams] = useSearchParams()
+  const search = params.get('q') ?? ''
+  const status = (params.get('status') as Status | null) ?? 'all'
+  const visibility = (params.get('visibility') as Visibility | null) ?? 'all'
+  const sort = (params.get('sort') as Sort | null) ?? 'recent'
+  const from = params.get('from') ?? ''
+  const to = params.get('to') ?? ''
+  const page = Math.max(1, Number(params.get('page') ?? 1) || 1)
+
+  const [query, setQuery] = useState(search)
+  const [datePreset, setDatePreset] = useState<DatePreset>(from || to ? 'custom' : 'any')
+
+  /**
+   * Write one part of the address, and go back to page one unless the page is
+   * what changed — a filter narrowing to three results has no page four.
+   */
+  const setParam = useCallback(
+    (changes: Record<string, string | null>) => {
+      setParams(
+        (current) => {
+          const next = new URLSearchParams(current)
+          for (const [key, value] of Object.entries(changes)) {
+            if (value === null || value === '') next.delete(key)
+            else next.set(key, value)
+          }
+          if (!('page' in changes)) next.delete('page')
+          return next
+        },
+        { replace: true },
+      )
+    },
+    [setParams],
+  )
+
   const [display, setDisplay] = useState<Display>(() => {
     try {
       const stored = window.localStorage.getItem(DISPLAY_KEY)
-      if (stored === 'auto' || stored === 'tiles' || stored === 'list') return stored
+      if (stored === 'cards' || stored === 'list') return stored
     } catch {
       /* a browser refusing storage is not a reason to fail to render */
     }
-    return 'auto'
+    return 'cards'
   })
 
   const [items, setItems] = useState<ReflectionSummary[]>([])
+
+  /*
+   * Page size is remembered, like the display choice, because it is a statement
+   * about how somebody reads rather than about this visit.
+   */
+  const [pageSize, setPageSize] = useState<number>(() => {
+    try {
+      const stored = Number(window.localStorage.getItem(PAGE_SIZE_KEY))
+      if ((PAGE_SIZES as readonly number[]).includes(stored)) return stored
+    } catch {
+      /* a browser refusing storage is not a reason to fail to render */
+    }
+    return DEFAULT_PAGE_SIZE
+  })
+  /** How much of each reflection is shown. A view preference, not a filter. */
+  const [density, setDensity] = useState<Density>(() => {
+    try {
+      const stored = window.localStorage.getItem(DENSITY_KEY)
+      if (stored === 'compact' || stored === 'preview' || stored === 'full') return stored
+    } catch {
+      /* a browser refusing storage is not a reason to fail to render */
+    }
+    return 'preview'
+  })
+
+  function remember(key: string, value: string) {
+    try {
+      window.localStorage.setItem(key, value)
+    } catch {
+      /* the choice is still honoured for this session */
+    }
+  }
+
+  function choosePageSize(next: number) {
+    setPageSize(next)
+    remember(PAGE_SIZE_KEY, String(next))
+    /* Back to the first page: page 7 of a 10-per-page list is not page 7 of 50. */
+    setParam({ page: null })
+  }
+
+  function chooseDensity(next: Density) {
+    setDensity(next)
+    remember(DENSITY_KEY, next)
+  }
+
+
+  /*
+   * The page comes from the server.
+   *
+   * It used to be cut here out of a response carrying everything, which worked
+   * only while "everything" was small. `total` and `pageCount` describe the
+   * whole matching set, so the pager can say where you are without the browser
+   * having been sent the rest.
+   */
+  const [pageInfo, setPageInfo] = useState({ total: 0, page: 1, pageCount: 1 })
+  const pageItems = items
+  const currentPage = pageInfo.page
+  const pageCount = pageInfo.pageCount
   const [enriched, setEnriched] = useState<Record<string, Enrichment>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -345,25 +713,31 @@ export function ReflectionsPage() {
 
   // Results update while typing, but not on every keystroke.
   useEffect(() => {
-    const timer = setTimeout(() => setSearch(query.trim()), 220)
+    const trimmed = query.trim()
+    if (trimmed === search) return
+    const timer = setTimeout(() => setParam({ q: trimmed || null }), 220)
     return () => clearTimeout(timer)
-  }, [query])
+  }, [query, search, setParam])
 
   useEffect(() => {
     let live = true
     setLoading(true)
-    const params = new URLSearchParams({ q: search, filter, sort })
-    if (from) params.set('from', from)
-    if (to) params.set('to', to)
-    if (section) params.set('section', section)
-    if (tag) params.set('tag', tag)
-    if (book) params.set('book', book)
-    api<unknown>(`/reflections?${params.toString()}`)
+    const request = new URLSearchParams({
+      q: search,
+      status,
+      visibility,
+      sort,
+      page: String(page),
+      pageSize: String(pageSize),
+    })
+    if (from) request.set('from', from)
+    if (to) request.set('to', to)
+    api<unknown>(`/reflections?${request.toString()}`)
       .then((body) => {
         if (!live) return
         const payload = readPayload(body)
         setItems(payload.items)
-        setFacets({ tags: payload.tags, books: payload.books })
+        setPageInfo({ total: payload.total, page: payload.page, pageCount: payload.pageCount })
         setSettled(payload.items.length === 0)
         setNow(Date.now())
         setError(null)
@@ -380,7 +754,7 @@ export function ReflectionsPage() {
     return () => {
       live = false
     }
-  }, [search, filter, sort, from, to, section, tag, book])
+  }, [search, status, visibility, sort, from, to, page, pageSize])
 
   /*
    * Excerpt and completion come from the conversation detail, keyed by the
@@ -388,7 +762,12 @@ export function ReflectionsPage() {
    */
   useEffect(() => {
     let live = true
-    const wanted = items.slice(0, ENRICH_LIMIT).filter((item) => !enriched[`${item.id}:${item.updatedAt}`])
+    /*
+     * Exactly the page, which is also a fix: this used to enrich the first 24
+     * of the whole list, so the 25th reflection onwards showed "Nothing
+     * written yet." however much was written in it.
+     */
+    const wanted = pageItems.filter((item) => !enriched[`${item.id}:${item.updatedAt}`])
     if (wanted.length === 0) {
       setSettled(true)
       return
@@ -406,6 +785,7 @@ export function ReflectionsPage() {
         additions[`${item.id}:${item.updatedAt}`] = {
           excerpt: excerptFrom(result.value),
           written: writtenSections(result.value),
+          sections: fullSections(result.value),
         }
       })
       if (Object.keys(additions).length > 0) {
@@ -416,7 +796,7 @@ export function ReflectionsPage() {
       live = false
       clearTimeout(grace)
     }
-  }, [items, enriched])
+  }, [pageItems, enriched])
 
   const enrichmentFor = useCallback(
     (item: ReflectionSummary) => enriched[`${item.id}:${item.updatedAt}`],
@@ -424,46 +804,41 @@ export function ReflectionsPage() {
   )
 
   const searching = search.length > 0
-  const narrowing = searching || Boolean(section || tag || book || from || to)
+  const narrowing =
+    searching || status !== 'all' || visibility !== 'all' || Boolean(from || to)
+  /** How many filters are on, so the Filters button can say so without opening. */
+  const activeFilters =
+    (status !== 'all' ? 1 : 0) + (visibility !== 'all' ? 1 : 0) + (from || to ? 1 : 0)
 
   function chooseDatePreset(next: DatePreset) {
     setDatePreset(next)
-    if (next === 'custom' || next === 'any') {
-      if (next === 'any') {
-        setFrom('')
-        setTo('')
-      }
+    if (next === 'any') {
+      setParam({ from: null, to: null })
       return
     }
+    if (next === 'custom') return
     const range = rangeFor(next)
-    setFrom(range.from)
-    setTo(range.to)
+    setParam({ from: range.from, to: range.to })
   }
 
   function clearFilters() {
     setQuery('')
-    setFilter('all')
     setDatePreset('any')
-    setFrom('')
-    setTo('')
-    setSection(null)
-    setTag(null)
-    setBook(null)
+    setParams(new URLSearchParams(), { replace: true })
   }
+
 
   /*
    * Auto is width-driven for columns — that part is CSS — and content-driven
    * only here, where a long list of search results is better read as a list.
    */
-  const asList =
-    display === 'list' ||
-    (display === 'auto' && searching && items.length > DENSE_SEARCH_THRESHOLD)
+  const asList = display === 'list'
 
   const { continuing, recent, earlier } = useMemo(() => {
     if (narrowing) {
-      return { continuing: [] as ReflectionSummary[], recent: items, earlier: [] as ReflectionSummary[] }
+      return { continuing: [] as ReflectionSummary[], recent: pageItems, earlier: [] as ReflectionSummary[] }
     }
-    const unfinished = items
+    const unfinished = pageItems
       .filter((item) => {
         if (item.format === CHAT_FORMATS.CONDENSED) return false
         const done = enriched[`${item.id}:${item.updatedAt}`]?.written.length
@@ -471,18 +846,18 @@ export function ReflectionsPage() {
       })
       .slice(0, 2)
     const held = new Set(unfinished.map((item) => item.id))
-    const rest = items.filter((item) => !held.has(item.id))
+    const rest = pageItems.filter((item) => !held.has(item.id))
     return {
       continuing: unfinished,
       recent: rest.filter((item) => now - new Date(item.updatedAt).getTime() <= 30 * DAY),
       earlier: rest.filter((item) => now - new Date(item.updatedAt).getTime() > 30 * DAY),
     }
-  }, [items, enriched, narrowing, now])
+  }, [pageItems, enriched, narrowing, now])
 
   const grouped = useMemo(() => {
     const order: string[] = []
     const buckets = new Map<string, ReflectionSummary[]>()
-    for (const item of items) {
+    for (const item of pageItems) {
       const label = groupLabel(item.updatedAt, now)
       if (!buckets.has(label)) {
         buckets.set(label, [])
@@ -491,7 +866,7 @@ export function ReflectionsPage() {
       buckets.get(label)?.push(item)
     }
     return order.map((label) => ({ label, items: buckets.get(label) ?? [] }))
-  }, [items, now])
+  }, [pageItems, now])
 
   /*
    * The first paint waits for completion counts; every later fetch does not,
@@ -506,12 +881,11 @@ export function ReflectionsPage() {
 
   const description = loading
     ? 'Gathering what you have written.'
-    : items.length === 0
+    : pageInfo.total === 0
       ? 'Return to conversations and moments that mattered.'
-      : `${items.length} ${items.length === 1 ? 'reflection' : 'reflections'} · return to conversations and moments that mattered.`
+      : `${pageInfo.total} ${pageInfo.total === 1 ? 'reflection' : 'reflections'} · return to conversations and moments that mattered.`
 
-  const nothingAtAll =
-    !preparing && items.length === 0 && !narrowing && filter === 'all'
+  const nothingAtAll = !preparing && pageInfo.total === 0 && !narrowing
 
   return (
     <div className={styles.page} data-reflections-root="">
@@ -521,9 +895,11 @@ export function ReflectionsPage() {
           <h1 className={styles.title}>Reflections</h1>
           <p className={`lede ${styles.description}`}>{description}</p>
         </div>
-        <Link to="/" className="btn btn-primary">
-          + New reflection
-        </Link>
+        {/*
+          No "New reflection" here. The application header carries that action
+          on every page, and two of them a few centimetres apart is the kind of
+          duplication that makes a library look like an admin screen.
+        */}
       </header>
 
       {nothingAtAll ? null : (
@@ -542,32 +918,40 @@ export function ReflectionsPage() {
             />
           </div>
           <div className={styles.controlRow}>
-            <div className={styles.chips} role="group" aria-label="Filter reflections">
-              {FILTERS.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  className={styles.chip}
-                  aria-pressed={filter === option.id}
-                  onClick={() => setFilter(option.id)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
             <div className={styles.rightControls}>
+              {/*
+                Filters live behind one button, and it says how many are on so a
+                narrowed list is never a mystery. The three here are the ones
+                somebody reaches for; the rest the search covers, because the
+                search reads the whole reflection rather than one field.
+              */}
+              <FiltersPopover
+                count={activeFilters}
+                status={status}
+                visibility={visibility}
+                datePreset={datePreset}
+                from={from}
+                to={to}
+                onStatus={(next) => setParam({ status: next === 'all' ? null : next })}
+                onVisibility={(next) => setParam({ visibility: next === 'all' ? null : next })}
+                onDatePreset={chooseDatePreset}
+                onFrom={(value) => setParam({ from: value || null })}
+                onTo={(value) => setParam({ to: value || null })}
+              />
+
               <label className={styles.sort}>
                 <span className="sr-only">Sort reflections</span>
                 <select
                   className={`input ${styles.select}`}
                   value={sort}
-                  onChange={(event) => setSort(event.target.value as Sort)}
+                  onChange={(event) => setParam({ sort: event.target.value })}
                 >
-                  <option value="recent">Recently updated</option>
-                  <option value="title">Title</option>
+                  <option value="recent">Updated ↓</option>
+                  <option value="title">Title ↑</option>
                 </select>
               </label>
-              <div className={styles.segmented} role="group" aria-label="Display">
+
+              <div className={styles.segmented} role="group" aria-label="View">
                 {DISPLAYS.map((option) => (
                   <button
                     key={option.id}
@@ -581,86 +965,38 @@ export function ReflectionsPage() {
                   </button>
                 ))}
               </div>
-            </div>
-          </div>
-          <div className={styles.chips} role="group" aria-label="When it was updated">
-            {DATE_PRESETS.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                className={styles.chip}
-                aria-pressed={datePreset === option.id}
-                onClick={() => chooseDatePreset(option.id)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-          {datePreset === 'custom' ? (
-            <div className={styles.dateRow}>
-              <label className={styles.dateField}>
-                From
-                <input
-                  type="date"
-                  className={`input ${styles.dateInput}`}
-                  value={from}
-                  onChange={(event) => setFrom(event.target.value)}
-                />
+
+              <label className={styles.control}>
+                <span className="sr-only">How much of each reflection to show</span>
+                <select
+                  className={`input ${styles.select}`}
+                  value={density}
+                  onChange={(event) => chooseDensity(event.target.value as Density)}
+                >
+                  {DENSITIES.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </label>
-              <label className={styles.dateField}>
-                To
-                <input
-                  type="date"
-                  className={`input ${styles.dateInput}`}
-                  value={to}
-                  onChange={(event) => setTo(event.target.value)}
-                />
+
+              <label className={styles.control}>
+                <span className="sr-only">Reflections per page</span>
+                <select
+                  className={`input ${styles.select}`}
+                  value={pageSize}
+                  onChange={(event) => choosePageSize(Number(event.target.value))}
+                >
+                  {PAGE_SIZES.map((size) => (
+                    <option key={size} value={size}>
+                      {size} per page
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
-          ) : null}
-          <div className={styles.chips} role="group" aria-label="Written section">
-            {SECTIONS_FILTERS.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                className={styles.chip}
-                aria-pressed={section === option.id}
-                onClick={() => setSection(section === option.id ? null : option.id)}
-              >
-                {option.label}
-              </button>
-            ))}
           </div>
-          {facets.books.length > 0 ? (
-            <div className={styles.chips} role="group" aria-label="Scripture book">
-              {facets.books.map((item) => (
-                <button
-                  key={item.usfm}
-                  type="button"
-                  className={styles.chip}
-                  aria-pressed={book === item.usfm}
-                  onClick={() => setBook(book === item.usfm ? null : item.usfm)}
-                >
-                  {item.name}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          {facets.tags.length > 0 ? (
-            <div className={styles.chips} role="group" aria-label="Tags">
-              {facets.tags.map((item) => (
-                <button
-                  key={item.tag}
-                  type="button"
-                  className={styles.chip}
-                  aria-pressed={tag === item.tag}
-                  onClick={() => setTag(tag === item.tag ? null : item.tag)}
-                >
-                  #{item.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
         </div>
       )}
 
@@ -708,11 +1044,12 @@ export function ReflectionsPage() {
               <h2 className={styles.sectionTitle}>{group.label}</h2>
               <ul className={styles.list} data-view="list">
                 {group.items.map((item) => (
-                  <Row key={item.id} item={item} enrichment={enrichmentFor(item)} now={now} />
+                  <Row key={item.id} item={item} enrichment={enrichmentFor(item)} now={now} density={density} />
                 ))}
               </ul>
             </section>
           ))}
+          <Pager page={currentPage} pageCount={pageCount} onPage={(next) => setParam({ page: String(next) })} />
         </div>
       ) : (
         <div className={styles.sections}>
@@ -727,6 +1064,7 @@ export function ReflectionsPage() {
                     enrichment={enrichmentFor(item)}
                     now={now}
                     featured
+                    density={density}
                   />
                 ))}
               </ul>
@@ -737,7 +1075,7 @@ export function ReflectionsPage() {
               <h2 className={styles.sectionTitle}>{narrowing ? 'Results' : 'Recent'}</h2>
               <ul className={styles.grid} data-view="tiles" data-grid="tiles">
                 {recent.map((item) => (
-                  <Tile key={item.id} item={item} enrichment={enrichmentFor(item)} now={now} />
+                  <Tile key={item.id} item={item} enrichment={enrichmentFor(item)} now={now} density={density} />
                 ))}
               </ul>
             </section>
@@ -747,11 +1085,12 @@ export function ReflectionsPage() {
               <h2 className={styles.sectionTitle}>Earlier</h2>
               <ul className={styles.grid} data-view="tiles" data-grid="tiles">
                 {earlier.map((item) => (
-                  <Tile key={item.id} item={item} enrichment={enrichmentFor(item)} now={now} />
+                  <Tile key={item.id} item={item} enrichment={enrichmentFor(item)} now={now} density={density} />
                 ))}
               </ul>
             </section>
           ) : null}
+          <Pager page={currentPage} pageCount={pageCount} onPage={(next) => setParam({ page: String(next) })} />
         </div>
       )}
     </div>

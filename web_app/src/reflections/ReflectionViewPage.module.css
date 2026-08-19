@@ -1,0 +1,144 @@
+/*
+ * A reflection at reading width.
+ *
+ * Deliberately unlike the editor: no boxes, no counters, no action rows. The
+ * sections keep their tone down the leading edge so Heart is still tellable
+ * from Application at a glance, and nothing else competes with the words.
+ */
+
+.page {
+  max-inline-size: 46rem;
+  margin-inline: auto;
+  padding: var(--space-4) var(--space-4) var(--space-6);
+}
+
+.breadcrumb {
+  margin-block-end: var(--space-3);
+}
+
+.breadcrumb a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  color: var(--accent);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-block-end: var(--space-3);
+  border-block-end: 1px solid var(--line);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-xl, 1.9rem);
+  line-height: var(--leading-snug);
+  color: var(--ink);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.reference {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tags li {
+  padding: 0.1rem var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-block: var(--space-4);
+}
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.section {
+  padding-inline-start: var(--space-4);
+  border-inline-start: 3px solid var(--line-strong);
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.letter {
+  font-size: 0.95rem;
+  letter-spacing: 0;
+}
+
+/* The author's own line breaks are part of what they wrote. */
+.body {
+  margin: 0;
+  max-inline-size: var(--measure);
+  font-family: var(--font-serif);
+  font-size: var(--text-md, 1.05rem);
+  line-height: var(--leading-loose);
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+
+/* The four tones, matching the card and the editor. */
+.content { border-inline-start-color: var(--content); }
+.content .letter { color: var(--content); }
+.heart { border-inline-start-color: var(--heart); }
+.heart .letter { color: var(--heart); }
+.application { border-inline-start-color: var(--application); }
+.application .letter { color: var(--application); }
+.testimony { border-inline-start-color: var(--testimony); }
+.testimony .letter { color: var(--testimony); }
+.verse { border-inline-start-color: var(--content); }
+.verse .letter { color: var(--content); }
+.reflection { border-inline-start-color: var(--heart); }
+.reflection .letter { color: var(--heart); }
+
+.empty,
+.loading,
+.problem {
+  margin: var(--space-4) 0;
+  color: var(--muted);
+}
+
+.problem {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
