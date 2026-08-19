@@ -29,6 +29,12 @@ export function AboutPage() {
 
         <h2>Policies and help</h2>
         <ul className={styles.links}>
+          <li className={styles.linkRow}>
+            <Link to="/welcome">Welcome</Link>
+            <span className={styles.linkSummary}>
+              The short version: what C.H.A.T. is, and what it promises.
+            </span>
+          </li>
           {LEGAL_PAGES.map(({ slug, label, summary }) => (
             <li className={styles.linkRow} key={slug}>
               <Link to={`/${slug}`}>{label}</Link>

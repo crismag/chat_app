@@ -11,6 +11,7 @@ import { CreatePage } from '../create/CreatePage.tsx'
 import { ProfilePage } from '../profile/ProfilePage.tsx'
 import { OpenSourceLicencesPage } from '../licenses/OpenSourceLicencesPage.tsx'
 import { AboutPage } from '../legal/AboutPage.tsx'
+import { WelcomePage } from '../legal/WelcomePage.tsx'
 import { PrivacyPage } from '../legal/PrivacyPage.tsx'
 import { TermsPage } from '../legal/TermsPage.tsx'
 import { DisclaimerPage } from '../legal/DisclaimerPage.tsx'
@@ -44,6 +45,13 @@ export function App() {
           before approving sign-in with Google, Facebook or Apple. A policy
           behind a login is not a published policy.
         */}
+        {/*
+          The front door, for a link that has to explain itself: the banner,
+          the four letters, and every other page from one place. Not at `/` on
+          purpose — that opens straight into writing, and a splash screen in
+          front of it would be the login wall again, wearing a different coat.
+        */}
+        <Route path="/welcome" element={<WelcomePage />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/terms" element={<TermsPage />} />

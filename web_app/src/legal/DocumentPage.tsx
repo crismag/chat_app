@@ -20,6 +20,7 @@ function DocumentNav({ current }: { current: LegalPageSlug }) {
         </Link>
       ))}
       <Link to="/about">About</Link>
+      <Link to="/welcome">Welcome</Link>
       <Link to="/">Back to Reflections</Link>
     </nav>
   )
