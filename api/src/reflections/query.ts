@@ -18,10 +18,22 @@ const SECTION_MATCH: Record<string, readonly string[]> = {
   [CONDENSED_SECTION_TYPES.REFLECTION]: [CONDENSED_SECTION_TYPES.REFLECTION],
 };
 
+/** The page sizes the collection offers. 100 is the ceiling, not a default. */
+export const PAGE_SIZES = [10, 20, 50, 100] as const;
+export const DEFAULT_PAGE_SIZE = 20;
+
 export type ReflectionFilters = {
   q: string;
-  filter: string;
+  /*
+   * Two independent questions, because they are independent in the product:
+   * a reflection can be finished and private, or a draft that has been shared.
+   * One combined filter made those mutually exclusive, which they never were.
+   */
+  status: 'all' | 'draft' | 'complete';
+  visibility: 'all' | 'private' | 'shared';
   sort: 'recent' | 'title';
+  page: number;
+  pageSize: number;
   from: string | null;
   to: string | null;
   section: string | null;
@@ -61,7 +73,10 @@ export function readReflectionFilters(query: {
 
   return {
     q: (query.get('q') ?? '').trim().toLowerCase(),
-    filter: query.get('filter') ?? 'all',
+    status: readStatus(query.get('status')),
+    visibility: readVisibility(query.get('visibility')),
+    page: readPage(query.get('page')),
+    pageSize: readPageSize(query.get('pageSize')),
     sort,
     from,
     to,
@@ -112,6 +127,26 @@ export function tagsOf(
     [...writing.matchAll(/#([\p{L}\p{N}][\p{L}\p{N}_-]*)/gu)].map((match) => match[0]),
   );
   return [...new Set([...fromFields, ...fromWriting].map((item) => item.tag))];
+}
+
+function readStatus(value: string | undefined): ReflectionFilters['status'] {
+  return value === 'draft' || value === 'complete' ? value : 'all';
+}
+
+function readVisibility(value: string | undefined): ReflectionFilters['visibility'] {
+  return value === 'private' || value === 'shared' ? value : 'all';
+}
+
+/* An unreadable page is page one rather than an error: a bad page number in a
+ * URL should show somebody their reflections, not a message about integers. */
+function readPage(value: string | undefined): number {
+  const parsed = Number.parseInt(value ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function readPageSize(value: string | undefined): number {
+  const parsed = Number.parseInt(value ?? '', 10);
+  return (PAGE_SIZES as readonly number[]).includes(parsed) ? parsed : DEFAULT_PAGE_SIZE;
 }
 
 export function matchesReflection(

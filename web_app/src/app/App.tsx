@@ -4,6 +4,7 @@ import { AuthPage } from '../auth/AuthPage.tsx'
 import { AppShell } from '../shared/layout/AppShell.tsx'
 import { ChatPage } from '../chat/ChatPage.tsx'
 import { ReflectionsPage } from '../reflections/ReflectionsPage.tsx'
+import { ReflectionViewPage } from '../reflections/ReflectionViewPage.tsx'
 import { CommunityPage } from '../community/CommunityPage.tsx'
 import { PublicationPage } from '../community/PublicationPage.tsx'
 import { CreatePage } from '../create/CreatePage.tsx'
@@ -44,6 +45,11 @@ export function App() {
         <Route element={<AppShell />}>
           <Route path="/" element={<ChatPage />} />
           <Route path="/reflections" element={<ReflectionsPage />} />
+          {/*
+            A reflection has an address of its own, and it is a reading one.
+            Opening something you wrote should not put a caret in it.
+          */}
+          <Route path="/reflections/:id" element={<ReflectionViewPage />} />
           {/*
             Library was renamed to Reflections. The old path is kept as a
             redirect rather than deleted, because a bookmark or an open tab

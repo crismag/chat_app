@@ -1007,22 +1007,22 @@ export function createApp(
 
     const items = mine.filter((conversation) => {
       /*
-       * "Completed" means the format's own rules are satisfied — the same
-       * validator that gates publication — rather than a flag someone
-       * remembered to set.
+       * "Complete" means the format's own rules are satisfied — the same
+       * validator that gates sharing — rather than a flag someone remembered
+       * to set.
        */
-      if (parsed.filter !== 'all') {
+      if (parsed.status !== 'all') {
         const complete =
           validateChat(conversation.format, draftOf(conversation)).missing.length === 0;
+        if (parsed.status === 'draft' && complete) return false;
+        if (parsed.status === 'complete' && !complete) return false;
+      }
 
-        if (parsed.filter === 'drafts' && complete) return false;
-        if (parsed.filter === 'completed' && !complete) return false;
-        if (
-          parsed.filter === 'published' &&
-          conversation.publicationState !== PUBLICATION_STATES.PUBLISHED
-        ) {
-          return false;
-        }
+      /* Shared means it has been given an audience. Everything else is yours. */
+      if (parsed.visibility !== 'all') {
+        const shared = conversation.publicationState === PUBLICATION_STATES.PUBLISHED;
+        if (parsed.visibility === 'shared' && !shared) return false;
+        if (parsed.visibility === 'private' && shared) return false;
       }
 
       return matchesReflection(
@@ -1039,8 +1039,28 @@ export function createApp(
         : b.updatedAt.localeCompare(a.updatedAt),
     );
 
+    /*
+     * The page is cut here rather than in the browser.
+     *
+     * `total` is the whole matching set, so the collection can say how many
+     * there are and how many pages without having been sent them — which is
+     * the point: a library of a thousand reflections must not put a thousand
+     * rows on the wire to show twenty.
+     *
+     * A page number past the end returns the last page rather than nothing,
+     * because that is what a stale link or a narrowed filter produces, and an
+     * empty screen reads as "you have no reflections".
+     */
+    const pageCount = Math.max(1, Math.ceil(items.length / parsed.pageSize));
+    const page = Math.min(parsed.page, pageCount);
+    const start = (page - 1) * parsed.pageSize;
+
     return c.json({
-      items: items.map(summaryOf),
+      items: items.slice(start, start + parsed.pageSize).map(summaryOf),
+      total: items.length,
+      page,
+      pageSize: parsed.pageSize,
+      pageCount,
       tags: tagFacets(mine),
       books: bookFacets(mine),
     });
