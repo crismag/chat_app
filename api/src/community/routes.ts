@@ -77,7 +77,7 @@ export type CommunityUser = { id: string; email: string };
  * publishing *reads* a reflection and never writes one.
  */
 export type CommunityRouteOptions = {
-  currentUser: (c: Context) => CommunityUser | null;
+  currentUser: (c: Context) => Promise<CommunityUser | null>;
   /** `null` when the backing cannot carry membership; every route 503s. */
   store: CommunityStore | null;
   /** The author's reflection, read-only, only if they own it. */
@@ -169,9 +169,9 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
    * Returning the reason rather than throwing means an unavailable Community
    * says so in a sentence the interface can show, instead of appearing broken.
    */
-  const guard = (c: Context) => {
+  const guard = async (c: Context) => {
     if (!store) return { user: null, store: null, response: c.json({ error: UNAVAILABLE }, 503) };
-    const user = currentUser(c);
+    const user = await currentUser(c);
     if (!user) {
       return { user: null, store: null, response: c.json({ error: 'Unauthenticated.' }, 401) };
     }
@@ -180,8 +180,8 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
 
   /* ---------------------------------------------------------- communities */
 
-  app.get('/communities', (c) => {
-    const { user, store: db, response } = guard(c);
+  app.get('/communities', async (c) => {
+    const { user, store: db, response } = await guard(c);
     if (!user || !db) return response;
 
     return c.json({
@@ -209,7 +209,7 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
   });
 
   app.post('/communities', async (c) => {
-    const { user, store: db, response } = guard(c);
+    const { user, store: db, response } = await guard(c);
     if (!user || !db) return response;
 
     const body = await c.req
@@ -257,8 +257,8 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     return membership && grantsAccess(membership.state) ? membership : null;
   };
 
-  app.get('/communities/:id', (c) => {
-    const { user, store: db, response } = guard(c);
+  app.get('/communities/:id', async (c) => {
+    const { user, store: db, response } = await guard(c);
     if (!user || !db) return response;
 
     const id = c.req.param('id');
@@ -277,8 +277,8 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     });
   });
 
-  app.get('/communities/:id/members', (c) => {
-    const { user, store: db, response } = guard(c);
+  app.get('/communities/:id/members', async (c) => {
+    const { user, store: db, response } = await guard(c);
     if (!user || !db) return response;
 
     const id = c.req.param('id');
@@ -307,7 +307,7 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
   });
 
   app.post('/communities/:id/invitations', async (c) => {
-    const { user, store: db, response } = guard(c);
+    const { user, store: db, response } = await guard(c);
     if (!user || !db) return response;
 
     const id = c.req.param('id');
@@ -350,8 +350,8 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     return c.json({ ok: true, state: MEMBERSHIP_STATES.INVITED }, 201);
   });
 
-  app.post('/communities/:id/invitations/accept', (c) => {
-    const { user, store: db, response } = guard(c);
+  app.post('/communities/:id/invitations/accept', async (c) => {
+    const { user, store: db, response } = await guard(c);
     if (!user || !db) return response;
 
     const id = c.req.param('id');
@@ -379,7 +379,7 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
    * earlier.
    */
   app.patch('/communities/:id/members/:userId', async (c) => {
-    const { user, store: db, response } = guard(c);
+    const { user, store: db, response } = await guard(c);
     if (!user || !db) return response;
 
     const id = c.req.param('id');
@@ -444,8 +444,8 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     return c.json({ ok: true, role, state, muted: body.muted ?? subject.mutedAt !== null });
   });
 
-  app.post('/communities/:id/leave', (c) => {
-    const { user, store: db, response } = guard(c);
+  app.post('/communities/:id/leave', async (c) => {
+    const { user, store: db, response } = await guard(c);
     if (!user || !db) return response;
 
     const id = c.req.param('id');
@@ -468,8 +468,8 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
 
   /* --------------------------------------------------------- publications */
 
-  app.get('/publications/saved', (c) => {
-    const { user, store: db, response } = guard(c);
+  app.get('/publications/saved', async (c) => {
+    const { user, store: db, response } = await guard(c);
     if (!user || !db) return response;
     const origin = originOf(c);
     return c.json({
@@ -477,8 +477,8 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     });
   });
 
-  app.get('/publications', (c) => {
-    const { user, store: db, response } = guard(c);
+  app.get('/publications', async (c) => {
+    const { user, store: db, response } = await guard(c);
     if (!user || !db) return response;
 
     const scopeParam = c.req.query('scope') ?? 'shared';
@@ -538,7 +538,7 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
    *    audience than the author chose is the worst possible failure mode.
    */
   app.post('/publications', async (c) => {
-    const { user, store: db, response } = guard(c);
+    const { user, store: db, response } = await guard(c);
     if (!user || !db) return response;
 
     type PublishBody = {
@@ -676,8 +676,8 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
    * path is matched inside a statement that also asks whether this viewer holds
    * an active membership right now. A URL is not a capability here.
    */
-  app.get('/publications/:id', (c) => {
-    const { user, store: db, response } = guard(c);
+  app.get('/publications/:id', async (c) => {
+    const { user, store: db, response } = await guard(c);
     if (!user || !db) return response;
 
     const view = db.publication(user.id, c.req.param('id'));
@@ -690,7 +690,7 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     db.publication(userId, id);
 
   app.post('/publications/:id/encouraged', async (c) => {
-    const { user, store: db, response } = guard(c);
+    const { user, store: db, response } = await guard(c);
     if (!user || !db) return response;
 
     const id = c.req.param('id');
@@ -716,7 +716,7 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
   });
 
   app.post('/publications/:id/save', async (c) => {
-    const { user, store: db, response } = guard(c);
+    const { user, store: db, response } = await guard(c);
     if (!user || !db) return response;
 
     const id = c.req.param('id');
@@ -739,7 +739,7 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
   });
 
   app.post('/publications/:id/report', async (c) => {
-    const { user, store: db, response } = guard(c);
+    const { user, store: db, response } = await guard(c);
     if (!user || !db) return response;
 
     const id = c.req.param('id');
@@ -785,7 +785,7 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
    * erase the evidence a review depends on.
    */
   app.post('/publications/:id/hide', async (c) => {
-    const { user, store: db, response } = guard(c);
+    const { user, store: db, response } = await guard(c);
     if (!user || !db) return response;
 
     const id = c.req.param('id');
@@ -832,8 +832,8 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
    * Note this deletes the *publication*, never the reflection it was made from.
    * The author's private source material is untouched by anything in this file.
    */
-  app.delete('/publications/:id', (c) => {
-    const { user, store: db, response } = guard(c);
+  app.delete('/publications/:id', async (c) => {
+    const { user, store: db, response } = await guard(c);
     if (!user || !db) return response;
 
     const id = c.req.param('id');

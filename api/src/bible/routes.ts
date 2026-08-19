@@ -83,7 +83,7 @@ function addressOf(c: Context): string {
 export interface BibleRouteDeps {
   service: BibleService;
   /** The app's existing authentication. */
-  currentUser: (c: Context) => { id: string } | null;
+  currentUser: (c: Context) => Promise<{ id: string } | null>;
   /** Whether this user owns this reflection. Ownership is never assumed. */
   ownsConversation: (userId: string, conversationId: string) => boolean;
   passages: PassageStore;
@@ -176,10 +176,10 @@ export function createBibleRoutes(deps: BibleRouteDeps) {
    * answer contains nothing about anyone and nothing about the credential
    * beyond whether one is usable.
    */
-  routes.get('/status', (c) => c.json(deps.service.status()));
+  routes.get('/status', async (c) => c.json(deps.service.status()));
 
   routes.get('/translations', async (c) => {
-    const user = deps.currentUser(c);
+    const user = await deps.currentUser(c);
     if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
 
     /*
@@ -233,7 +233,7 @@ export function createBibleRoutes(deps: BibleRouteDeps) {
   });
 
   routes.get('/passages', async (c) => {
-    const user = deps.currentUser(c);
+    const user = await deps.currentUser(c);
     if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
 
     const translationId = Number.parseInt((c.req.query('translationId') ?? '').trim(), 10);
@@ -270,16 +270,16 @@ export function createBibleRoutes(deps: BibleRouteDeps) {
    * is not this user's answers 404, exactly as an absent one does, so these
    * endpoints cannot be used to discover which reflection ids exist.
    */
-  const owned = (c: Context): { userId: string; conversationId: string } | null => {
-    const user = deps.currentUser(c);
+  const owned = async (c: Context): Promise<{ userId: string; conversationId: string } | null> => {
+    const user = await deps.currentUser(c);
     if (!user) return null;
     const conversationId = c.req.param('id') ?? '';
     if (!conversationId || !deps.ownsConversation(user.id, conversationId)) return null;
     return { userId: user.id, conversationId };
   };
 
-  routes.get('/reflections/:id/passage', (c) => {
-    const scope = owned(c);
+  routes.get('/reflections/:id/passage', async (c) => {
+    const scope = await owned(c);
     if (!scope) return c.json({ error: 'Reflection not found.' }, 404);
     const passage = deps.passages.get(scope.conversationId);
     /*
@@ -291,7 +291,7 @@ export function createBibleRoutes(deps: BibleRouteDeps) {
   });
 
   routes.put('/reflections/:id/passage', async (c) => {
-    const scope = owned(c);
+    const scope = await owned(c);
     if (!scope) return c.json({ error: 'Reflection not found.' }, 404);
 
     const passage = readPassageBody(await c.req.json().catch(() => null));
@@ -305,8 +305,8 @@ export function createBibleRoutes(deps: BibleRouteDeps) {
     return c.json({ passage });
   });
 
-  routes.delete('/reflections/:id/passage', (c) => {
-    const scope = owned(c);
+  routes.delete('/reflections/:id/passage', async (c) => {
+    const scope = await owned(c);
     if (!scope) return c.json({ error: 'Reflection not found.' }, 404);
     deps.passages.delete(scope.conversationId);
     return c.body(null, 204);

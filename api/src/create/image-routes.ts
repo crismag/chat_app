@@ -64,7 +64,7 @@ function safeProvenance(value: unknown): value is Record<string, string | number
 export interface StudioImageRouteDependencies {
   provider?: StudioImageProvider
   assets: StudioImageAssetStore
-  currentUser(c: Context): { id: string } | null
+  currentUser(c: Context): Promise<{ id: string } | null>
   ownsConversation(userId: string, conversationId: string): boolean
   now(): string
 }
@@ -73,10 +73,10 @@ export interface StudioImageRouteDependencies {
 export function createStudioImageRoutes(deps: StudioImageRouteDependencies) {
   const routes = new Hono()
 
-  routes.get('/status', (c) => c.json({ enabled: Boolean(deps.provider) }))
+  routes.get('/status', async (c) => c.json({ enabled: Boolean(deps.provider) }))
 
   routes.post('/:conversationId/generate', async (c) => {
-    const user = deps.currentUser(c)
+    const user = await deps.currentUser(c)
     if (!user) return c.json({ error: 'Unauthenticated.' }, 401)
     const conversationId = c.req.param('conversationId')
     if (!deps.ownsConversation(user.id, conversationId)) return c.json({ error: 'Reflection not found.' }, 404)
@@ -128,8 +128,8 @@ export function createStudioImageRoutes(deps: StudioImageRouteDependencies) {
     return c.json({ assetId: id, width: result.width, height: result.height, provenance })
   })
 
-  routes.get('/:assetId', (c) => {
-    const user = deps.currentUser(c)
+  routes.get('/:assetId', async (c) => {
+    const user = await deps.currentUser(c)
     if (!user) return c.json({ error: 'Unauthenticated.' }, 401)
     const asset = deps.assets.get(c.req.param('assetId'))
     if (!asset || asset.userId !== user.id) return c.json({ error: 'Asset not found.' }, 404)
