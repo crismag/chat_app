@@ -1,4 +1,4 @@
-import { Navigate, NavLink, Outlet, useNavigate } from 'react-router'
+import { Link, NavLink, Outlet, useNavigate } from 'react-router'
 import { useAuth } from '../../auth/useAuth.ts'
 import { ChatIcon, CommunityIcon, LibraryIcon, PlusIcon } from '../ui/icons.tsx'
 import { ProfileMenu } from '../ui/ProfileMenu.tsx'
@@ -42,9 +42,15 @@ export function AppShell() {
     )
   }
 
-  if (!user) {
-    return <Navigate to="/login" replace />
-  }
+  /*
+   * No wall.
+   *
+   * This used to send anyone without a session to /login, which meant a
+   * visitor had to decide whether to trust the product before they had used
+   * it. The shell renders for everybody now; what an anonymous person cannot
+   * do is refused at the point they try it, with the reason, rather than at
+   * the door.
+   */
 
   return (
     <div className={styles.shell}>
@@ -99,7 +105,21 @@ export function AppShell() {
               <PlusIcon className={styles.navIcon} />
               <span className={styles.newLabel}>New reflection</span>
             </button>
-            <ProfileMenu email={user.email} onSignOut={() => void logout()} />
+            {/*
+              Signed in: the account menu. Not signed in: where their work is
+              kept, stated once and quietly. It is not a prompt and not a
+              banner — somebody writing does not need to be asked about an
+              account on every screen, but they should never be unsure where
+              what they wrote has gone.
+            */}
+            {user ? (
+              <ProfileMenu email={user.email} onSignOut={() => void logout()} />
+            ) : (
+              <Link className={styles.deviceNote} to="/login" title="Sign in to reach these reflections on another device">
+                <span className={styles.deviceDot} aria-hidden="true" />
+                Saved on this device
+              </Link>
+            )}
           </div>
         </div>
       </header>

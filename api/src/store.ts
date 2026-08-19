@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 export type StoredUser = {
   id: string;
   email: string;
@@ -11,7 +12,12 @@ export type StoredSession = {
 
 export type StoredConversation = {
   id: string;
-  userId: string;
+  /*
+   * Who it belongs to. Present from the first write, with or without an
+   * account behind it. There is deliberately no `userId` here: an owner may
+   * have an account attached, and a reflection does not care whether it does.
+   */
+  ownerId: string;
   /** Which content format's rules this reflection is validated against. */
   format: 'full' | 'condensed';
   title: string;
@@ -109,6 +115,93 @@ export class MemoryMessageTable {
   }
 }
 
+/** An owner: a person's work, with or without an account behind it. */
+export type StoredOwner = {
+  id: string;
+  kind: 'anonymous' | 'user';
+  userId: string | null;
+  createdAt: string;
+  claimedAt: string | null;
+  expiresAt: string | null;
+};
+
+/**
+ * The same owner surface as the SQLite table, in memory.
+ *
+ * `merge` moves reflections between owners, so it is given the conversations
+ * it has to rewrite. Keeping the two implementations behaviourally identical
+ * matters more here than usual: the tests run against this one and the product
+ * runs against the other, and a merge that behaved differently would be a bug
+ * nothing could catch.
+ */
+export class MemoryOwnerTable {
+  private readonly rows = new Map<string, StoredOwner>();
+  private readonly conversations: Map<string, StoredConversation>;
+
+  constructor(conversations: Map<string, StoredConversation>) {
+    this.conversations = conversations;
+  }
+
+  get(id: string): StoredOwner | undefined {
+    const row = this.rows.get(id);
+    return row ? { ...row } : undefined;
+  }
+
+  forUser(userId: string): StoredOwner | undefined {
+    for (const row of this.rows.values()) if (row.userId === userId) return { ...row };
+    return undefined;
+  }
+
+  createAnonymous(expiresAt: string | null = null): StoredOwner {
+    const owner: StoredOwner = {
+      id: randomUUID(),
+      kind: 'anonymous',
+      userId: null,
+      createdAt: new Date().toISOString(),
+      claimedAt: null,
+      expiresAt,
+    };
+    this.rows.set(owner.id, owner);
+    return { ...owner };
+  }
+
+  createForUser(userId: string): StoredOwner {
+    const now = new Date().toISOString();
+    const owner: StoredOwner = {
+      id: randomUUID(),
+      kind: 'user',
+      userId,
+      createdAt: now,
+      claimedAt: now,
+      expiresAt: null,
+    };
+    this.rows.set(owner.id, owner);
+    return { ...owner };
+  }
+
+  claim(ownerId: string, userId: string): StoredOwner | undefined {
+    const row = this.rows.get(ownerId);
+    if (!row || row.userId) return this.get(ownerId);
+    row.kind = 'user';
+    row.userId = userId;
+    row.claimedAt = new Date().toISOString();
+    row.expiresAt = null;
+    return { ...row };
+  }
+
+  merge(fromOwnerId: string, intoOwnerId: string): void {
+    if (fromOwnerId === intoOwnerId) return;
+    for (const conversation of this.conversations.values()) {
+      if (conversation.ownerId === fromOwnerId) conversation.ownerId = intoOwnerId;
+    }
+    const row = this.rows.get(fromOwnerId);
+    if (row) {
+      row.claimedAt = new Date().toISOString();
+      row.expiresAt = null;
+    }
+  }
+}
+
 export class MemoryStore {
   users = new Map<string, StoredUser>();
   usersByEmail = new Map<string, string>();
@@ -116,4 +209,5 @@ export class MemoryStore {
   conversations = new Map<string, StoredConversation>();
   messages = new MemoryMessageTable();
   sections = new MemorySectionTable();
+  owners = new MemoryOwnerTable(this.conversations);
 }

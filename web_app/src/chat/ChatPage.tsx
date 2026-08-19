@@ -28,6 +28,7 @@ import {
 } from '@chat/shared'
 import { ScripturePassage } from '../bible/ScripturePassage.tsx'
 import type { BiblePassage } from '../bible/api.ts'
+import { useAuth } from '../auth/useAuth.ts'
 import { ApiError, api } from '../shared/api/client.ts'
 import {
   BookIcon,
@@ -47,6 +48,7 @@ import {
   FormatSheet,
   Sheet,
   ShareSheet,
+  SignInToShare,
   TitleSuggestionSheet,
   type ShareAudience,
 } from './ChatSheets.tsx'
@@ -104,6 +106,8 @@ function useMediaQuery(query: string): boolean {
 }
 
 export function ChatPage() {
+  /* Whether there is anybody to share as. Nothing else on this page needs it. */
+  const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
 
@@ -1900,7 +1904,11 @@ export function ChatPage() {
         </Sheet>
       ) : null}
 
-      {shareOpen && detail ? (
+      {shareOpen && detail && !user ? (
+        <SignInToShare reflectionId={detail.id} onClose={() => setShareOpen(false)} />
+      ) : null}
+
+      {shareOpen && detail && user ? (
         <ShareSheet
           communities={communities}
           currentlyShared={detail.visibility === 'shared'}

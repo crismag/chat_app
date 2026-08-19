@@ -255,3 +255,46 @@
     padding-bottom: var(--space-7);
   }
 }
+
+/*
+ * Where an anonymous person's work is kept.
+ *
+ * Deliberately quiet: the same size as the navigation, no colour of its own,
+ * no badge. It answers "where has this gone" without asking for anything, and
+ * it is a link so the answer to "how do I keep it elsewhere" is one press away
+ * rather than a banner nobody dismissed.
+ */
+.deviceNote {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.5rem;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.deviceNote:hover,
+.deviceNote:focus-visible {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.deviceDot {
+  inline-size: 0.45rem;
+  block-size: 0.45rem;
+  border-radius: 50%;
+  background: var(--ok, var(--accent));
+}
+
+@media (max-width: 640px) {
+  /* The dot alone at phone width; the words would crowd the tab bar. */
+  .deviceNote {
+    padding: 0 var(--space-2);
+    font-size: 0;
+    gap: 0;
+  }
+}

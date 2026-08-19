@@ -916,3 +916,124 @@ describe('sharing is always an explicit act', () => {
     }
   });
 });
+
+/*
+ * The login wall, and what replaced it.
+ *
+ * A visitor writes first and decides about an account later. These say that
+ * plainly: no session is needed to create or read your own work, ownership is
+ * still proved on every request, and neither way of acquiring an account loses
+ * anything written before it.
+ */
+describe('writing without an account', () => {
+  const cookieFrom = (response: Response) =>
+    (response.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+
+  async function anonymousReflection(app: ReturnType<typeof createApp>, cookie?: string) {
+    const response = await app.request('/api/conversations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) },
+      body: JSON.stringify({ title: 'Written before signing in' }),
+    });
+    return { response, id: (await json<{ id: string }>(response)).id };
+  }
+
+  test('anyone can create a reflection, and gets an owner cookie for it', async () => {
+    const app = createApp(new MemoryStore());
+    const { response } = await anonymousReflection(app);
+    expect(response.status).toBe(201);
+    const cookie = response.headers.get('set-cookie') ?? '';
+    expect(cookie).toMatch(/^chat_owner=/);
+    /* It is a bearer credential: script has no business reading it. */
+    expect(cookie).toMatch(/HttpOnly/i);
+  });
+
+  test('and can read back only what that cookie owns', async () => {
+    const app = createApp(new MemoryStore());
+    const mine = await anonymousReflection(app);
+    const cookie = cookieFrom(mine.response);
+
+    const listed = await json<{ id: string }[]>(
+      await app.request('/api/conversations', { headers: { Cookie: cookie } }),
+    );
+    expect(listed.map((item) => item.id)).toEqual([mine.id]);
+
+    /* A different browser is a different owner, and sees none of it. */
+    const stranger = await json<unknown[]>(await app.request('/api/conversations'));
+    expect(stranger).toEqual([]);
+    expect(
+      (await app.request(`/api/conversations/${mine.id}`)).status,
+    ).toBe(404);
+  });
+
+  test('a cookie naming an owner that does not exist is nobody', async () => {
+    const app = createApp(new MemoryStore());
+    const response = await app.request('/api/conversations', {
+      headers: { Cookie: 'chat_owner=00000000-0000-4000-8000-000000000000' },
+    });
+    expect(response.status).toBe(200);
+    expect(await json<unknown[]>(response)).toEqual([]);
+  });
+
+  /*
+   * Registration keeps the same owner row, so nothing is rewritten. The
+   * reflection is simply still there afterwards.
+   */
+  test('registering brings everything written beforehand with it', async () => {
+    const app = createApp(new MemoryStore());
+    const before = await anonymousReflection(app);
+    const ownerCookie = cookieFrom(before.response);
+
+    const registered = await app.request('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: ownerCookie },
+      body: JSON.stringify({ email: 'claims@example.com', password: 'a-long-password' }),
+    });
+    expect(registered.status).toBe(201);
+    const session = cookieFrom(registered);
+
+    const listed = await json<{ id: string }[]>(
+      await app.request('/api/conversations', { headers: { Cookie: `${ownerCookie}; ${session}` } }),
+    );
+    expect(listed.map((item) => item.id)).toContain(before.id);
+  });
+
+  /*
+   * Signing into an account that already has reflections is the harder case:
+   * two owners, and both sets have to survive.
+   */
+  test('signing in merges anonymous work into the account, keeping both', async () => {
+    const app = createApp(new MemoryStore());
+
+    const registered = await app.request('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'merger@example.com', password: 'a-long-password' }),
+    });
+    const firstSession = cookieFrom(registered);
+    const owned = await app.request('/api/conversations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: firstSession },
+      body: JSON.stringify({ title: 'From the account' }),
+    });
+    const accountReflection = (await json<{ id: string }>(owned)).id;
+
+    /* A different browser: no session, writes something, then signs in. */
+    const anonymous = await anonymousReflection(app);
+    const ownerCookie = cookieFrom(anonymous.response);
+
+    const signedIn = await app.request('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: ownerCookie },
+      body: JSON.stringify({ email: 'merger@example.com', password: 'a-long-password' }),
+    });
+    const session = cookieFrom(signedIn);
+
+    const listed = await json<{ id: string }[]>(
+      await app.request('/api/conversations', { headers: { Cookie: session } }),
+    );
+    const ids = listed.map((item) => item.id);
+    expect(ids).toContain(accountReflection);
+    expect(ids).toContain(anonymous.id);
+  });
+});

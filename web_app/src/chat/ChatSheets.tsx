@@ -8,6 +8,7 @@ import {
   type ChatFormat,
   type ValidationResult,
 } from '@chat/shared'
+import { Link } from 'react-router'
 import { CloseIcon, GlobeIcon, LockIcon, CommunityIcon, ShareIcon } from '../shared/ui/icons.tsx'
 
 import { ORIGIN_LABELS, SECTIONS, mergeInto } from './sections.ts'
@@ -96,6 +97,37 @@ export type ShareAudience = 'only-me' | 'public' | 'community' | 'device'
  * means a second publication, which the copy says out loud rather than offering
  * a checkbox that quietly turns into "public".
  */
+/**
+ * Sharing needs an account, and asks for one here rather than at the door.
+ *
+ * The reflection is already saved by the time anybody sees this, which is the
+ * first thing it says — the fear a sign-in prompt creates is that the writing
+ * is about to be lost. Where they came from is carried in the link, so signing
+ * in returns them to this reflection rather than to a dashboard.
+ */
+export function SignInToShare({ reflectionId, onClose }: { reflectionId: string; onClose: () => void }) {
+  return (
+    <Sheet title="Sign in to share" onClose={onClose}>
+      <p className={styles.sheetLead}>
+        Your reflection is already saved on this device. Sharing it publicly or with a community
+        needs an account, because both of them put your name to it.
+      </p>
+      <p className={styles.sheetLead}>
+        Signing in also brings everything you have written here with you, and makes it reachable
+        from your other devices.
+      </p>
+      <div className={styles.destinations}>
+        <Link
+          className="btn btn-primary"
+          to={`/login?next=${encodeURIComponent(`/?c=${reflectionId}`)}&intent=share`}
+        >
+          Sign in or create an account
+        </Link>
+      </div>
+    </Sheet>
+  )
+}
+
 export function ShareSheet({
   currentlyShared,
   validation,

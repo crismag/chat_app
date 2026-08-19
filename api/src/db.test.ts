@@ -190,7 +190,12 @@ describe('the Context → Content rename carries stored writing across', () => {
      * fixtures exist to be migrated, and one built with the new schema would
      * prove nothing.
      */
+    /* The shape this database actually had: reflections keyed to a user, with
+     * no owner, and a column called publicationState. */
     seed.db.exec('ALTER TABLE conversations RENAME COLUMN visibility TO publicationState');
+    seed.db.exec('DROP INDEX IF EXISTS idx_conversations_owner');
+    seed.db.exec('ALTER TABLE conversations DROP COLUMN ownerId');
+    seed.db.exec('ALTER TABLE conversations ADD COLUMN userId TEXT');
     seed.db
       .prepare(
         `INSERT INTO conversations
@@ -277,7 +282,12 @@ describe('the Context → Content rename carries stored writing across', () => {
      * fixtures exist to be migrated, and one built with the new schema would
      * prove nothing.
      */
+    /* The shape this database actually had: reflections keyed to a user, with
+     * no owner, and a column called publicationState. */
     seed.db.exec('ALTER TABLE conversations RENAME COLUMN visibility TO publicationState');
+    seed.db.exec('DROP INDEX IF EXISTS idx_conversations_owner');
+    seed.db.exec('ALTER TABLE conversations DROP COLUMN ownerId');
+    seed.db.exec('ALTER TABLE conversations ADD COLUMN userId TEXT');
     seed.db
       .prepare(
         `INSERT INTO conversations
@@ -315,7 +325,12 @@ describe('publicationState → visibility', () => {
   function beforeTheRename(name: string): string {
     const file = join(dir, name);
     const seed = new SqliteStore(file);
+    /* The shape this database actually had: reflections keyed to a user, with
+     * no owner, and a column called publicationState. */
     seed.db.exec('ALTER TABLE conversations RENAME COLUMN visibility TO publicationState');
+    seed.db.exec('DROP INDEX IF EXISTS idx_conversations_owner');
+    seed.db.exec('ALTER TABLE conversations DROP COLUMN ownerId');
+    seed.db.exec('ALTER TABLE conversations ADD COLUMN userId TEXT');
     seed.db
       .prepare('INSERT INTO users (id, email, passwordHash) VALUES (?, ?, ?)')
       .run('u1', `${name}@example.com`, 'x');
@@ -367,6 +382,70 @@ describe('publicationState → visibility', () => {
     const store = new SqliteStore(file);
     try {
       expect(store.conversations.get('shared-one')?.visibility).toBe('shared');
+    } finally {
+      store.close();
+    }
+  });
+});
+
+/*
+ * Reflections written before owners existed still belong to their author.
+ *
+ * The old schema keyed a reflection to a user with a foreign key, which is the
+ * login wall written as a constraint. Migrating gives each author an owner and
+ * repoints their reflections at it — and drops the old column, so nothing can
+ * quietly start reading it again.
+ */
+describe('reflections gain an owner', () => {
+  function beforeOwners(name: string): string {
+    const file = join(dir, name);
+    const seed = new SqliteStore(file);
+    seed.db.exec('DROP INDEX IF EXISTS idx_conversations_owner');
+    seed.db.exec('ALTER TABLE conversations DROP COLUMN ownerId');
+    seed.db.exec('ALTER TABLE conversations ADD COLUMN userId TEXT');
+    seed.db
+      .prepare('INSERT INTO users (id, email, passwordHash) VALUES (?, ?, ?)')
+      .run('u1', `${name}@example.com`, 'x');
+    for (const id of ['c1', 'c2']) {
+      seed.db
+        .prepare(
+          `INSERT INTO conversations
+             (id, userId, format, title, scriptureReference, visibility, createdAt, updatedAt)
+           VALUES (?, 'u1', 'full', ?, NULL, 'private', '2026-01-01', '2026-01-01')`,
+        )
+        .run(id, `Reflection ${id}`);
+    }
+    seed.close();
+    return file;
+  }
+
+  it('gives the author one owner, and points both reflections at it', () => {
+    const store = new SqliteStore(beforeOwners('owners-backfill.sqlite'));
+    try {
+      const first = store.conversations.get('c1');
+      const second = store.conversations.get('c2');
+      expect(first?.ownerId).toBeTruthy();
+      /* One owner for the author, not one per reflection. */
+      expect(second?.ownerId).toBe(first?.ownerId);
+
+      const owner = store.owners.get(first!.ownerId);
+      expect(owner?.kind).toBe('user');
+      expect(owner?.userId).toBe('u1');
+      /* An account's owner never expires. */
+      expect(owner?.expiresAt).toBeNull();
+    } finally {
+      store.close();
+    }
+  });
+
+  it('drops the column that made an account compulsory', () => {
+    const store = new SqliteStore(beforeOwners('owners-drop.sqlite'));
+    try {
+      const columns = (store.db.prepare('PRAGMA table_info(conversations)').all() as {
+        name: string
+      }[]).map((column) => column.name);
+      expect(columns).toContain('ownerId');
+      expect(columns).not.toContain('userId');
     } finally {
       store.close();
     }

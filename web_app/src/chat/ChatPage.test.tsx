@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { ChatPage } from './ChatPage.tsx'
+import { AuthProvider } from '../auth/AuthContext.tsx'
 
 /*
  * The Scripture reference that lost what was typed into it.
@@ -173,9 +174,13 @@ afterEach(() => {
 })
 
 function renderPage() {
+  /* The page asks who is signed in — to decide whether Share can act — so it
+   * needs the provider that answers, exactly as the application supplies. */
   return render(
     <MemoryRouter>
-      <ChatPage />
+      <AuthProvider>
+        <ChatPage />
+      </AuthProvider>
     </MemoryRouter>,
   )
 }
@@ -261,8 +266,10 @@ test('opening a different reflection still discards the drafts of the one left b
 test('?new=1 is acted on once and does not come back', async () => {
   render(
     <MemoryRouter initialEntries={['/?new=1']}>
-      <ChatPage />
-    </MemoryRouter>,
+        <AuthProvider>
+          <ChatPage />
+        </AuthProvider>
+      </MemoryRouter>,
   )
 
   const title = await screen.findByLabelText('Reflection title')
@@ -314,8 +321,10 @@ test('a saved reflection hydrates its title, passage control and C.H.A.T. fields
 
   render(
     <MemoryRouter initialEntries={['/?c=c1']}>
-      <ChatPage />
-    </MemoryRouter>,
+        <AuthProvider>
+          <ChatPage />
+        </AuthProvider>
+      </MemoryRouter>,
   )
 
   await waitFor(() =>

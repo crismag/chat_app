@@ -16,6 +16,7 @@
  * keeps this change to one thing, and makes it easy to reason about if it has
  * to be reverted.
  */
+import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { readVisibility } from '@chat/shared';
 import type {
@@ -47,9 +48,42 @@ function migrate(db: DatabaseSync): void {
       expiresAt INTEGER NOT NULL
     );
 
+    /*
+     * Who a reflection belongs to, before there is anybody to belong to.
+     *
+     * An owner is not a user. Somebody who opens the app and writes something
+     * owns it immediately, identified by a random value in a cookie and
+     * nothing else -- no account, and no fake guest row in the users table
+     * pretending to be a person.
+     *
+     * Registering upgrades this row in place: userId is filled in and kind
+     * becomes 'user'. Every reflection keeps pointing at the same owner, so
+     * registering moves no writing at all. Signing into an account that
+     * already exists is the other case, and that one does move rows.
+     *
+     * userId holds the account's public UUID rather than an internal key,
+     * because accounts live in MariaDB and that is the identifier allowed to
+     * cross between the two stores.
+     */
+    CREATE TABLE IF NOT EXISTS owners (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      userId TEXT,
+      createdAt TEXT NOT NULL,
+      claimedAt TEXT,
+      expiresAt TEXT
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_owner_user ON owners(userId) WHERE userId IS NOT NULL;
+
     CREATE TABLE IF NOT EXISTS conversations (
       id TEXT PRIMARY KEY,
-      userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      /*
+       * The owner, not the user. A reflection written by somebody with no
+       * account still has one, which is why this cannot be a foreign key into
+       * users -- that constraint was the login wall expressed in SQL.
+       */
+      ownerId TEXT NOT NULL,
       format TEXT NOT NULL DEFAULT 'full',
       title TEXT NOT NULL,
       scriptureReference TEXT,
@@ -78,7 +112,6 @@ function migrate(db: DatabaseSync): void {
       PRIMARY KEY (conversationId, type)
     );
 
-    CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(userId);
     CREATE INDEX IF NOT EXISTS idx_messages_conversation
       ON messages(conversationId, position);
     CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expiresAt);
@@ -98,6 +131,56 @@ function migrate(db: DatabaseSync): void {
 
   renameContextSectionToContent(db);
   renamePublicationStateToVisibility(db);
+  addColumn(db, 'conversations', 'ownerId', 'TEXT');
+  giveExistingReflectionsAnOwner(db);
+  dropConversationUserId(db);
+  /* After the column exists: an older database reaches this without it. */
+  db.exec('CREATE INDEX IF NOT EXISTS idx_conversations_owner ON conversations(ownerId)');
+}
+
+/**
+ * Every reflection written before owners existed belongs to its author.
+ *
+ * One owner per user, kind 'user', claimed the moment it is made -- these are
+ * accounts that already exist, so nothing about them is anonymous. Runs once:
+ * afterwards no conversation has a null ownerId.
+ */
+function giveExistingReflectionsAnOwner(db: DatabaseSync): void {
+  const columns = db.prepare('PRAGMA table_info(conversations)').all() as { name: string }[];
+  /* Nothing to carry across on a database that never had the old column. */
+  if (!columns.some((column) => column.name === 'userId')) return;
+  const pending = db
+    .prepare('SELECT COUNT(*) AS n FROM conversations WHERE ownerId IS NULL')
+    .get() as { n: number } | undefined;
+  if (Number(pending?.n ?? 0) === 0) return;
+
+  db.exec('BEGIN');
+  try {
+    const rows = db
+      .prepare('SELECT DISTINCT userId FROM conversations WHERE ownerId IS NULL')
+      .all() as { userId: string }[];
+    const now = new Date().toISOString();
+    for (const { userId } of rows) {
+      const existing = db.prepare('SELECT id FROM owners WHERE userId = ?').get(userId) as
+        | { id: string }
+        | undefined;
+      const ownerId = existing?.id ?? randomUUID();
+      if (!existing) {
+        db.prepare(
+          `INSERT INTO owners (id, kind, userId, createdAt, claimedAt, expiresAt)
+           VALUES (?, 'user', ?, ?, ?, NULL)`,
+        ).run(ownerId, userId, now, now);
+      }
+      db.prepare('UPDATE conversations SET ownerId = ? WHERE userId = ? AND ownerId IS NULL').run(
+        ownerId,
+        userId,
+      );
+    }
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 /**
@@ -212,13 +295,32 @@ function addColumn(db: DatabaseSync, table: string, column: string, type: string
   db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
 }
 
+/**
+ * `conversations.userId` goes, once every row has an owner.
+ *
+ * It was `NOT NULL REFERENCES users(id)`, which is the login wall written as a
+ * constraint: a reflection could not exist without an account behind it. Owner
+ * replaces it, and the old column is dropped rather than left nullable so
+ * nothing can quietly start reading it again.
+ */
+function dropConversationUserId(db: DatabaseSync): void {
+  const columns = db.prepare('PRAGMA table_info(conversations)').all() as { name: string }[];
+  if (!columns.some((column) => column.name === 'userId')) return;
+  const orphans = db
+    .prepare('SELECT COUNT(*) AS n FROM conversations WHERE ownerId IS NULL')
+    .get() as { n: number } | undefined;
+  /* Never drop the only record of who owns something. */
+  if (Number(orphans?.n ?? 0) > 0) return;
+  db.exec('ALTER TABLE conversations DROP COLUMN userId');
+}
+
 /** Rows come back as plain objects; this keeps the casts in one place. */
 type Row = Record<string, unknown>;
 
 function conversationFromRow(row: Row): StoredConversation {
   return {
     id: String(row['id']),
-    userId: String(row['userId']),
+    ownerId: String(row['ownerId']),
     format: row['format'] === 'condensed' ? 'condensed' : 'full',
     title: String(row['title']),
     scriptureReference: row['scriptureReference'] == null ? null : String(row['scriptureReference']),
@@ -339,19 +441,20 @@ class ConversationTable {
     this.db
       .prepare(
         `INSERT INTO conversations
-           (id, userId, format, title, scriptureReference, visibility, tags, createdAt, updatedAt)
+           (id, ownerId, format, title, scriptureReference, visibility, tags, createdAt, updatedAt)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            format = excluded.format,
            title = excluded.title,
            scriptureReference = excluded.scriptureReference,
+           ownerId = excluded.ownerId,
            visibility = excluded.visibility,
            tags = excluded.tags,
            updatedAt = excluded.updatedAt`,
       )
       .run(
         id,
-        conversation.userId,
+        conversation.ownerId,
         conversation.format,
         conversation.title,
         conversation.scriptureReference,
@@ -447,7 +550,7 @@ class MessageTable {
       `INSERT INTO messages
          (id, conversationId, position, role, content, originalContent, authorOrigin, createdAt,
           draftText, draftSection)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     this.db.exec('BEGIN');
     try {
@@ -545,6 +648,143 @@ class SectionTable {
  * `:memory:` is the default so the test suite keeps running without touching
  * the disk, and each test gets its own empty database.
  */
+/** An owner: a person's work, with or without an account behind it. */
+export type StoredOwner = {
+  id: string;
+  kind: 'anonymous' | 'user';
+  userId: string | null;
+  createdAt: string;
+  claimedAt: string | null;
+  expiresAt: string | null;
+};
+
+/**
+ * Owners, and the two ways an anonymous one stops being anonymous.
+ *
+ * `claim` is registration: the same row gains a userId and no reflection
+ * moves. `merge` is signing into an account that already exists, where two
+ * owners have to become one and rows really do move — in a transaction,
+ * because half a merge is worse than none.
+ */
+class OwnerTable {
+  private readonly db: DatabaseSync;
+
+  constructor(db: DatabaseSync) {
+    this.db = db;
+  }
+
+  private static read(row: Record<string, unknown> | undefined): StoredOwner | undefined {
+    if (!row) return undefined;
+    return {
+      id: String(row['id']),
+      kind: row['kind'] === 'user' ? 'user' : 'anonymous',
+      userId: row['userId'] === null || row['userId'] === undefined ? null : String(row['userId']),
+      createdAt: String(row['createdAt']),
+      claimedAt: row['claimedAt'] ? String(row['claimedAt']) : null,
+      expiresAt: row['expiresAt'] ? String(row['expiresAt']) : null,
+    };
+  }
+
+  get(id: string): StoredOwner | undefined {
+    return OwnerTable.read(
+      this.db.prepare('SELECT * FROM owners WHERE id = ?').get(id) as
+        | Record<string, unknown>
+        | undefined,
+    );
+  }
+
+  forUser(userId: string): StoredOwner | undefined {
+    return OwnerTable.read(
+      this.db.prepare('SELECT * FROM owners WHERE userId = ?').get(userId) as
+        | Record<string, unknown>
+        | undefined,
+    );
+  }
+
+  /**
+   * A new anonymous owner.
+   *
+   * The id is the credential — it is what the cookie carries and the only
+   * proof of ownership an anonymous visitor has — so it is generated the same
+   * way a session token is rather than being a counter or a timestamp.
+   */
+  createAnonymous(expiresAt: string | null = null): StoredOwner {
+    const owner: StoredOwner = {
+      id: randomUUID(),
+      kind: 'anonymous',
+      userId: null,
+      createdAt: new Date().toISOString(),
+      claimedAt: null,
+      expiresAt,
+    };
+    this.db
+      .prepare(
+        `INSERT INTO owners (id, kind, userId, createdAt, claimedAt, expiresAt)
+         VALUES (?, 'anonymous', NULL, ?, NULL, ?)`,
+      )
+      .run(owner.id, owner.createdAt, owner.expiresAt);
+    return owner;
+  }
+
+  /** An owner for an account that has none yet, which is every new account. */
+  createForUser(userId: string): StoredOwner {
+    const now = new Date().toISOString();
+    const id = randomUUID();
+    this.db
+      .prepare(
+        `INSERT INTO owners (id, kind, userId, createdAt, claimedAt, expiresAt)
+         VALUES (?, 'user', ?, ?, ?, NULL)`,
+      )
+      .run(id, userId, now, now);
+    return { id, kind: 'user', userId, createdAt: now, claimedAt: now, expiresAt: null };
+  }
+
+  /**
+   * Registration: this owner is now that account's.
+   *
+   * Nothing is copied and nothing is moved. The expiry goes too — an anonymous
+   * owner may be cleaned up one day, and an account's never should be.
+   */
+  claim(ownerId: string, userId: string): StoredOwner | undefined {
+    this.db
+      .prepare(
+        `UPDATE owners
+            SET kind = 'user', userId = ?, claimedAt = ?, expiresAt = NULL
+          WHERE id = ? AND userId IS NULL`,
+      )
+      .run(userId, new Date().toISOString(), ownerId);
+    return this.get(ownerId);
+  }
+
+  /**
+   * Signing in to an account that already exists.
+   *
+   * Two owners, one person. Everything the anonymous owner holds is moved to
+   * the account's owner and the empty one is marked claimed rather than
+   * deleted, so a cookie still carrying its id resolves to something known
+   * instead of looking like a new visitor.
+   *
+   * All of it in one transaction: a half-merge would leave a person looking at
+   * some of their own writing.
+   */
+  merge(fromOwnerId: string, intoOwnerId: string): void {
+    if (fromOwnerId === intoOwnerId) return;
+    this.db.exec('BEGIN');
+    try {
+      this.db
+        .prepare('UPDATE conversations SET ownerId = ? WHERE ownerId = ?')
+        .run(intoOwnerId, fromOwnerId);
+      this.db
+        .prepare("UPDATE owners SET claimedAt = ?, expiresAt = NULL, kind = 'anonymous' WHERE id = ?")
+        .run(new Date().toISOString(), fromOwnerId);
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+}
+
 export class SqliteStore {
   readonly db: DatabaseSync;
   readonly users: UserTable;
@@ -553,6 +793,7 @@ export class SqliteStore {
   readonly conversations: ConversationTable;
   readonly messages: MessageTable;
   readonly sections: SectionTable;
+  readonly owners: OwnerTable;
 
   constructor(location = ':memory:') {
     this.db = new DatabaseSync(location);
@@ -563,6 +804,7 @@ export class SqliteStore {
     this.conversations = new ConversationTable(this.db);
     this.messages = new MessageTable(this.db);
     this.sections = new SectionTable(this.db);
+    this.owners = new OwnerTable(this.db);
   }
 
   close(): void {

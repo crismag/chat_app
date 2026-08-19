@@ -5,6 +5,7 @@ import { cors } from 'hono/cors';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { sessionCookieOptions } from './auth/session-cookie.ts';
 import { SqliteAuthStore, type AuthStore } from './auth/store.ts';
+import { ownerForRead, ownerForUser, ownerForWrite, ownerFromCookie } from './auth/owner.ts';
 import { hashPassword, verifyPassword } from './auth/local-password.ts';
 import { webOrigins } from './http/origins.ts';
 import {
@@ -233,7 +234,7 @@ export function createApp(
       conversation: {
         load: (userId, conversationId) => {
           const conversation = store.conversations.get(conversationId);
-          if (!conversation || conversation.userId !== userId) return null;
+          if (!conversation || !userOwnsConversation(userId, conversation.id)) return null;
 
           const stored = sectionsFromStore(store.sections.get(conversationId));
           const sections: Record<string, string> = {};
@@ -356,7 +357,7 @@ export function createApp(
       service: bibleService,
       currentUser: (c) => currentUser(c),
       ownsConversation: (userId, conversationId) =>
-        store.conversations.get(conversationId)?.userId === userId,
+        userOwnsConversation(userId, conversationId),
       passages: biblePassages,
     }),
   );
@@ -400,7 +401,7 @@ export function createApp(
       store: createCommunityStore(store),
       reflection: (userId, conversationId) => {
         const conversation = store.conversations.get(conversationId);
-        if (!conversation || conversation.userId !== userId) return null;
+        if (!conversation || !userOwnsConversation(userId, conversation.id)) return null;
         const stored = store.sections.get(conversationId);
         return {
           format: conversation.format,
@@ -428,6 +429,18 @@ export function createApp(
     if (!user) {
       return c.json({ error: 'An account with that email already exists.' }, 409);
     }
+    /*
+     * Everything written before registering comes with them, and nothing is
+     * copied to do it. The anonymous owner is upgraded in place — same row,
+     * same id — so every reflection already points at the right place and not
+     * one of them is rewritten.
+     *
+     * With no anonymous owner this is somebody's first visit on this browser,
+     * and they simply get a fresh one.
+     */
+    const anonymous = ownerFromCookie(c, store);
+    if (anonymous && !anonymous.userId) store.owners.claim(anonymous.id, user.id);
+    else ownerForUser(store, user.id);
     const token = await auth.startSession(user.id);
     setCookie(c, SESSION_COOKIE, token, sessionCookieOptions(c.req.header('origin')));
     return c.json({ id: user.id, email: user.email }, 201);
@@ -439,6 +452,18 @@ export function createApp(
     const user = await auth.verify(email, body.password ?? '');
     if (!user) {
       return c.json({ error: 'Invalid email or password.' }, 401);
+    }
+    /*
+     * Signing into an account that already exists is the other case, and this
+     * one really does move rows: two owners, one person. Everything written
+     * anonymously on this browser moves to the account's owner inside a
+     * transaction, so somebody who wrote three reflections and then remembered
+     * they had an account sees all of them, not one set or the other.
+     */
+    const account = ownerForUser(store, user.id);
+    const anonymous = ownerFromCookie(c, store);
+    if (anonymous && !anonymous.userId && anonymous.id !== account.id) {
+      store.owners.merge(anonymous.id, account.id);
     }
     const token = await auth.startSession(user.id);
     setCookie(c, SESSION_COOKIE, token, sessionCookieOptions(c.req.header('origin')));
@@ -463,10 +488,14 @@ export function createApp(
   });
 
   app.post('/api/conversations', async (c) => {
-    const user = await requireUser(c);
-    if (!user) {
-      return c.json({ error: 'Unauthenticated.' }, 401);
-    }
+    /*
+     * No account needed to begin, which is the whole point: a visitor writes
+     * first and decides about an account later. `ownerForWrite` mints an
+     * anonymous owner and sets its cookie on this first write rather than on a
+     * page view, so merely looking around hands out nothing.
+     */
+    const user = await currentUser(c);
+    const owner = ownerForWrite(c, store, user);
     /*
      * A title is not required to begin. Someone with a passage on their mind
      * should be able to start writing, not fill in a form first — so an untitled
@@ -482,7 +511,7 @@ export function createApp(
       body.format === CHAT_FORMATS.CONDENSED ? CHAT_FORMATS.CONDENSED : CHAT_FORMATS.FULL;
     const conversation: StoredConversation = {
       id: randomUUID(),
-      userId: user.id,
+      ownerId: owner.id,
       format,
       title: body.title?.trim() || reference || 'New reflection',
       scriptureReference: reference,
@@ -496,42 +525,64 @@ export function createApp(
   });
 
   app.get('/api/conversations', async (c) => {
-    const user = await requireUser(c);
-    if (!user) {
-      return c.json({ error: 'Unauthenticated.' }, 401);
-    }
+    /*
+     * Somebody's own list, whoever they are. An anonymous visitor with no
+     * cookie yet has written nothing, so the honest answer is an empty list
+     * rather than a refusal.
+     */
+    const owner = ownerForRead(c, store, await currentUser(c));
+    if (!owner) return c.json([]);
     const items = [...store.conversations.values()]
-      .filter((conversation) => conversation.userId === user.id)
+      .filter((conversation) => conversation.ownerId === owner.id)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .map(summaryOf);
     return c.json(items);
   });
 
+  /*
+   * The reflection this request is allowed to touch.
+   *
+   * Ownership is the question, not authentication. Somebody who has never
+   * signed in owns what they wrote, and the cookie naming their owner is
+   * checked here against the database rather than believed — an identifier is
+   * not an assertion.
+   *
+   * Not being able to reach a reflection is a 404 whether it does not exist or
+   * belongs to somebody else, because "this is not yours" and "this is not
+   * here" must not be distinguishable from outside.
+   */
+  /*
+   * Whether an account owns a reflection.
+   *
+   * The sub-routers still ask in terms of a user, because their own gate is an
+   * account. Ownership is by owner now, so the question is routed through the
+   * owner that account holds.
+   */
+  const userOwnsConversation = (userId: string, conversationId: string) => {
+    const owner = store.owners.forUser(userId);
+    return Boolean(owner && store.conversations.get(conversationId)?.ownerId === owner.id);
+  };
+
   const ownedConversation = async (c: Parameters<typeof currentUser>[0], id: string) => {
-    const user = await requireUser(c);
-    if (!user) {
-      return { error: 401 as const, user: null, conversation: null };
-    }
+    const user = await currentUser(c);
+    const owner = ownerForRead(c, store, user);
     const conversation = store.conversations.get(id);
-    if (!conversation || conversation.userId !== user.id) {
-      return { error: 404 as const, user, conversation: null };
+    if (!owner || !conversation || conversation.ownerId !== owner.id) {
+      return { error: 404 as const, user, owner, conversation: null };
     }
-    return { error: null, user, conversation };
+    return { error: null, user, owner, conversation };
   };
 
   app.route('/api/studio-assets', createStudioImageRoutes({
     ...(studioImages.provider ? { provider: studioImages.provider } : {}),
     assets: studioImageAssets,
     currentUser: (c) => currentUser(c),
-    ownsConversation: (userId, conversationId) => store.conversations.get(conversationId)?.userId === userId,
+    ownsConversation: (userId, conversationId) => userOwnsConversation(userId, conversationId),
     now: nowIso,
   }));
 
   app.get('/api/conversations/:id', async (c) => {
-    const { error, conversation } = await ownedConversation(c, c.req.param('id'));
-    if (error === 401) {
-      return c.json({ error: 'Unauthenticated.' }, 401);
-    }
+    const { conversation } = await ownedConversation(c, c.req.param('id'));
     if (!conversation) {
       return c.json({ error: 'Conversation not found.' }, 404);
     }
@@ -557,10 +608,7 @@ export function createApp(
    * changing format leaves both drafts in place.
    */
   app.patch('/api/conversations/:id', async (c) => {
-    const { error, conversation } = await ownedConversation(c, c.req.param('id'));
-    if (error === 401) {
-      return c.json({ error: 'Unauthenticated.' }, 401);
-    }
+    const { conversation } = await ownedConversation(c, c.req.param('id'));
     if (!conversation) {
       return c.json({ error: 'Conversation not found.' }, 404);
     }
@@ -631,10 +679,7 @@ export function createApp(
    * arrives here the author has said yes.
    */
   app.delete('/api/conversations/:id', async (c) => {
-    const { error, conversation } = await ownedConversation(c, c.req.param('id'));
-    if (error === 401) {
-      return c.json({ error: 'Unauthenticated.' }, 401);
-    }
+    const { conversation } = await ownedConversation(c, c.req.param('id'));
     if (!conversation) {
       return c.json({ error: 'Conversation not found.' }, 404);
     }
@@ -645,10 +690,7 @@ export function createApp(
   });
 
   app.post('/api/conversations/:id/messages', async (c) => {
-    const { error, conversation } = await ownedConversation(c, c.req.param('id'));
-    if (error === 401) {
-      return c.json({ error: 'Unauthenticated.' }, 401);
-    }
+    const { conversation } = await ownedConversation(c, c.req.param('id'));
     if (!conversation) {
       return c.json({ error: 'Conversation not found.' }, 404);
     }
@@ -680,10 +722,7 @@ export function createApp(
    * — never because they finished writing or pressed Save.
    */
   app.post('/api/conversations/:id/share', async (c) => {
-    const { error, conversation } = await ownedConversation(c, c.req.param('id'));
-    if (error === 401) {
-      return c.json({ error: 'Unauthenticated.' }, 401);
-    }
+    const { conversation } = await ownedConversation(c, c.req.param('id'));
     if (!conversation) {
       return c.json({ error: 'Conversation not found.' }, 404);
     }
@@ -710,10 +749,7 @@ export function createApp(
 
   /* Taking it back. Was `/unpublish`; nothing was ever published. */
   app.post('/api/conversations/:id/make-private', async (c) => {
-    const { error, conversation } = await ownedConversation(c, c.req.param('id'));
-    if (error === 401) {
-      return c.json({ error: 'Unauthenticated.' }, 401);
-    }
+    const { conversation } = await ownedConversation(c, c.req.param('id'));
     if (!conversation) {
       return c.json({ error: 'Conversation not found.' }, 404);
     }
@@ -724,10 +760,7 @@ export function createApp(
   });
 
   app.patch('/api/conversations/:id/sections', async (c) => {
-    const { error, conversation } = await ownedConversation(c, c.req.param('id'));
-    if (error === 401) {
-      return c.json({ error: 'Unauthenticated.' }, 401);
-    }
+    const { conversation } = await ownedConversation(c, c.req.param('id'));
     if (!conversation) {
       return c.json({ error: 'Conversation not found.' }, 404);
     }
@@ -789,10 +822,7 @@ export function createApp(
   });
 
   app.post('/api/conversations/:id/ai', async (c) => {
-    const { error, user, conversation } = await ownedConversation(c, c.req.param('id'));
-    if (error === 401) {
-      return c.json({ error: 'Unauthenticated.' }, 401);
-    }
+    const { user, conversation } = await ownedConversation(c, c.req.param('id'));
     if (!conversation) {
       return c.json({ error: 'Conversation not found.' }, 404);
     }
@@ -997,11 +1027,7 @@ export function createApp(
    * badly. The old path is an alias and goes when the page moves.
    */
   const reflections = async (c: Context) => {
-    const user = await requireUser(c);
-    if (!user) {
-      return c.json({ error: 'Unauthenticated.' }, 401);
-    }
-
+    const owner = ownerForRead(c, store, await currentUser(c));
     const parsed = readReflectionFilters({
       get: (name) => c.req.query(name),
     });
@@ -1009,9 +1035,11 @@ export function createApp(
       return c.json({ error: parsed.error }, 400);
     }
 
-    const mine = [...store.conversations.values()].filter(
-      (conversation) => conversation.userId === user.id,
-    );
+    const mine = owner
+      ? [...store.conversations.values()].filter(
+          (conversation) => conversation.ownerId === owner.id,
+        )
+      : [];
 
     const items = mine.filter((conversation) => {
       /*
@@ -1094,15 +1122,13 @@ export function createApp(
    * reflection, or expose another user's creation.
    */
   app.get('/api/studio-creations/:conversationId', async (c) => {
-    const { error, conversation } = await ownedConversation(c, c.req.param('conversationId'));
-    if (error === 401) return c.json({ error: 'Unauthenticated.' }, 401);
+    const { conversation } = await ownedConversation(c, c.req.param('conversationId'));
     if (!conversation) return c.json({ error: 'Conversation not found.' }, 404);
     return c.json({ creation: studioCreations.get(conversation.id) });
   });
 
   app.put('/api/studio-creations/:conversationId', async (c) => {
-    const { error, conversation } = await ownedConversation(c, c.req.param('conversationId'));
-    if (error === 401) return c.json({ error: 'Unauthenticated.' }, 401);
+    const { conversation } = await ownedConversation(c, c.req.param('conversationId'));
     if (!conversation) return c.json({ error: 'Conversation not found.' }, 404);
     const previous = studioCreations.get(conversation.id);
     const creation = readStudioCreation(
@@ -1134,10 +1160,7 @@ export function createApp(
     if (!body.conversationId) {
       return c.json({ error: 'conversationId is required.' }, 400);
     }
-    const { error, conversation } = await ownedConversation(c, body.conversationId);
-    if (error === 401) {
-      return c.json({ error: 'Unauthenticated.' }, 401);
-    }
+    const { conversation } = await ownedConversation(c, body.conversationId);
     if (!conversation) {
       return c.json({ error: 'Conversation not found.' }, 404);
     }

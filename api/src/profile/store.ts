@@ -261,7 +261,7 @@ class SqliteProfileStore implements ProfileStore {
       .prepare(
         `SELECT id, format, title, scriptureReference, updatedAt
            FROM conversations
-          WHERE userId = ? AND visibility = ?
+          WHERE ownerId = (SELECT id FROM owners WHERE userId = ?) AND visibility = ?
           ORDER BY updatedAt DESC`,
       )
       .all(userId, SHARED) as unknown as Pick<
@@ -275,7 +275,7 @@ class SqliteProfileStore implements ProfileStore {
         `SELECT s.conversationId AS conversationId, s.type AS type, s.content AS content
            FROM sections AS s
            JOIN conversations AS c ON c.id = s.conversationId
-          WHERE c.userId = ? AND c.visibility = ?`,
+          WHERE c.ownerId = (SELECT id FROM owners WHERE userId = ?) AND c.visibility = ?`,
       )
       .all(userId, SHARED) as unknown as {
       conversationId: string;
@@ -298,7 +298,7 @@ class SqliteProfileStore implements ProfileStore {
   publicShareCount(userId: string): number {
     const row = this.db
       .prepare(
-        'SELECT COUNT(*) AS n FROM conversations WHERE userId = ? AND visibility = ?',
+        'SELECT COUNT(*) AS n FROM conversations WHERE ownerId = (SELECT id FROM owners WHERE userId = ?) AND visibility = ?',
       )
       .get(userId, SHARED) as Row | undefined;
     return Number(row?.['n'] ?? 0);
@@ -372,6 +372,9 @@ class SqliteProfileStore implements ProfileStore {
 type ConversationSource = {
   conversations: { values(): Iterable<StoredConversation> };
   sections: { get(conversationId: string): Record<string, StoredSection> | undefined };
+  /* A profile shows an account's shared reflections, and an account reaches
+   * them through the owner it holds. */
+  owners: { forUser(userId: string): { id: string } | undefined };
 };
 
 class MemoryProfileStore implements ProfileStore {
@@ -408,7 +411,8 @@ class MemoryProfileStore implements ProfileStore {
   private shared(userId: string): StoredConversation[] {
     return [...this.source.conversations.values()].filter(
       (conversation) =>
-        conversation.userId === userId && conversation.visibility === SHARED,
+        conversation.ownerId === this.source.owners.forUser(userId)?.id &&
+        conversation.visibility === SHARED,
     );
   }
 

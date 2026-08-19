@@ -106,11 +106,23 @@ function renderAt(path: string) {
   )
 }
 
-test('unauthenticated visitors are asked to sign in', async () => {
+/*
+ * There is no wall. A visitor lands in the application and can write; the
+ * things that need an account ask for one when they are reached.
+ */
+test('a visitor with no account lands in the app, not at a sign-in form', async () => {
   vi.stubGlobal('fetch', mockUnauthenticatedFetch())
   renderAt('/')
+  expect(await screen.findByLabelText('Write your reflection')).toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: 'Sign in' })).toBeNull()
+  /* And is told where their work is kept, once, quietly. */
+  expect(screen.getByText('Saved on this device')).toBeInTheDocument()
+})
+
+test('the sign-in page is still there for anyone who wants it', async () => {
+  vi.stubGlobal('fetch', mockUnauthenticatedFetch())
+  renderAt('/login')
   expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
-  expect(screen.getByText(/private unless you explicitly publish/i)).toBeInTheDocument()
 })
 
 test('Reflect opens on a question, and can be written in immediately', async () => {
