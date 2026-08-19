@@ -48,7 +48,7 @@ Four capabilities, each triggered by an explicit act, plus a status read:
 **Out of scope, deliberately:** auto-filling Heart or Testimony; generating a
 personal story, emotion, conviction, prayer or experience; claiming divine
 authority or certainty about God's will; replacing pastoral, mental-health,
-medical, legal or emergency help; auto-publishing anything; calls on
+medical, legal or emergency help; auto-sharing anything; calls on
 keystrokes; agents, function calling, search grounding, RAG, vector stores,
 image generation.
 

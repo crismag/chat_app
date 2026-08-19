@@ -42,7 +42,7 @@ content, credential-shaped keys, and temporary signed URLs before persistence.
 
 Save is explicit. Export uses Create Studio's deterministic renderer, downloads
 a PNG in the browser, then saves the document and the export timestamp,
-dimensions and media type. Export does not publish to Community.
+dimensions and media type. Export does not share to Community.
 
 Generated assets are served from authenticated
 `/api/studio-assets/:assetId` routes and remain owner-scoped. Studio documents

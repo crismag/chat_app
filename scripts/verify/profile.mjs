@@ -4,7 +4,7 @@
  * Four claims are checked here, and only one of them is a screenshot.
  *
  *  1. A profile renders as a portfolio: identity, favourite Scripture, and the
- *     person's published reflections as the same gallery cards Reflections uses.
+ *     person's shared reflections as the same gallery cards Reflections uses.
  *  2. **A private reflection never appears on it.** Checked twice over: once by
  *     reading the API payload a *second* account receives — the assertion that
  *     matters, because it is upstream of any rendering — and once by searching
@@ -68,7 +68,7 @@ const PRIVATE_TITLE = 'PRIVATE-DO-NOT-SHOW';
 const PRIVATE_BODY = 'PRIVATE-BODY-that-no-stranger-may-read';
 
 try {
-  /* --- the author, with one published and one private reflection ------- */
+  /* --- the author, with one shared and one private reflection ------- */
 
   const stamp = Date.now();
   const authorEmail = `author${stamp}@example.com`;
@@ -84,7 +84,7 @@ try {
           ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         }).then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) }));
 
-      const write = async (draft, publish) => {
+      const write = async (draft, share) => {
         const created = await call('POST', '/api/conversations', {
           title: draft.title,
           scriptureReference: draft.reference,
@@ -93,12 +93,12 @@ try {
         for (const [type, content] of Object.entries(draft.sections)) {
           await call('PATCH', `/api/conversations/${id}/sections`, { type, content });
         }
-        if (publish) await call('POST', `/api/conversations/${id}/publish`);
+        if (share) await call('POST', `/api/conversations/${id}/share`);
         return id;
       };
 
-      const published = [];
-      published.push(
+      const shared = [];
+      shared.push(
         await write(
           {
             title: 'Trusting while I cannot see',
@@ -113,7 +113,7 @@ try {
           true,
         ),
       );
-      published.push(
+      shared.push(
         await write(
           {
             title: 'Be still and know',
@@ -128,7 +128,7 @@ try {
           true,
         ),
       );
-      published.push(
+      shared.push(
         await write(
           {
             title: 'The vine and the branches',
@@ -159,13 +159,13 @@ try {
         favouriteVerses: ['Romans 8:28', 'Psalm 46:10', 'John 15:5'],
       });
 
-      return { published, privateId, handle: profile.body.handle };
+      return { shared, privateId, handle: profile.body.handle };
     },
     PRIVATE_TITLE,
     PRIVATE_BODY,
   );
 
-  console.log(`seeded ${seeded.published.length} published, 1 private, handle @${seeded.handle}`);
+  console.log(`seeded ${seeded.shared.length} shared, 1 private, handle @${seeded.handle}`);
 
   /* --- reached from the shell's avatar menu, not only by URL ----------- */
 

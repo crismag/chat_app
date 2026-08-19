@@ -220,7 +220,7 @@ export interface ValidationResult {
   format: ChatFormat;
   status: LengthStatus;
   /** True only when every rule passes and required content is present. */
-  publishable: boolean;
+  shareable: boolean;
   fields: FieldReport[];
   combined: FieldReport;
   pages: number;
@@ -351,7 +351,7 @@ export function validateChat(
   return {
     format,
     status,
-    publishable:
+    shareable:
       !invalid && missing.length === 0 && !requiresExtensionAcknowledgement,
     fields,
     combined,

@@ -71,7 +71,7 @@ web_app/src/
 ├── bible/         # passage card, translation picker (the old "scripture/")
 ├── chat/          # the Reflect page: card, conversation panel, sheets
 ├── reflections/   # the personal list (the old "library/")
-├── community/     # published entries
+├── community/     # shared entries
 ├── create/        # visual export
 ├── shared/        # layout shell, API client, icons, design tokens
 └── styles/
@@ -113,7 +113,7 @@ Initial responsibilities:
 - C.H.A.T. structures;
 - Scripture references and metadata;
 - search;
-- publication state;
+- share state;
 - community reads;
 - AI orchestration;
 - generated-asset metadata;
@@ -179,7 +179,7 @@ same image rather than the `mysql:8` default.
 **Privacy boundary:** the central database stores users, identities, profiles,
 settings, sessions, reflections, revisions, generated-image records, and
 **non-content** AI usage metadata. Migration `003` adds communities and
-membership, publications and their copied sections, tags, reactions, saves and
+membership, shares and their copied sections, tags, reactions, saves and
 reports, the Create Studio document and its image bytes, and the passage a
 reflection was written against.
 
@@ -188,7 +188,7 @@ reflection, which **is** stored centrally.
 
 That reverses what this document said before, and the reversal is recorded
 rather than quietly applied. The rule used to be that AI conversation content
-never reached the server. The published Privacy Policy says the opposite — *"we
+never reached the server. The shared Privacy Policy says the opposite — *"we
 may collect ... AI conversations"* — and of the two, a policy the product does
 not follow is the worse thing to leave standing. The owner chose the policy.
 
@@ -203,10 +203,10 @@ column that would turn telemetry into an archive fails the suite rather than
 relying on review.
 
 Two things migration `003` keeps from the SQLite tables it replaces, because
-they are rules rather than shapes: `publications.audience` is a single column
-with no join table, so *exactly one audience per publication* is enforced by
-the schema; and `publication_reactions` is keyed on (publication, user), so a
-doubled request cannot inflate a count. A publication stores **copied** section
+they are rules rather than shapes: `shares.audience` is a single column
+with no join table, so *exactly one audience per share* is enforced by
+the schema; and `publication_reactions` is keyed on (share, user), so a
+doubled request cannot inflate a count. A share stores **copied** section
 text, so choosing what appears can never mutate the reflection it came from.
 
 What is actually implemented for the live SQLite path, in `api/src/db.ts`:
@@ -238,7 +238,7 @@ ChatSection
 ScriptureReference
 Tag
 ConversationTag
-Publication
+Share
 Creation
 CreationAsset
 Template
@@ -294,7 +294,7 @@ through the proxy.
 
 The backend must enforce privacy. UI hiding is not sufficient.
 
-A community query must only return explicitly published records.
+A community query must only return explicitly shared records.
 
 Conceptually:
 
@@ -303,7 +303,7 @@ private content query:
   owner_id = current_user
 
 community query:
-  publication_state = PUBLISHED
+  visibility = 'shared'
 ```
 
 No community endpoint should retrieve private content and rely on the frontend to filter it out.

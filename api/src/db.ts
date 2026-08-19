@@ -17,6 +17,7 @@
  * to be reverted.
  */
 import { DatabaseSync } from 'node:sqlite';
+import { readVisibility } from '@chat/shared';
 import type {
   StoredConversation,
   StoredMessage,
@@ -52,7 +53,7 @@ function migrate(db: DatabaseSync): void {
       format TEXT NOT NULL DEFAULT 'full',
       title TEXT NOT NULL,
       scriptureReference TEXT,
-      publicationState TEXT NOT NULL,
+      visibility TEXT NOT NULL,
       tags TEXT NOT NULL DEFAULT '[]',
       createdAt TEXT NOT NULL,
       updatedAt TEXT NOT NULL
@@ -96,6 +97,41 @@ function migrate(db: DatabaseSync): void {
   addColumn(db, 'conversations', 'tags', "TEXT NOT NULL DEFAULT '[]'");
 
   renameContextSectionToContent(db);
+  renamePublicationStateToVisibility(db);
+}
+
+/**
+ * `publicationState` becomes `visibility`, and `published` becomes `shared`.
+ *
+ * The old name described a publishing lifecycle the product never had: two
+ * values, both of them answers to "who can see this". Renaming the column
+ * without moving the values would leave every shared reflection reading as
+ * private, which is why the value migration runs in the same transaction as
+ * the rename rather than being left to the reader.
+ *
+ * Safe to run on every start: it does nothing once the column is gone.
+ */
+function renamePublicationStateToVisibility(db: DatabaseSync): void {
+  const columns = db.prepare('PRAGMA table_info(conversations)').all() as { name: string }[];
+  const names = columns.map((column) => column.name);
+  if (!names.includes('publicationState')) return;
+
+  db.exec('BEGIN');
+  try {
+    if (names.includes('visibility')) {
+      /* Both present, which only happens if a rename was interrupted. */
+      db.exec("UPDATE conversations SET visibility = publicationState WHERE visibility IS NULL OR visibility = ''");
+      db.exec('ALTER TABLE conversations DROP COLUMN publicationState');
+    } else {
+      db.exec('ALTER TABLE conversations RENAME COLUMN publicationState TO visibility');
+    }
+    db.exec("UPDATE conversations SET visibility = 'shared' WHERE visibility = 'published'");
+    db.exec("UPDATE conversations SET visibility = 'private' WHERE visibility NOT IN ('shared', 'private')");
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 /**
@@ -186,7 +222,8 @@ function conversationFromRow(row: Row): StoredConversation {
     format: row['format'] === 'condensed' ? 'condensed' : 'full',
     title: String(row['title']),
     scriptureReference: row['scriptureReference'] == null ? null : String(row['scriptureReference']),
-    publicationState: row['publicationState'] === 'published' ? 'published' : 'private',
+    /* Rows written before sharing was called sharing say `published`. */
+    visibility: readVisibility(row['visibility']),
     tags: readStoredTags(row['tags']),
     createdAt: String(row['createdAt']),
     updatedAt: String(row['updatedAt']),
@@ -302,13 +339,13 @@ class ConversationTable {
     this.db
       .prepare(
         `INSERT INTO conversations
-           (id, userId, format, title, scriptureReference, publicationState, tags, createdAt, updatedAt)
+           (id, userId, format, title, scriptureReference, visibility, tags, createdAt, updatedAt)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            format = excluded.format,
            title = excluded.title,
            scriptureReference = excluded.scriptureReference,
-           publicationState = excluded.publicationState,
+           visibility = excluded.visibility,
            tags = excluded.tags,
            updatedAt = excluded.updatedAt`,
       )
@@ -318,7 +355,7 @@ class ConversationTable {
         conversation.format,
         conversation.title,
         conversation.scriptureReference,
-        conversation.publicationState,
+        conversation.visibility,
         tagsJson(conversation.tags ?? []),
         conversation.createdAt,
         conversation.updatedAt,

@@ -28,17 +28,17 @@ const condensedDraft = (over: Partial<Record<string, string>> = {}) => ({
 });
 
 describe('Full C.H.A.T.', () => {
-  it('is publishable when complete and within the recommended budget', () => {
+  it('is shareable when complete and within the recommended budget', () => {
     const result = validateChat(CHAT_FORMATS.FULL, fullDraft());
     expect(result.status).toBe(LENGTH_STATUS.RECOMMENDED);
-    expect(result.publishable).toBe(true);
+    expect(result.shareable).toBe(true);
     expect(result.missing).toEqual([]);
   });
 
-  it('is not publishable while a required section is empty', () => {
+  it('is not shareable while a required section is empty', () => {
     const result = validateChat(CHAT_FORMATS.FULL, fullDraft({ testimony: '' }));
     expect(result.missing).toContain('testimony');
-    expect(result.publishable).toBe(false);
+    expect(result.shareable).toBe(false);
   });
 
   /*
@@ -74,7 +74,7 @@ describe('Full C.H.A.T.', () => {
     });
     expect(result.combined.length).toBe(4000);
     expect(result.status).toBe(LENGTH_STATUS.INVALID);
-    expect(result.publishable).toBe(false);
+    expect(result.shareable).toBe(false);
   });
 
   /*
@@ -93,7 +93,7 @@ describe('Full C.H.A.T.', () => {
 
     expect(result.missing).not.toContain('content');
     expect(result.missing).toEqual([]);
-    expect(result.publishable).toBe(true);
+    expect(result.shareable).toBe(true);
     expect(
       counterFor(CHAT_FORMATS.FULL, 'content', verseOnly)!.status,
     ).toBe(LENGTH_STATUS.RECOMMENDED);
@@ -103,19 +103,19 @@ describe('Full C.H.A.T.', () => {
     const draft = fullDraft({ content: fill(700), heart: fill(700), application: fill(450) });
     const unacknowledged = validateChat(CHAT_FORMATS.FULL, draft);
     expect(unacknowledged.requiresExtensionAcknowledgement).toBe(true);
-    expect(unacknowledged.publishable).toBe(false);
+    expect(unacknowledged.shareable).toBe(false);
 
     const acknowledged = validateChat(CHAT_FORMATS.FULL, draft, {
       extensionAcknowledged: true,
     });
-    expect(acknowledged.publishable).toBe(true);
+    expect(acknowledged.shareable).toBe(true);
   });
 });
 
 describe('Condensed C.H.A.T.', () => {
-  it('is publishable within budget', () => {
+  it('is shareable within budget', () => {
     const result = validateChat(CHAT_FORMATS.CONDENSED, condensedDraft());
-    expect(result.publishable).toBe(true);
+    expect(result.shareable).toBe(true);
     expect(result.maxPages).toBe(1);
   });
 
@@ -140,7 +140,7 @@ describe('Condensed C.H.A.T.', () => {
       extensionAcknowledged: true,
     });
     expect(result.status).toBe(LENGTH_STATUS.INVALID);
-    expect(result.publishable).toBe(false);
+    expect(result.shareable).toBe(false);
     expect(result.requiresExtensionAcknowledgement).toBe(false);
     expect(FORMAT_LIMITS.condensed.extensionAllowed).toBe(false);
   });
@@ -150,14 +150,14 @@ describe('Condensed C.H.A.T.', () => {
       quotesVerseText: true,
     });
     expect(result.missing).toContain('translation');
-    expect(result.publishable).toBe(false);
+    expect(result.shareable).toBe(false);
 
     const named = validateChat(
       CHAT_FORMATS.CONDENSED,
       { ...condensedDraft(), translation: 'NIV' },
       { quotesVerseText: true },
     );
-    expect(named.publishable).toBe(true);
+    expect(named.shareable).toBe(true);
   });
 });
 

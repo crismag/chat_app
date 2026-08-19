@@ -9,7 +9,7 @@ Before implementing a feature or changing an existing one:
 1. Identify the user-visible behavior being changed.
 2. Identify the domain objects involved.
 3. Identify the exact files/modules expected to change.
-4. Check whether the change affects privacy, authorship, publication, AI behavior, or cross-platform behavior.
+4. Check whether the change affects privacy, authorship, share, AI behavior, or cross-platform behavior.
 5. Prefer the smallest coherent implementation that completes the user workflow.
 
 Do not begin with broad refactors unless they are required to deliver the requested behavior.
@@ -20,7 +20,7 @@ C.H.A.T. is primarily:
 
 - a private conversational Scripture/reflection tool;
 - a searchable personal library;
-- an optional internal publishing/community layer;
+- an optional internal sharing/community layer;
 - a visual content creation tool.
 
 Do not casually expand it into unrelated product categories.
@@ -29,7 +29,7 @@ Do not casually expand it into unrelated product categories.
 
 New user content must default to private.
 
-Publishing requires an explicit user action.
+Sharing requires an explicit user action.
 
 Never expose private data through:
 
@@ -37,7 +37,7 @@ Never expose private data through:
 - public search;
 - client-side filtering of mixed private/public datasets;
 - analytics payloads containing unnecessary user content;
-- generated public URLs without explicit publication intent.
+- generated public URLs without explicit share intent.
 
 Treat privacy as a backend/domain rule, not only a UI state.
 
@@ -168,7 +168,7 @@ Prefer clear resources for:
 - conversations;
 - messages;
 - structured C.H.A.T.s;
-- publication;
+- share;
 - creations;
 - AI operations;
 - search.
@@ -180,8 +180,8 @@ Validate authorization at every data boundary.
 Prioritize tests around high-risk behavior:
 
 - private content cannot be retrieved by other users;
-- publication changes visibility correctly;
-- unpublishing removes community visibility if supported;
+- share changes visibility correctly;
+- making private removes community visibility if supported;
 - AI revision does not destroy original content;
 - C/H/A/T extraction preserves section meaning;
 - export handles short and long text;

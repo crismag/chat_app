@@ -23,9 +23,9 @@ Create section below was rewritten for that work; the original 2026-08-16
 "empty room" recommendation is historical.
 
 A further follow-through the same day restored Community to the primary
-navigation because a published entry can now be opened: audiences,
-membership, `GET /api/publications`, a gallery of cards, and
-`/community/publications/:id`. The **Community** section below still describes
+navigation because a shared entry can now be opened: audiences,
+membership, `GET /api/shares`, a gallery of cards, and
+`/community/shares/:id`. The **Community** section below still describes
 the 2026-08-16 listing; treat that verdict as historical.
 
 The rest of this document is still the 2026-08-16 browser tour.
@@ -214,7 +214,7 @@ saved, re-openable reflection; live Gemini replies that stay on the passage and
 decline to author Heart or Testimony; drafts that arrive labelled and go
 nowhere until the author places them; per-section provenance; length counters
 against the raised limits; passage lookup across 47 translations; delete;
-publish gating.
+share gating.
 
 ---
 
@@ -245,16 +245,16 @@ the count, and opening a result back into the correct reflection.
 
 **Verdict (2026-08-16 tour): not shippable. It was a database listing with a
 heading over it.** That listing is gone. The page is now Shared / Public /
-Communities with openable publication cards. Re-run `community.mjs` before
+Communities with openable share cards. Re-run `community.mjs` before
 trusting a line item below.
 
 - **Blocker — nothing is clickable.**
   `web_app/src/community/CommunityPage.tsx` L68–75 renders each entry as two
   plain `<span>`s. There is no link, no button, no detail route. A person can
-  see that a published C.H.A.T. exists and can do absolutely nothing with it,
+  see that a shared C.H.A.T. exists and can do absolutely nothing with it,
   including read it. The page's entire promise is discovery, and discovery is
   not implemented.
-- **Blocker — no author is named.** Published entries show a title and a
+- **Blocker — no author is named.** Shared entries show a title and a
   reference. Whose reflection it is — the single thing that makes a community
   feed mean anything — is not shown, and `GET /api/community` does not return
   it.
@@ -270,7 +270,7 @@ trusting a line item below.
   stylesheet belonging to a component nothing routes to.
 
 The privacy boundary itself is correct and enforced server-side: only records
-with `publicationState === 'published'` are returned. The backend of this
+with `visibility === 'shared'` are returned. The backend of this
 feature is done; the page is not.
 
 ---
@@ -289,7 +289,7 @@ design tool, and generated/uploaded artwork is still Phase 6.**
   cards. **Export all pages** downloads the carousel.
 - The Fabric-backed editor can change layers, save the canonical document,
   reopen it after reload, and export a deterministic PNG.
-- Studio persistence is owner-scoped and separate from Community publication.
+- Studio persistence is owner-scoped and separate from Community share.
 - `/open-source-licenses` is independently reachable and bundles Create Studio
   and application notices for offline use.
 - **Remaining:** uploaded artwork, a production generated-background provider,

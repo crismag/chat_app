@@ -2,7 +2,7 @@
  * The reflection gallery card, and the small pieces it is made of.
  *
  * Extracted from `ReflectionsPage` rather than reimplemented, because the
- * public profile shows a person's published reflections and the brief is
+ * public profile shows a person's shared reflections and the brief is
  * explicit that it shows *the same* cards. Two cards claiming to be the same
  * card is how a product starts looking like two products.
  *
@@ -20,7 +20,7 @@ import {
   CHAT_SECTION_TYPES,
   type ChatFormat,
   type ChatSectionType,
-  type PublicationState,
+  type Visibility,
 } from '@chat/shared'
 import styles from './ReflectionCard.module.css'
 
@@ -113,12 +113,12 @@ export function ChatProgress({
   )
 }
 
-export function StateBadge({ state }: { state: PublicationState }) {
-  const published = state === 'published'
+export function StateBadge({ state }: { state: Visibility }) {
+  const shared = state === 'shared'
   return (
-    <span className={`badge ${published ? styles.published : styles.private}`}>
-      <span aria-hidden="true">{published ? '◉' : '◆'}</span>
-      {published ? 'Published' : 'Private'}
+    <span className={`badge ${shared ? styles.shared : styles.private}`}>
+      <span aria-hidden="true">{shared ? '◉' : '◆'}</span>
+      {shared ? 'Shared' : 'Private'}
     </span>
   )
 }
@@ -167,7 +167,7 @@ export function ReflectionCard({
   now: number
   href?: string
   featured?: boolean
-  state?: PublicationState
+  state?: Visibility
   emptyExcerpt?: string
   badge?: ReactNode
   actions?: ReactNode

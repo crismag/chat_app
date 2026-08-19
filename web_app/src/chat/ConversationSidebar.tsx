@@ -178,13 +178,13 @@ export function ConversationSidebar({
                         {/*
                           Privacy is stated in an icon and a word, never a
                           colour alone — someone has to be able to tell a
-                          private reflection from a published one in
+                          private reflection from a shared one in
                           greyscale.
                         */}
-                        {item.publicationState === 'published' ? (
+                        {item.visibility === 'shared' ? (
                           <span className={styles.stateChip}>
                             <GlobeIcon className={styles.tinyIcon} />
-                            Published
+                            Shared
                           </span>
                         ) : (
                           <span className={styles.stateChip}>

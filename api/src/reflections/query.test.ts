@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { AUTHOR_ORIGINS, CHAT_FORMATS, CHAT_SECTION_TYPES, PUBLICATION_STATES } from '@chat/shared';
+import { AUTHOR_ORIGINS, CHAT_FORMATS, CHAT_SECTION_TYPES, VISIBILITY } from '@chat/shared';
 import type { StoredConversation, StoredSection } from '../store.ts';
 import { matchesReflection, readReflectionFilters } from './query.ts';
 
@@ -9,7 +9,7 @@ const conversation: StoredConversation = {
   format: CHAT_FORMATS.FULL,
   title: 'Abide',
   scriptureReference: 'John 15:5',
-  publicationState: PUBLICATION_STATES.PRIVATE,
+  visibility: VISIBILITY.PRIVATE,
   tags: [{ tag: 'faith', label: 'faith' }],
   createdAt: '2026-03-01T12:00:00.000Z',
   updatedAt: '2026-03-10T12:00:00.000Z',

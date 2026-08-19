@@ -24,7 +24,7 @@
  *
  * Not here. `GET /api/profiles/:handle` returns only published reflections,
  * decided in the query. This component renders what it is given and has no
- * filter, no `publicationState` check and no way to receive a private
+ * filter, no `visibility` check and no way to receive a private
  * reflection in the first place. That is on purpose: a page that filters is a
  * page one refactor away from leaking.
  */

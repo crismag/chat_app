@@ -15,7 +15,7 @@ C.H.A.T. turns those moments into a persistent, searchable personal library with
 A user should be able to move naturally through this loop:
 
 ```text
-CONVERSE → REMEMBER → REFLECT → CREATE → optionally PUBLISH
+CONVERSE → REMEMBER → REFLECT → CREATE → optionally SHARE
 ```
 
 The application should make that loop feel simple enough for everyday use.
@@ -73,9 +73,9 @@ Private content must not appear in:
 - recommendations to other users;
 - platform discovery surfaces.
 
-Only a deliberate publish action on a specific item makes that item available to other users inside the platform.
+Only a deliberate share action on a specific item makes that item available to other users inside the platform.
 
-The product should never infer publication from:
+The product should never infer share from:
 
 - exporting an image;
 - downloading content;
@@ -84,17 +84,17 @@ The product should never infer publication from:
 - making a visual card;
 - having a public profile.
 
-## Publishing model
+## Sharing model
 
-Initial publication states should remain intentionally small:
+Initial share states should remain intentionally small:
 
 ```text
-PRIVATE → PUBLISHED
+PRIVATE → SHARED
 ```
 
 Do not introduce friends-only, followers-only, group-only, unlisted, church-only, or complex ACL states until a concrete requirement exists.
 
-Publishing must be explicit and reversible if the platform later supports unpublishing.
+Sharing must be explicit and reversible if the platform later supports making private.
 
 ## External sharing
 
@@ -102,7 +102,7 @@ C.H.A.T. does not need to manage every external destination.
 
 The application should support creating/exporting high-quality content. The browser or operating system may handle external sharing through downloads, share sheets, messaging apps, social networks, email, or other user-selected channels.
 
-External sharing and internal publication are different operations.
+External sharing and internal share are different operations.
 
 ## AI role
 
@@ -251,7 +251,7 @@ enforced on both sides of the wire.
 
 Recommended is advice and never blocks anything; a Full C.H.A.T. over it is
 *Extended* and may be laid out across two pages, which the author is asked to
-allow. Hard is a refusal, and it blocks completion and publication.
+allow. Hard is a refusal, and it blocks completion and share.
 
 The section numbers were raised from 400/700 for Content and 300/600 for the
 other three, with a combined 1200/2400. Those were written before anyone looked
@@ -277,12 +277,12 @@ When content is too long, the application should offer intelligent alternatives 
 
 ## Community
 
-The community layer consists only of explicitly published entries. Each
-publication has one audience: public, or one community the author belongs to.
+The community layer consists only of explicitly shared entries. Each
+share has one audience: public, or one community the author belongs to.
 
 The initial community experience can remain small:
 
-- browse published C.H.A.T.s;
+- browse shared C.H.A.T.s;
 - search by Scripture/theme;
 - open author/public entry;
 - copy or save a reference if supported.

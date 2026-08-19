@@ -8,7 +8,7 @@ import {
   type ChatFormat,
   type ValidationResult,
 } from '@chat/shared'
-import { CloseIcon, GlobeIcon, LockIcon, CommunityIcon } from '../shared/ui/icons.tsx'
+import { CloseIcon, GlobeIcon, LockIcon, CommunityIcon, ShareIcon } from '../shared/ui/icons.tsx'
 
 import { ORIGIN_LABELS, SECTIONS, mergeInto } from './sections.ts'
 import type { FieldType } from './types.ts'
@@ -73,10 +73,18 @@ export function Sheet({
 
 /* ------------------------------------------------------------------- share */
 
-export type ShareAudience = 'only-me' | 'public' | 'community'
+/*
+ * Where a reflection can go.
+ *
+ * `device` is not an audience and deliberately sits beside the two that are:
+ * handing something to WhatsApp or Messages is an export, and it must never
+ * change who can see the reflection inside C.H.A.T. `only-me` is the way back
+ * from having shared.
+ */
+export type ShareAudience = 'only-me' | 'public' | 'community' | 'device'
 
 /**
- * Where this goes — the question Publish never asked.
+ * Where this goes.
  *
  * Exactly one audience per publication, named in words before it is chosen. The
  * community destination is live now, and offers only communities this person is
@@ -89,14 +97,15 @@ export type ShareAudience = 'only-me' | 'public' | 'community'
  * a checkbox that quietly turns into "public".
  */
 export function ShareSheet({
-  currentlyPublished,
+  currentlyShared,
   validation,
   format,
   communities,
   onClose,
   onShare,
+  onShareExternally,
 }: {
-  currentlyPublished: boolean
+  currentlyShared: boolean
   validation: ValidationResult | null
   format: ChatFormat
   communities: { id: string; name: string }[]
@@ -106,22 +115,22 @@ export function ShareSheet({
     acknowledgeExtension: boolean,
     communityId: string | null,
   ) => Promise<void>
+  /** Hands the reflection to the device. Never changes who can see it here. */
+  onShareExternally: () => Promise<void>
 }) {
+  /*
+   * The first destination that can actually be used. Defaulting to a community
+   * when somebody is in none left the sheet proposing an action its own button
+   * could not perform.
+   */
   const [audience, setAudience] = useState<ShareAudience>(
-    currentlyPublished ? 'public' : 'only-me',
+    communities.length > 0 ? 'community' : 'public',
   )
   const [communityId, setCommunityId] = useState<string | null>(communities[0]?.id ?? null)
   const [acknowledged, setAcknowledged] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const destinations = [
-    {
-      id: 'only-me' as const,
-      icon: <LockIcon className={styles.smallIcon} />,
-      name: 'Only me',
-      detail: 'Stays private. Nobody else can reach it, even with the link.',
-      available: true,
-    },
     {
       id: 'public' as const,
       icon: <GlobeIcon className={styles.smallIcon} />,
@@ -140,6 +149,25 @@ export function ShareSheet({
           : 'Members of one community only. You are not in a community yet — you can start one from Community.',
       available: communities.length > 0,
     },
+    {
+      id: 'device' as const,
+      icon: <ShareIcon className={styles.smallIcon} />,
+      name: 'Another app',
+      detail:
+        'Hands it to your device — Messages, WhatsApp, anything installed. An export: it does not change who can see this reflection here.',
+      available: true,
+    },
+    ...(currentlyShared
+      ? [
+          {
+            id: 'only-me' as const,
+            icon: <LockIcon className={styles.smallIcon} />,
+            name: 'Make private',
+            detail: 'Removes it from sharing. Nobody else can reach it, even with the link.',
+            available: true,
+          },
+        ]
+      : []),
   ]
 
   return (
@@ -157,27 +185,34 @@ export function ShareSheet({
             disabled={busy}
             onClick={() => {
               setBusy(true)
-              void onShare(
-                audience,
-                acknowledged,
-                audience === 'community' ? communityId : null,
-              ).finally(() => setBusy(false))
+              /*
+               * The device route goes nowhere near visibility. It is the one
+               * destination that does not answer "who can see this".
+               */
+              const done =
+                audience === 'device'
+                  ? onShareExternally()
+                  : onShare(audience, acknowledged, audience === 'community' ? communityId : null)
+              void done.finally(() => setBusy(false))
             }}
           >
             {busy
               ? 'Sharing…'
               : audience === 'only-me'
-                ? 'Keep it private'
+                ? 'Make private'
                 : audience === 'community'
-                  ? 'Share with this community'
-                  : 'Share publicly'}
+                  ? 'Share to community'
+                  : audience === 'device'
+                    ? 'Share to another app'
+                    : 'Share publicly'}
           </button>
         </>
       }
     >
       <p className={styles.sheetLead}>
-        A reflection goes to one audience at a time. Sharing it somewhere else later makes a
-        separate publication — private sharing never becomes public on its own.
+        A reflection goes to one audience at a time, and only when you say so — finishing one
+        never shares it. Sharing it somewhere else later is a separate share; a community share
+        never becomes public on its own.
       </p>
 
       <ul className={styles.destinations}>

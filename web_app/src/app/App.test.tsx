@@ -209,7 +209,7 @@ test('an unknown address keeps the shell and explains itself', async () => {
   expect(screen.getByRole('navigation', { name: 'Primary desktop' })).toBeInTheDocument()
 })
 
-test('Community is in the primary navigation once a published entry can be opened', async () => {
+test('Community is in the primary navigation once a shared entry can be opened', async () => {
   vi.stubGlobal('fetch', mockAuthenticatedFetch())
   renderAt('/')
   const desktop = await screen.findByRole('navigation', { name: 'Primary desktop' })

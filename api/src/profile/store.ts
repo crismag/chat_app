@@ -12,10 +12,10 @@
  *
  * A public profile is a public surface listing a private person's work, so the
  * dangerous shape is obvious: read everything the author has, hand it over, and
- * let the page show the published ones. That leaks through titles, excerpts and
+ * let the page show the shared ones. That leaks through titles, excerpts and
  * counts long before anyone notices the rendering is doing the filtering.
  *
- * So **`publicationState = 'published'` is in the WHERE clause of every query
+ * So **`visibility = 'shared'` is in the WHERE clause of every query
  * here.** Not in a `.filter()` after the read, not in the route, and certainly
  * not in the browser. The SQLite implementation never selects a private row at
  * all; the in-memory implementation, which exists only so the test suite can
@@ -41,7 +41,7 @@ export type StoredProfile = {
 };
 
 /**
- * One published reflection, as a stranger may see it.
+ * One shared reflection, as a stranger may see it.
  *
  * Note what is absent: no `userId`, no publication state (everything here is
  * public by construction), no message content, no private counts. `sections`
@@ -73,7 +73,7 @@ export interface ProfileStore {
   /** True when some *other* account already holds this handle. */
   handleTaken(handle: string, exceptUserId: string): boolean;
   save(profile: StoredProfile): void;
-  /** Only published reflections. The predicate is applied during retrieval. */
+  /** Only shared reflections. The predicate is applied during retrieval. */
   publicShares(userId: string): PublicShare[];
   /** The same predicate, so the count can never disagree with the list. */
   publicShareCount(userId: string): number;
@@ -85,7 +85,7 @@ export interface ProfileStore {
 
 /* ------------------------------------------------------------------ shared */
 
-const PUBLISHED = 'published';
+const SHARED = 'shared';
 
 /** Section order for an excerpt, per format. */
 const EXCERPT_ORDER: Record<string, readonly string[]> = {
@@ -249,11 +249,11 @@ class SqliteProfileStore implements ProfileStore {
   /*
    * The authorisation query.
    *
-   * Two statements, and `publicationState = 'published'` is in the WHERE of
+   * Two statements, and `visibility = 'shared'` is in the WHERE of
    * both — including the one that reads section text, so a private
    * reflection's words are never loaded into this process at all, let alone
    * serialised towards a browser. The join on the second statement is what
-   * makes that true: sections are reached *through* the published conversation,
+   * makes that true: sections are reached *through* the shared conversation,
    * never listed independently and matched up afterwards.
    */
   publicShares(userId: string): PublicShare[] {
@@ -261,10 +261,10 @@ class SqliteProfileStore implements ProfileStore {
       .prepare(
         `SELECT id, format, title, scriptureReference, updatedAt
            FROM conversations
-          WHERE userId = ? AND publicationState = ?
+          WHERE userId = ? AND visibility = ?
           ORDER BY updatedAt DESC`,
       )
-      .all(userId, PUBLISHED) as unknown as Pick<
+      .all(userId, SHARED) as unknown as Pick<
       StoredConversation,
       'id' | 'format' | 'title' | 'scriptureReference' | 'updatedAt'
     >[];
@@ -275,9 +275,9 @@ class SqliteProfileStore implements ProfileStore {
         `SELECT s.conversationId AS conversationId, s.type AS type, s.content AS content
            FROM sections AS s
            JOIN conversations AS c ON c.id = s.conversationId
-          WHERE c.userId = ? AND c.publicationState = ?`,
+          WHERE c.userId = ? AND c.visibility = ?`,
       )
-      .all(userId, PUBLISHED) as unknown as {
+      .all(userId, SHARED) as unknown as {
       conversationId: string;
       type: string;
       content: string;
@@ -298,9 +298,9 @@ class SqliteProfileStore implements ProfileStore {
   publicShareCount(userId: string): number {
     const row = this.db
       .prepare(
-        'SELECT COUNT(*) AS n FROM conversations WHERE userId = ? AND publicationState = ?',
+        'SELECT COUNT(*) AS n FROM conversations WHERE userId = ? AND visibility = ?',
       )
-      .get(userId, PUBLISHED) as Row | undefined;
+      .get(userId, SHARED) as Row | undefined;
     return Number(row?.['n'] ?? 0);
   }
 
@@ -365,7 +365,7 @@ class SqliteProfileStore implements ProfileStore {
  * The same store over `MemoryStore`, for the test suite.
  *
  * It reads `conversations` and `sections` from the surrounding store, and the
- * published predicate is the *first* thing applied — before a title, an
+ * shared predicate is the *first* thing applied — before a title, an
  * excerpt or a section is touched — so this implementation cannot pass an
  * authorisation test that the SQLite one would fail, or the reverse.
  */
@@ -405,15 +405,15 @@ class MemoryProfileStore implements ProfileStore {
     this.profiles.set(profile.userId, { ...profile });
   }
 
-  private published(userId: string): StoredConversation[] {
+  private shared(userId: string): StoredConversation[] {
     return [...this.source.conversations.values()].filter(
       (conversation) =>
-        conversation.userId === userId && conversation.publicationState === PUBLISHED,
+        conversation.userId === userId && conversation.visibility === SHARED,
     );
   }
 
   publicShares(userId: string): PublicShare[] {
-    return this.published(userId)
+    return this.shared(userId)
       .map((conversation) => {
         const stored = this.source.sections.get(conversation.id) ?? {};
         const sections: Record<string, string> = {};
@@ -424,7 +424,7 @@ class MemoryProfileStore implements ProfileStore {
   }
 
   publicShareCount(userId: string): number {
-    return this.published(userId).length;
+    return this.shared(userId).length;
   }
 
   addReport(report: Omit<ProfileReport, 'id' | 'createdAt'>): ProfileReport {

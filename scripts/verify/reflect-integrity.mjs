@@ -326,7 +326,7 @@ try {
   );
   check('the Community option cannot be chosen', communityDisabled === true);
 
-  // Publishing an incomplete C.H.A.T. must fail with numbers, not "invalid".
+  // Sharing an incomplete C.H.A.T. must fail with numbers, not "invalid".
   await driver.findElement(By.css('input[value="public"]')).click();
   await clickByText('Share publicly');
   await wait(1500);
@@ -418,7 +418,7 @@ try {
       entry.level.name === 'SEVERE' &&
       !/favicon/.test(entry.message) &&
       !/auth\/me/.test(entry.message) &&
-      !/\/publish/.test(entry.message),
+      !/\/share/.test(entry.message),
   );
   check('no severe console errors', severe.length === 0, severe.map((e) => e.message).join(' | '));
 
