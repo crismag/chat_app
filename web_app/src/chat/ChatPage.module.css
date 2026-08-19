@@ -520,15 +520,13 @@
  * neither is a decision locked in at the moment a reflection began.
  */
 .referenceInput,
-.titleInput,
 /*
- * On the metadata line beside the format, so it stops taking a row of its own.
- * Bounded, because tags are short and an input greedy for the whole line would
- * push the progress off the end of it.
+ * The two inline inputs. They share everything except their width, which is
+ * the one thing they must not share: the title takes the line it is on, and
+ * the tags sit in a metadata row beside the format and the progress.
  */
+.titleInput,
 .tagsInput {
-  inline-size: min(14rem, 40%);
-  flex: 0 1 auto;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -550,9 +548,20 @@
 }
 
 .titleInput {
+  /* All of it: a title is the field of arbitrary length on that line. */
+  inline-size: 100%;
   font-family: var(--font-serif);
   font-size: var(--text-lg);
   font-weight: 600;
+}
+
+/*
+ * Bounded, because tags are short and an input greedy for the whole line would
+ * push the progress off the end of it.
+ */
+.tagsInput {
+  inline-size: min(14rem, 40%);
+  flex: 0 1 auto;
 }
 
 .tagsInput {
