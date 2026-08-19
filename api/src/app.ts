@@ -4,8 +4,14 @@ import type { Context } from 'hono';
 import { cors } from 'hono/cors';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { sessionCookieOptions } from './auth/session-cookie.ts';
-import { SqliteAuthStore, type AuthStore } from './auth/store.ts';
-import { ownerForRead, ownerForUser, ownerForWrite, ownerFromCookie } from './auth/owner.ts';
+import { SqliteAuthStore, type AuthStore, type AuthUser } from './auth/store.ts';
+import {
+  clearGuestCookie,
+  createGuest,
+  currentAccount as accountFor,
+  deviceClassFromRequest,
+  guestFromCookie,
+} from './auth/guest.ts';
 import { AnonymousAiAllowance } from './ai/anonymous-allowance.ts';
 import { hashPassword, verifyPassword } from './auth/local-password.ts';
 import { webOrigins } from './http/origins.ts';
@@ -27,6 +33,10 @@ import {
   type CreateLayout,
   type CreateStyle,
   type HealthResponse,
+  CREATION_METHODS,
+  CREATION_SOURCES,
+  readCreationContext,
+  type CreationSource,
 } from '@chat/shared';
 import {
   aiStatus,
@@ -201,6 +211,62 @@ export function createApp(
 
   const requireUser = async (c: Parameters<typeof currentUser>[0]) => currentUser(c);
 
+  /*
+   * Whoever this request is for: the signed-in account, else the guest their
+   * credential names, else nobody.
+   *
+   * Nobody is an ordinary answer. A visitor reading a shared reflection is
+   * nobody, and no account is created to serve them -- that only happens when
+   * somebody asks for one at /api/auth/guest.
+   */
+  const currentAccount = async (c: Context) => accountFor(c, auth, await currentUser(c));
+
+  /*
+   * What the client is told about whoever it is talking to.
+   *
+   * One shape for both kinds. The client shows "Guest · QuietCedar-14" or an
+   * email from the same payload rather than calling two endpoints and
+   * inferring which sort of person came back.
+   */
+  const accountBody = (account: AuthUser) => ({
+    id: account.id,
+    accountType: account.accountType,
+    email: account.email,
+    guestName: account.guestName,
+    emailVerified: account.emailVerified,
+  });
+
+  /*
+   * The refusal that means "choose how to be somebody", not "go away".
+   *
+   * `needsAccount` is what the client keys on: it opens the guest-or-sign-in
+   * choice and retries the action afterwards, so nothing the person had
+   * written is lost to the interruption. `creationSource` travels back with
+   * the choice so the resulting account records where it was made.
+   */
+  const accountRequired = (creationSource: CreationSource) => ({
+    error: 'Saving this needs an account — continue as a guest, or sign in.',
+    needsAccount: true,
+    creationSource,
+  });
+
+  /** How much a guest would be bringing with them. Used to say so plainly. */
+  const reflectionsOwnedBy = (userId: string) =>
+    [...store.conversations.values()].filter((conversation) => conversation.userId === userId).length;
+
+  /*
+   * The parts of the application that still need an email behind them.
+   *
+   * Community sharing puts a name next to somebody's writing where other
+   * people can see it, and a profile is that name. Those want a registered
+   * account; the private work of writing a reflection does not, which is the
+   * distinction this function exists to keep.
+   */
+  const registeredUser = async (c: Context) => {
+    const user = await currentUser(c);
+    return user?.email ? { id: user.id, email: user.email } : null;
+  };
+
   app.get('/api/health', async (c) => {
     const body: HealthResponse = {
       status: 'ok',
@@ -231,7 +297,7 @@ export function createApp(
        * closed door. It is the one feature billed per call, so a visitor gets
        * enough to see what it does and an account is what makes it ordinary.
        */
-      currentOwner: async (c) => ownerForRead(c, store, await currentUser(c)),
+      currentOwner: (c) => currentAccount(c),
       anonymousAllowance,
       /*
        * The server builds the chat's context; the client never describes it.
@@ -367,9 +433,9 @@ export function createApp(
       service: bibleService,
       /* Scripture is reachable without an account; the reflection it is saved
        * against still is not. */
-      currentOwner: async (c) => ownerForRead(c, store, await currentUser(c)),
-      ownsConversation: (ownerId, conversationId) =>
-        store.conversations.get(conversationId)?.ownerId === ownerId,
+      currentOwner: (c) => currentAccount(c),
+      ownsConversation: (userId, conversationId) =>
+        store.conversations.get(conversationId)?.userId === userId,
       passages: biblePassages,
     }),
   );
@@ -387,7 +453,7 @@ export function createApp(
   app.route(
     '/api/profiles',
     createProfileRoutes({
-      currentUser: (c) => currentUser(c),
+      currentUser: (c) => registeredUser(c),
       profiles,
     }),
   );
@@ -409,7 +475,7 @@ export function createApp(
   app.route(
     '/api',
     createCommunityRoutes({
-      currentUser: (c) => currentUser(c),
+      currentUser: (c) => registeredUser(c),
       store: createCommunityStore(store),
       reflection: (userId, conversationId) => {
         const conversation = store.conversations.get(conversationId);
@@ -425,10 +491,39 @@ export function createApp(
               : sectionsFromStore(stored),
         };
       },
-      userIdByEmail: (email) => store.usersByEmail.get(email) ?? null,
+      userIdByEmail: (email) => store.accounts.byEmail(email)?.id ?? null,
       ensureIdentity: (user) => ensureProfile(profiles, user),
     }),
   );
+
+  /*
+   * "Continue as guest", and the only place a guest account is ever made.
+   *
+   * Asked for explicitly, by somebody who was shown the choice and took it. It
+   * is a POST because it creates a user, and it carries where the choice
+   * happened -- which reflection, which page -- because that context cannot be
+   * reconstructed afterwards and is worth having when deciding whether the
+   * prompt is appearing in the right place.
+   *
+   * Idempotent for anybody who is already somebody: a guest who somehow asks
+   * again gets the account they already have rather than a second one, and a
+   * signed-in person gets themselves.
+   */
+  app.post('/api/auth/guest', async (c) => {
+    const signedIn = await currentUser(c);
+    if (signedIn) return c.json(accountBody(signedIn));
+    const existing = await guestFromCookie(c, auth);
+    if (existing) return c.json(accountBody(existing));
+
+    const body = await c.req.json<unknown>().catch(() => ({}));
+    const context = readCreationContext({
+      ...(body as Record<string, unknown>),
+      creationMethod: CREATION_METHODS.GUEST_OPT_IN,
+      deviceClass: deviceClassFromRequest(c),
+    });
+    const guest = await createGuest(c, auth, context);
+    return c.json(accountBody(guest), 201);
+  });
 
   app.post('/api/auth/register', async (c) => {
     const body = await c.req.json<{ email?: string; password?: string }>();
@@ -437,25 +532,37 @@ export function createApp(
     if (!email || password.length < 8) {
       return c.json({ error: 'Email and a password of at least 8 characters are required.' }, 400);
     }
-    const user = await auth.register(email, password);
-    if (!user) {
-      return c.json({ error: 'An account with that email already exists.' }, 409);
-    }
     /*
-     * Everything written before registering comes with them, and nothing is
-     * copied to do it. The anonymous owner is upgraded in place — same row,
-     * same id — so every reflection already points at the right place and not
-     * one of them is rewritten.
+     * A guest registering claims the account they already have.
      *
-     * With no anonymous owner this is somebody's first visit on this browser,
-     * and they simply get a fresh one.
+     * Same row, same id, so every reflection written before this moment is
+     * still pointed at by the same identifier afterwards and not one of them
+     * is rewritten. That is the invariant the whole design exists to keep:
+     * registration is an upgrade, not a new account with a migration attached.
      */
-    const anonymous = ownerFromCookie(c, store);
-    if (anonymous && !anonymous.userId) store.owners.claim(anonymous.id, user.id);
-    else ownerForUser(store, user.id);
+    const guest = await guestFromCookie(c, auth);
+    const user = await auth.register(email, password, guest?.id ?? null);
+    if (!user) {
+      /*
+       * The one case an upgrade cannot handle: this email is somebody's
+       * account already. It is not overwritten and no content is moved --
+       * they are told, and signing in to that account is what merges their
+       * guest work into it.
+       */
+      return c.json(
+        {
+          error: 'An account with that email already exists.',
+          accountExists: true,
+          ...(guest ? { guestReflections: reflectionsOwnedBy(guest.id) } : {}),
+        },
+        409,
+      );
+    }
+    /* The account is theirs now; the guest credential has nothing left to do. */
+    if (guest) clearGuestCookie(c);
     const token = await auth.startSession(user.id);
     setCookie(c, SESSION_COOKIE, token, sessionCookieOptions(c.req.header('origin')));
-    return c.json({ id: user.id, email: user.email }, 201);
+    return c.json(accountBody(user), 201);
   });
 
   app.post('/api/auth/login', async (c) => {
@@ -466,20 +573,29 @@ export function createApp(
       return c.json({ error: 'Invalid email or password.' }, 401);
     }
     /*
-     * Signing into an account that already exists is the other case, and this
-     * one really does move rows: two owners, one person. Everything written
-     * anonymously on this browser moves to the account's owner inside a
-     * transaction, so somebody who wrote three reflections and then remembered
-     * they had an account sees all of them, not one set or the other.
+     * The merge path, and the only one that moves anything.
+     *
+     * A guest whose email turns out to belong to an account cannot be upgraded
+     * in place — that account exists and is not to be overwritten — so their
+     * work moves into it, in a transaction, once they have proved the account
+     * is theirs by signing in. Somebody who wrote three reflections and then
+     * remembered they had an account sees all of them, not one set or the
+     * other.
+     *
+     * The guest row is kept and marked rather than deleted, and its credential
+     * is revoked, so a cookie left behind resolves to something known instead
+     * of looking like a new visitor.
      */
-    const account = ownerForUser(store, user.id);
-    const anonymous = ownerFromCookie(c, store);
-    if (anonymous && !anonymous.userId && anonymous.id !== account.id) {
-      store.owners.merge(anonymous.id, account.id);
+    const guest = await guestFromCookie(c, auth);
+    let merged = 0;
+    if (guest && guest.id !== user.id) {
+      merged = store.accounts.merge(guest.id, user.id);
+      await auth.merge(guest.id, user.id);
+      clearGuestCookie(c);
     }
     const token = await auth.startSession(user.id);
     setCookie(c, SESSION_COOKIE, token, sessionCookieOptions(c.req.header('origin')));
-    return c.json({ id: user.id, email: user.email });
+    return c.json({ ...accountBody(user), ...(merged > 0 ? { merged } : {}) });
   });
 
   app.post('/api/auth/logout', async (c) => {
@@ -491,23 +607,34 @@ export function createApp(
     return c.json({ ok: true });
   });
 
+  /*
+   * Who the client is talking to, guest included.
+   *
+   * A guest is a real answer here rather than a 401, because the interface has
+   * something true to say about them — their name, and that their work is kept
+   * on this device. A visitor is still a 401: there is genuinely nobody, and
+   * asking who you are must not be what brings an account into existence.
+   */
   app.get('/api/auth/me', async (c) => {
-    const user = await currentUser(c);
-    if (!user) {
+    const account = await currentAccount(c);
+    if (!account) {
       return c.json({ error: 'Unauthenticated.' }, 401);
     }
-    return c.json({ id: user.id, email: user.email });
+    return c.json(accountBody(account));
   });
 
   app.post('/api/conversations', async (c) => {
     /*
-     * No account needed to begin, which is the whole point: a visitor writes
-     * first and decides about an account later. `ownerForWrite` mints an
-     * anonymous owner and sets its cookie on this first write rather than on a
-     * page view, so merely looking around hands out nothing.
+     * Somebody has to own this, and nobody is created here to do it.
+     *
+     * A reflection is the first thing that must persist, so it is where the
+     * choice belongs: a visitor is told an account is needed and shown the two
+     * ways to have one. The client then asks for a guest, or signs in, and
+     * tries again. Creating the guest here instead would be quicker and would
+     * make "no account is created for a visitor" untrue.
      */
-    const user = await currentUser(c);
-    const owner = ownerForWrite(c, store, user);
+    const owner = await currentAccount(c);
+    if (!owner) return c.json(accountRequired(CREATION_SOURCES.REFLECTION_CREATE), 401);
     /*
      * A title is not required to begin. Someone with a passage on their mind
      * should be able to start writing, not fill in a form first — so an untitled
@@ -523,7 +650,7 @@ export function createApp(
       body.format === CHAT_FORMATS.CONDENSED ? CHAT_FORMATS.CONDENSED : CHAT_FORMATS.FULL;
     const conversation: StoredConversation = {
       id: randomUUID(),
-      ownerId: owner.id,
+      userId: owner.id,
       format,
       title: body.title?.trim() || reference || 'New reflection',
       scriptureReference: reference,
@@ -542,10 +669,10 @@ export function createApp(
      * cookie yet has written nothing, so the honest answer is an empty list
      * rather than a refusal.
      */
-    const owner = ownerForRead(c, store, await currentUser(c));
+    const owner = await currentAccount(c);
     if (!owner) return c.json([]);
     const items = [...store.conversations.values()]
-      .filter((conversation) => conversation.ownerId === owner.id)
+      .filter((conversation) => conversation.userId === owner.id)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .map(summaryOf);
     return c.json(items);
@@ -566,23 +693,21 @@ export function createApp(
   /*
    * Whether an account owns a reflection.
    *
-   * The sub-routers still ask in terms of a user, because their own gate is an
-   * account. Ownership is by owner now, so the question is routed through the
-   * owner that account holds.
+   * One comparison, because a guest's id and a registered user's id are the
+   * same kind of thing. This is what the guest-as-user design buys: ownership
+   * has one meaning everywhere instead of being routed through a second table
+   * depending on who is asking.
    */
-  const userOwnsConversation = (userId: string, conversationId: string) => {
-    const owner = store.owners.forUser(userId);
-    return Boolean(owner && store.conversations.get(conversationId)?.ownerId === owner.id);
-  };
+  const userOwnsConversation = (userId: string, conversationId: string) =>
+    store.conversations.get(conversationId)?.userId === userId;
 
   const ownedConversation = async (c: Parameters<typeof currentUser>[0], id: string) => {
-    const user = await currentUser(c);
-    const owner = ownerForRead(c, store, user);
+    const owner = await currentAccount(c);
     const conversation = store.conversations.get(id);
-    if (!owner || !conversation || conversation.ownerId !== owner.id) {
-      return { error: 404 as const, user, owner, conversation: null };
+    if (!owner || !conversation || conversation.userId !== owner.id) {
+      return { error: 404 as const, user: owner, owner, conversation: null };
     }
-    return { error: null, user, owner, conversation };
+    return { error: null, user: owner, owner, conversation };
   };
 
   app.route('/api/studio-assets', createStudioImageRoutes({
@@ -1039,7 +1164,7 @@ export function createApp(
    * badly. The old path is an alias and goes when the page moves.
    */
   const reflections = async (c: Context) => {
-    const owner = ownerForRead(c, store, await currentUser(c));
+    const owner = await currentAccount(c);
     const parsed = readReflectionFilters({
       get: (name) => c.req.query(name),
     });
@@ -1049,7 +1174,7 @@ export function createApp(
 
     const mine = owner
       ? [...store.conversations.values()].filter(
-          (conversation) => conversation.ownerId === owner.id,
+          (conversation) => conversation.userId === owner.id,
         )
       : [];
 

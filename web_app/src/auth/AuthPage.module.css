@@ -151,6 +151,20 @@
   font-size: var(--text-sm);
 }
 
+/*
+ * Not a failure: they have an account, and signing in is the next step rather
+ * than a correction. So it reads in the ordinary voice, not the red one.
+ */
+.notice {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted, var(--accent-soft, #eef1fb));
+  color: var(--ink-muted, inherit);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
 .switch {
   color: var(--muted);
   font-size: var(--text-sm);

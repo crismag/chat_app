@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
+import { accountLabel, isGuest, type Account } from '@chat/shared'
 import { CreateIcon, ProfileIcon, SignOutIcon } from './icons.tsx'
 import styles from './ProfileMenu.module.css'
 
@@ -16,10 +17,10 @@ import styles from './ProfileMenu.module.css'
  * A div with an onClick would look identical and be unusable from a keyboard.
  */
 export function ProfileMenu({
-  email,
+  account,
   onSignOut,
 }: {
-  email: string
+  account: Account
   onSignOut: () => void
 }) {
   const [open, setOpen] = useState(false)
@@ -28,8 +29,21 @@ export function ProfileMenu({
   const menuRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
 
+  /*
+   * A guest has a menu too.
+   *
+   * They are a real user with real work in here, so hiding the account
+   * controls from them would be hiding their own reflections' settings. What
+   * differs is one line and one item: what they are called, and the way to
+   * turn this into an account they can reach from anywhere.
+   */
+  const guest = isGuest(account)
+  const label = accountLabel(account)
   // The initial is derived rather than stored; there are no avatars yet.
-  const initial = email.trim().charAt(0).toUpperCase() || '?'
+  const initial = (guest ? (account.guestName ?? 'G') : (account.email ?? '?'))
+    .trim()
+    .charAt(0)
+    .toUpperCase() || '?'
 
   function close(returnFocus = true) {
     setOpen(false)
@@ -98,7 +112,7 @@ export function ProfileMenu({
         <span className={styles.avatar} aria-hidden="true">
           {initial}
         </span>
-        <span className="sr-only">Account menu for {email}</span>
+        <span className="sr-only">Account menu for {label}</span>
       </button>
 
       {open ? (
@@ -111,9 +125,30 @@ export function ProfileMenu({
           onKeyDown={onMenuKeyDown}
         >
           <p className={styles.identity}>
-            <span className={styles.identityLabel}>Signed in as</span>
-            <span className={styles.identityEmail}>{email}</span>
+            <span className={styles.identityLabel}>
+              {guest ? 'Kept on this device' : 'Signed in as'}
+            </span>
+            <span className={styles.identityEmail}>{label}</span>
           </p>
+          {/*
+            The way out of being a guest, offered rather than insisted on. It
+            claims the account they already have -- same reflections, same
+            everything -- which is why it says "your account" and not "sign up".
+          */}
+          {guest ? (
+            <button
+              type="button"
+              role="menuitem"
+              className={styles.item}
+              onClick={() => {
+                close(false)
+                void navigate('/login')
+              }}
+            >
+              <ProfileIcon className={styles.itemIcon} />
+              Create your account
+            </button>
+          ) : null}
           <button
             type="button"
             role="menuitem"
@@ -167,18 +202,20 @@ export function ProfileMenu({
             <span className={styles.itemIcon} aria-hidden="true">§</span>
             Open Source Licences
           </button>
-          <button
-            type="button"
-            role="menuitem"
-            className={styles.item}
-            onClick={() => {
-              close(false)
-              onSignOut()
-            }}
-          >
-            <SignOutIcon className={styles.itemIcon} />
-            Sign out
-          </button>
+          {guest ? null : (
+            <button
+              type="button"
+              role="menuitem"
+              className={styles.item}
+              onClick={() => {
+                close(false)
+                onSignOut()
+              }}
+            >
+              <SignOutIcon className={styles.itemIcon} />
+              Sign out
+            </button>
+          )}
         </div>
       ) : null}
     </div>

@@ -5,7 +5,7 @@ import { matchesReflection, readReflectionFilters } from './query.ts';
 
 const conversation: StoredConversation = {
   id: 'c1',
-  ownerId: 'o1',
+  userId: 'u1',
   format: CHAT_FORMATS.FULL,
   title: 'Abide',
   scriptureReference: 'John 15:5',

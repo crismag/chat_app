@@ -18,13 +18,14 @@
  */
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import { readVisibility } from '@chat/shared';
+import { readAccountType, readVisibility } from '@chat/shared';
 import type {
+  StoredAccount,
   StoredConversation,
+  StoredCreationContext,
   StoredMessage,
   StoredSection,
   StoredSession,
-  StoredUser,
 } from './store.ts';
 import { readStoredTags, tagsJson } from './reflections/tags.ts';
 
@@ -36,10 +37,72 @@ function migrate(db: DatabaseSync): void {
   db.exec('PRAGMA foreign_keys = ON');
 
   db.exec(`
+    /*
+     * One table for everybody, guests included.
+     *
+     * A guest is not a placeholder waiting to become a user; they are a user
+     * with no identity attached yet. So there is no separate guest table and
+     * no second kind of ownership -- there is accountType, and everything a
+     * person makes points at this row whichever value it holds. That is what
+     * makes registration an UPDATE rather than a migration.
+     *
+     * email and passwordHash are nullable because a guest has neither, and
+     * accountType is stored explicitly rather than inferred from their being
+     * null: "has no password" and "has not registered" are different facts,
+     * and a single-sign-on account would have the first without the second.
+     */
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
-      email TEXT NOT NULL UNIQUE,
-      passwordHash TEXT NOT NULL
+      accountType TEXT NOT NULL DEFAULT 'REGISTERED',
+      email TEXT UNIQUE,
+      passwordHash TEXT,
+      emailVerifiedAt TEXT,
+      displayName TEXT,
+      guestName TEXT UNIQUE,
+      guestCreatedAt TEXT,
+      registeredAt TEXT,
+      creationMethod TEXT,
+      creationSource TEXT,
+      platform TEXT,
+      deviceClass TEXT,
+      createdAt TEXT,
+      lastSeenAt TEXT,
+      /* Set when this guest's work was moved into an account that existed. */
+      mergedIntoUserId TEXT
+    );
+
+    /*
+     * How a guest proves, on their next visit, that they are the same guest.
+     *
+     * The credential is a long random value held in a cookie; what is stored
+     * here is its hash, for the same reason a password's is. A database that
+     * leaked would then contain nothing that can be replayed.
+     *
+     * Separate from the user row because it is revocable and replaceable
+     * without touching the account, and because a future application
+     * installation is another row rather than another user.
+     */
+    CREATE TABLE IF NOT EXISTS anonymous_credentials (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      tokenHash TEXT NOT NULL UNIQUE,
+      installationId TEXT,
+      platform TEXT,
+      createdAt TEXT NOT NULL,
+      lastSeenAt TEXT,
+      revokedAt TEXT
+    );
+
+    /*
+     * The next number for each base name.
+     *
+     * A counter rather than random digits, so QuietCedar-14 means what it
+     * appears to mean. Incremented inside a transaction, because the whole
+     * value of a sequence is that two callers cannot be handed the same one.
+     */
+    CREATE TABLE IF NOT EXISTS guest_name_sequences (
+      baseName TEXT PRIMARY KEY,
+      nextSequence INTEGER NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS sessions (
@@ -48,42 +111,17 @@ function migrate(db: DatabaseSync): void {
       expiresAt INTEGER NOT NULL
     );
 
-    /*
-     * Who a reflection belongs to, before there is anybody to belong to.
-     *
-     * An owner is not a user. Somebody who opens the app and writes something
-     * owns it immediately, identified by a random value in a cookie and
-     * nothing else -- no account, and no fake guest row in the users table
-     * pretending to be a person.
-     *
-     * Registering upgrades this row in place: userId is filled in and kind
-     * becomes 'user'. Every reflection keeps pointing at the same owner, so
-     * registering moves no writing at all. Signing into an account that
-     * already exists is the other case, and that one does move rows.
-     *
-     * userId holds the account's public UUID rather than an internal key,
-     * because accounts live in MariaDB and that is the identifier allowed to
-     * cross between the two stores.
-     */
-    CREATE TABLE IF NOT EXISTS owners (
-      id TEXT PRIMARY KEY,
-      kind TEXT NOT NULL,
-      userId TEXT,
-      createdAt TEXT NOT NULL,
-      claimedAt TEXT,
-      expiresAt TEXT
-    );
-
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_owner_user ON owners(userId) WHERE userId IS NOT NULL;
-
     CREATE TABLE IF NOT EXISTS conversations (
       id TEXT PRIMARY KEY,
       /*
-       * The owner, not the user. A reflection written by somebody with no
-       * account still has one, which is why this cannot be a foreign key into
-       * users -- that constraint was the login wall expressed in SQL.
+       * Who wrote it. A guest and a registered user are both users, so this is
+       * one column rather than two, and registration never touches it.
+       *
+       * Not a foreign key: accounts are moving to MariaDB and this identifier
+       * is the public one that crosses between the two stores. The constraint
+       * that used to be here was the login wall expressed in SQL anyway.
        */
-      ownerId TEXT NOT NULL,
+      userId TEXT NOT NULL,
       format TEXT NOT NULL DEFAULT 'full',
       title TEXT NOT NULL,
       scriptureReference TEXT,
@@ -131,51 +169,100 @@ function migrate(db: DatabaseSync): void {
 
   renameContextSectionToContent(db);
   renamePublicationStateToVisibility(db);
-  addColumn(db, 'conversations', 'ownerId', 'TEXT');
-  giveExistingReflectionsAnOwner(db);
-  dropConversationUserId(db);
-  /* After the column exists: an older database reaches this without it. */
-  db.exec('CREATE INDEX IF NOT EXISTS idx_conversations_owner ON conversations(ownerId)');
+  upgradeUsersToAccounts(db);
+  carryOwnersIntoUsers(db);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(userId)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_anonymous_credentials_user ON anonymous_credentials(userId)');
 }
 
 /**
- * Every reflection written before owners existed belongs to its author.
+ * The old two-column users table becomes the account table.
  *
- * One owner per user, kind 'user', claimed the moment it is made -- these are
- * accounts that already exist, so nothing about them is anonymous. Runs once:
- * afterwards no conversation has a null ownerId.
+ * SQLite cannot relax a NOT NULL, so this is a rebuild rather than a set of
+ * `ALTER TABLE`s: every existing row is an account somebody registered, which
+ * is exactly what `REGISTERED` means, and their creation date is unknown
+ * rather than invented.
  */
-function giveExistingReflectionsAnOwner(db: DatabaseSync): void {
-  const columns = db.prepare('PRAGMA table_info(conversations)').all() as { name: string }[];
-  /* Nothing to carry across on a database that never had the old column. */
-  if (!columns.some((column) => column.name === 'userId')) return;
-  const pending = db
-    .prepare('SELECT COUNT(*) AS n FROM conversations WHERE ownerId IS NULL')
-    .get() as { n: number } | undefined;
-  if (Number(pending?.n ?? 0) === 0) return;
+function upgradeUsersToAccounts(db: DatabaseSync): void {
+  const columns = db.prepare('PRAGMA table_info(users)').all() as { name: string }[];
+  if (columns.some((column) => column.name === 'accountType')) return;
 
   db.exec('BEGIN');
   try {
-    const rows = db
-      .prepare('SELECT DISTINCT userId FROM conversations WHERE ownerId IS NULL')
-      .all() as { userId: string }[];
-    const now = new Date().toISOString();
-    for (const { userId } of rows) {
-      const existing = db.prepare('SELECT id FROM owners WHERE userId = ?').get(userId) as
-        | { id: string }
-        | undefined;
-      const ownerId = existing?.id ?? randomUUID();
-      if (!existing) {
-        db.prepare(
-          `INSERT INTO owners (id, kind, userId, createdAt, claimedAt, expiresAt)
-           VALUES (?, 'user', ?, ?, ?, NULL)`,
-        ).run(ownerId, userId, now, now);
-      }
-      db.prepare('UPDATE conversations SET ownerId = ? WHERE userId = ? AND ownerId IS NULL').run(
-        ownerId,
-        userId,
+    db.exec(`
+      CREATE TABLE users_new (
+        id TEXT PRIMARY KEY,
+        accountType TEXT NOT NULL DEFAULT 'REGISTERED',
+        email TEXT UNIQUE,
+        passwordHash TEXT,
+        emailVerifiedAt TEXT,
+        displayName TEXT,
+        guestName TEXT UNIQUE,
+        guestCreatedAt TEXT,
+        registeredAt TEXT,
+        creationMethod TEXT,
+        creationSource TEXT,
+        platform TEXT,
+        deviceClass TEXT,
+        createdAt TEXT,
+        lastSeenAt TEXT,
+        mergedIntoUserId TEXT
       );
+      INSERT INTO users_new (id, accountType, email, passwordHash, creationMethod)
+        SELECT id, 'REGISTERED', email, passwordHash, 'REGISTRATION' FROM users;
+      DROP TABLE users;
+      ALTER TABLE users_new RENAME TO users;
+    `);
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+/**
+ * Owners were a separate table; they are users now.
+ *
+ * The intermediate design gave a reflection an `ownerId` pointing at a row
+ * that was not a user, so that somebody without an account could own
+ * something. Making the guest a first-class user does the same job with one
+ * fewer concept, and this carries any database written in between across:
+ * an owner with an account becomes that account, and one without becomes the
+ * guest user it was standing in for.
+ *
+ * The old cookie will not resolve afterwards -- it named an owner, and the
+ * credential is hashed now -- so such a guest is asked to choose again on
+ * their next visit. Their writing is still theirs the moment they sign in to
+ * the account that owns it; nothing is deleted here.
+ */
+function carryOwnersIntoUsers(db: DatabaseSync): void {
+  const columns = db.prepare('PRAGMA table_info(conversations)').all() as { name: string }[];
+  const names = columns.map((column) => column.name);
+  if (!names.includes('ownerId')) return;
+
+  db.exec('BEGIN');
+  try {
+    if (!names.includes('userId')) db.exec('ALTER TABLE conversations ADD COLUMN userId TEXT');
+    const owners = db.prepare('SELECT id, userId FROM owners').all() as {
+      id: string;
+      userId: string | null;
+    }[];
+    const now = new Date().toISOString();
+    for (const owner of owners) {
+      const accountId = owner.userId ?? owner.id;
+      if (!owner.userId) {
+        db.prepare(
+          `INSERT INTO users (id, accountType, guestName, guestCreatedAt, creationMethod,
+                              creationSource, platform, deviceClass, createdAt)
+           VALUES (?, 'ANONYMOUS', NULL, ?, 'GUEST_OPT_IN', 'OTHER_PERSISTENT_ACTION', 'WEB', 'UNKNOWN', ?)
+           ON CONFLICT(id) DO NOTHING`,
+        ).run(owner.id, now, now);
+      }
+      db.prepare('UPDATE conversations SET userId = ? WHERE ownerId = ?').run(accountId, owner.id);
     }
+    db.exec('DELETE FROM conversations WHERE userId IS NULL');
+    db.exec('ALTER TABLE conversations DROP COLUMN ownerId');
+    db.exec('DROP TABLE IF EXISTS owners');
     db.exec('COMMIT');
   } catch (error) {
     db.exec('ROLLBACK');
@@ -295,32 +382,13 @@ function addColumn(db: DatabaseSync, table: string, column: string, type: string
   db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
 }
 
-/**
- * `conversations.userId` goes, once every row has an owner.
- *
- * It was `NOT NULL REFERENCES users(id)`, which is the login wall written as a
- * constraint: a reflection could not exist without an account behind it. Owner
- * replaces it, and the old column is dropped rather than left nullable so
- * nothing can quietly start reading it again.
- */
-function dropConversationUserId(db: DatabaseSync): void {
-  const columns = db.prepare('PRAGMA table_info(conversations)').all() as { name: string }[];
-  if (!columns.some((column) => column.name === 'userId')) return;
-  const orphans = db
-    .prepare('SELECT COUNT(*) AS n FROM conversations WHERE ownerId IS NULL')
-    .get() as { n: number } | undefined;
-  /* Never drop the only record of who owns something. */
-  if (Number(orphans?.n ?? 0) > 0) return;
-  db.exec('ALTER TABLE conversations DROP COLUMN userId');
-}
-
 /** Rows come back as plain objects; this keeps the casts in one place. */
 type Row = Record<string, unknown>;
 
 function conversationFromRow(row: Row): StoredConversation {
   return {
     id: String(row['id']),
-    ownerId: String(row['ownerId']),
+    userId: String(row['userId']),
     format: row['format'] === 'condensed' ? 'condensed' : 'full',
     title: String(row['title']),
     scriptureReference: row['scriptureReference'] == null ? null : String(row['scriptureReference']),
@@ -332,54 +400,224 @@ function conversationFromRow(row: Row): StoredConversation {
   };
 }
 
-class UserTable {
+/**
+ * Accounts, guests and registered alike.
+ *
+ * The methods that matter are `createGuest` and `claim`. Together they are the
+ * product invariant: a guest is made once, and registering fills in the fields
+ * it was missing. Nothing here moves a reflection, because nothing needs to --
+ * the id does not change, so neither does anything pointing at it.
+ */
+class AccountTable {
   private readonly db: DatabaseSync;
 
   constructor(db: DatabaseSync) {
     this.db = db;
   }
 
-  get(id: string): StoredUser | undefined {
-    const row = this.db
-      .prepare('SELECT id, email, passwordHash FROM users WHERE id = ?')
-      .get(id) as Row | undefined;
-    return row as StoredUser | undefined;
+  private static read(row: Row | undefined): StoredAccount | undefined {
+    if (!row) return undefined;
+    return {
+      id: String(row['id']),
+      accountType: readAccountType(row['accountType']),
+      email: row['email'] == null ? null : String(row['email']),
+      passwordHash: row['passwordHash'] == null ? null : String(row['passwordHash']),
+      emailVerifiedAt: row['emailVerifiedAt'] == null ? null : String(row['emailVerifiedAt']),
+      displayName: row['displayName'] == null ? null : String(row['displayName']),
+      guestName: row['guestName'] == null ? null : String(row['guestName']),
+      registeredAt: row['registeredAt'] == null ? null : String(row['registeredAt']),
+      mergedIntoUserId: row['mergedIntoUserId'] == null ? null : String(row['mergedIntoUserId']),
+    };
   }
 
-  set(id: string, user: StoredUser): this {
+  get(id: string): StoredAccount | undefined {
+    return AccountTable.read(
+      this.db.prepare('SELECT * FROM users WHERE id = ?').get(id) as Row | undefined,
+    );
+  }
+
+  byEmail(email: string): StoredAccount | undefined {
+    return AccountTable.read(
+      this.db.prepare('SELECT * FROM users WHERE email = ?').get(email) as Row | undefined,
+    );
+  }
+
+  createRegistered(email: string, passwordHash: string): StoredAccount {
+    const id = randomUUID();
+    const now = new Date().toISOString();
     this.db
       .prepare(
-        `INSERT INTO users (id, email, passwordHash) VALUES (?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET email = excluded.email,
-                                       passwordHash = excluded.passwordHash`,
+        `INSERT INTO users (id, accountType, email, passwordHash, registeredAt,
+                            creationMethod, createdAt, lastSeenAt)
+         VALUES (?, 'REGISTERED', ?, ?, ?, 'REGISTRATION', ?, ?)`,
       )
-      .run(id, user.email, user.passwordHash);
-    return this;
+      .run(id, email, passwordHash, now, now, now);
+    return this.get(id) as StoredAccount;
+  }
+
+  createGuest(name: string, context: StoredCreationContext): StoredAccount {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `INSERT INTO users (id, accountType, guestName, guestCreatedAt, creationMethod,
+                            creationSource, platform, deviceClass, createdAt, lastSeenAt)
+         VALUES (?, 'ANONYMOUS', ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        name,
+        now,
+        context.creationMethod,
+        context.creationSource,
+        context.platform,
+        context.deviceClass,
+        now,
+        now,
+      );
+    return this.get(id) as StoredAccount;
+  }
+
+  /**
+   * Registration, done to the row that already exists.
+   *
+   * The guest name is kept. It is what the person has been called in the
+   * interface up to this moment, and an audit trail that ends the instant
+   * somebody registers is an audit trail with a hole in it.
+   *
+   * Guarded on the row still being a guest, so two registrations racing on one
+   * guest cannot both succeed.
+   */
+  claim(id: string, email: string, passwordHash: string): StoredAccount | undefined {
+    const changed = this.db
+      .prepare(
+        `UPDATE users
+            SET accountType = 'REGISTERED', email = ?, passwordHash = ?, registeredAt = ?
+          WHERE id = ? AND accountType = 'ANONYMOUS'`,
+      )
+      .run(email, passwordHash, new Date().toISOString(), id).changes;
+    return changed > 0 ? this.get(id) : undefined;
+  }
+
+  setEmailVerified(id: string, at = new Date().toISOString()): void {
+    this.db.prepare('UPDATE users SET emailVerifiedAt = ? WHERE id = ?').run(at, id);
+  }
+
+  touch(id: string): void {
+    this.db.prepare('UPDATE users SET lastSeenAt = ? WHERE id = ?').run(new Date().toISOString(), id);
+  }
+
+  /**
+   * The other path: this guest's work belongs to an account that already
+   * exists.
+   *
+   * Rows really do move here, so it is one transaction. The guest row is kept
+   * and marked rather than deleted, because a credential still in somebody's
+   * browser has to resolve to something known -- a retired account they are
+   * told about -- rather than looking like a brand-new visitor.
+   */
+  merge(fromUserId: string, intoUserId: string): number {
+    if (fromUserId === intoUserId) return 0;
+    this.db.exec('BEGIN');
+    try {
+      const moved = this.db
+        .prepare('UPDATE conversations SET userId = ? WHERE userId = ?')
+        .run(intoUserId, fromUserId).changes;
+      this.db
+        .prepare('UPDATE users SET mergedIntoUserId = ? WHERE id = ?')
+        .run(intoUserId, fromUserId);
+      this.db
+        .prepare("UPDATE anonymous_credentials SET revokedAt = ? WHERE userId = ? AND revokedAt IS NULL")
+        .run(new Date().toISOString(), fromUserId);
+      this.db.exec('COMMIT');
+      return Number(moved);
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  /**
+   * The next number for a base name, handed out once.
+   *
+   * Read and write in one transaction: the whole point of a sequence is that
+   * two callers arriving together get different numbers, and a read followed
+   * by a write outside a transaction is exactly how they would not.
+   */
+  nextGuestSequence(baseName: string): number {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const row = this.db
+        .prepare('SELECT nextSequence FROM guest_name_sequences WHERE baseName = ?')
+        .get(baseName) as Row | undefined;
+      const next = Number(row?.['nextSequence'] ?? 1);
+      this.db
+        .prepare(
+          `INSERT INTO guest_name_sequences (baseName, nextSequence) VALUES (?, ?)
+           ON CONFLICT(baseName) DO UPDATE SET nextSequence = excluded.nextSequence`,
+        )
+        .run(baseName, next + 1);
+      this.db.exec('COMMIT');
+      return next;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
 }
 
-/** Email → id. Backed by the same table; the unique index does the work. */
-class EmailIndex {
+/**
+ * Guest credentials: the hash, never the value.
+ *
+ * Looking one up is a lookup by hash, so a stolen database yields nothing that
+ * can be presented to the server. Revocation is a timestamp rather than a
+ * delete, so a credential that was retired stays distinguishable from one that
+ * never existed.
+ */
+class GuestCredentialTable {
   private readonly db: DatabaseSync;
 
   constructor(db: DatabaseSync) {
     this.db = db;
   }
 
-  has(email: string): boolean {
-    return this.get(email) !== undefined;
+  create(input: { userId: string; tokenHash: string; platform: string; installationId?: string | null }): string {
+    const id = randomUUID();
+    this.db
+      .prepare(
+        `INSERT INTO anonymous_credentials
+           (id, userId, tokenHash, installationId, platform, createdAt, lastSeenAt, revokedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
+      )
+      .run(
+        id,
+        input.userId,
+        input.tokenHash,
+        input.installationId ?? null,
+        input.platform,
+        new Date().toISOString(),
+        new Date().toISOString(),
+      );
+    return id;
   }
 
-  get(email: string): string | undefined {
+  findByTokenHash(tokenHash: string): { id: string; userId: string } | undefined {
     const row = this.db
-      .prepare('SELECT id FROM users WHERE email = ?')
-      .get(email) as Row | undefined;
-    return row?.['id'] as string | undefined;
+      .prepare('SELECT id, userId FROM anonymous_credentials WHERE tokenHash = ? AND revokedAt IS NULL')
+      .get(tokenHash) as Row | undefined;
+    return row ? { id: String(row['id']), userId: String(row['userId']) } : undefined;
   }
 
-  /* The row is written by UserTable.set; the index needs nothing of its own. */
-  set(): this {
-    return this;
+  touch(id: string): void {
+    this.db
+      .prepare('UPDATE anonymous_credentials SET lastSeenAt = ? WHERE id = ?')
+      .run(new Date().toISOString(), id);
+  }
+
+  revokeForUser(userId: string): void {
+    this.db
+      .prepare('UPDATE anonymous_credentials SET revokedAt = ? WHERE userId = ? AND revokedAt IS NULL')
+      .run(new Date().toISOString(), userId);
   }
 }
 
@@ -441,20 +679,20 @@ class ConversationTable {
     this.db
       .prepare(
         `INSERT INTO conversations
-           (id, ownerId, format, title, scriptureReference, visibility, tags, createdAt, updatedAt)
+           (id, userId, format, title, scriptureReference, visibility, tags, createdAt, updatedAt)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            format = excluded.format,
            title = excluded.title,
            scriptureReference = excluded.scriptureReference,
-           ownerId = excluded.ownerId,
+           userId = excluded.userId,
            visibility = excluded.visibility,
            tags = excluded.tags,
            updatedAt = excluded.updatedAt`,
       )
       .run(
         id,
-        conversation.ownerId,
+        conversation.userId,
         conversation.format,
         conversation.title,
         conversation.scriptureReference,
@@ -648,163 +886,24 @@ class SectionTable {
  * `:memory:` is the default so the test suite keeps running without touching
  * the disk, and each test gets its own empty database.
  */
-/** An owner: a person's work, with or without an account behind it. */
-export type StoredOwner = {
-  id: string;
-  kind: 'anonymous' | 'user';
-  userId: string | null;
-  createdAt: string;
-  claimedAt: string | null;
-  expiresAt: string | null;
-};
-
-/**
- * Owners, and the two ways an anonymous one stops being anonymous.
- *
- * `claim` is registration: the same row gains a userId and no reflection
- * moves. `merge` is signing into an account that already exists, where two
- * owners have to become one and rows really do move — in a transaction,
- * because half a merge is worse than none.
- */
-class OwnerTable {
-  private readonly db: DatabaseSync;
-
-  constructor(db: DatabaseSync) {
-    this.db = db;
-  }
-
-  private static read(row: Record<string, unknown> | undefined): StoredOwner | undefined {
-    if (!row) return undefined;
-    return {
-      id: String(row['id']),
-      kind: row['kind'] === 'user' ? 'user' : 'anonymous',
-      userId: row['userId'] === null || row['userId'] === undefined ? null : String(row['userId']),
-      createdAt: String(row['createdAt']),
-      claimedAt: row['claimedAt'] ? String(row['claimedAt']) : null,
-      expiresAt: row['expiresAt'] ? String(row['expiresAt']) : null,
-    };
-  }
-
-  get(id: string): StoredOwner | undefined {
-    return OwnerTable.read(
-      this.db.prepare('SELECT * FROM owners WHERE id = ?').get(id) as
-        | Record<string, unknown>
-        | undefined,
-    );
-  }
-
-  forUser(userId: string): StoredOwner | undefined {
-    return OwnerTable.read(
-      this.db.prepare('SELECT * FROM owners WHERE userId = ?').get(userId) as
-        | Record<string, unknown>
-        | undefined,
-    );
-  }
-
-  /**
-   * A new anonymous owner.
-   *
-   * The id is the credential — it is what the cookie carries and the only
-   * proof of ownership an anonymous visitor has — so it is generated the same
-   * way a session token is rather than being a counter or a timestamp.
-   */
-  createAnonymous(expiresAt: string | null = null): StoredOwner {
-    const owner: StoredOwner = {
-      id: randomUUID(),
-      kind: 'anonymous',
-      userId: null,
-      createdAt: new Date().toISOString(),
-      claimedAt: null,
-      expiresAt,
-    };
-    this.db
-      .prepare(
-        `INSERT INTO owners (id, kind, userId, createdAt, claimedAt, expiresAt)
-         VALUES (?, 'anonymous', NULL, ?, NULL, ?)`,
-      )
-      .run(owner.id, owner.createdAt, owner.expiresAt);
-    return owner;
-  }
-
-  /** An owner for an account that has none yet, which is every new account. */
-  createForUser(userId: string): StoredOwner {
-    const now = new Date().toISOString();
-    const id = randomUUID();
-    this.db
-      .prepare(
-        `INSERT INTO owners (id, kind, userId, createdAt, claimedAt, expiresAt)
-         VALUES (?, 'user', ?, ?, ?, NULL)`,
-      )
-      .run(id, userId, now, now);
-    return { id, kind: 'user', userId, createdAt: now, claimedAt: now, expiresAt: null };
-  }
-
-  /**
-   * Registration: this owner is now that account's.
-   *
-   * Nothing is copied and nothing is moved. The expiry goes too — an anonymous
-   * owner may be cleaned up one day, and an account's never should be.
-   */
-  claim(ownerId: string, userId: string): StoredOwner | undefined {
-    this.db
-      .prepare(
-        `UPDATE owners
-            SET kind = 'user', userId = ?, claimedAt = ?, expiresAt = NULL
-          WHERE id = ? AND userId IS NULL`,
-      )
-      .run(userId, new Date().toISOString(), ownerId);
-    return this.get(ownerId);
-  }
-
-  /**
-   * Signing in to an account that already exists.
-   *
-   * Two owners, one person. Everything the anonymous owner holds is moved to
-   * the account's owner and the empty one is marked claimed rather than
-   * deleted, so a cookie still carrying its id resolves to something known
-   * instead of looking like a new visitor.
-   *
-   * All of it in one transaction: a half-merge would leave a person looking at
-   * some of their own writing.
-   */
-  merge(fromOwnerId: string, intoOwnerId: string): void {
-    if (fromOwnerId === intoOwnerId) return;
-    this.db.exec('BEGIN');
-    try {
-      this.db
-        .prepare('UPDATE conversations SET ownerId = ? WHERE ownerId = ?')
-        .run(intoOwnerId, fromOwnerId);
-      this.db
-        .prepare("UPDATE owners SET claimedAt = ?, expiresAt = NULL, kind = 'anonymous' WHERE id = ?")
-        .run(new Date().toISOString(), fromOwnerId);
-      this.db.exec('COMMIT');
-    } catch (error) {
-      this.db.exec('ROLLBACK');
-      throw error;
-    }
-  }
-}
-
 export class SqliteStore {
   readonly db: DatabaseSync;
-  readonly users: UserTable;
-  readonly usersByEmail: EmailIndex;
+  readonly accounts: AccountTable;
+  readonly guestCredentials: GuestCredentialTable;
   readonly sessions: SessionTable;
   readonly conversations: ConversationTable;
   readonly messages: MessageTable;
   readonly sections: SectionTable;
-  readonly owners: OwnerTable;
 
   constructor(location = ':memory:') {
     this.db = new DatabaseSync(location);
     migrate(this.db);
-    this.users = new UserTable(this.db);
-    this.usersByEmail = new EmailIndex(this.db);
+    this.accounts = new AccountTable(this.db);
+    this.guestCredentials = new GuestCredentialTable(this.db);
     this.sessions = new SessionTable(this.db);
     this.conversations = new ConversationTable(this.db);
     this.messages = new MessageTable(this.db);
     this.sections = new SectionTable(this.db);
-    this.owners = new OwnerTable(this.db);
   }
 
   close(): void {

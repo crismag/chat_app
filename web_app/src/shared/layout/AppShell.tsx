@@ -106,18 +106,19 @@ export function AppShell() {
               <span className={styles.newLabel}>New reflection</span>
             </button>
             {/*
-              Signed in: the account menu. Not signed in: where their work is
-              kept, stated once and quietly. It is not a prompt and not a
-              banner — somebody writing does not need to be asked about an
-              account on every screen, but they should never be unsure where
-              what they wrote has gone.
+              Somebody — guest or registered: the account menu, which says
+              which they are. Nobody yet: an invitation to sign in, stated once
+              and quietly. It is not a prompt and not a banner; a visitor is
+              asked about an account exactly once, when they first keep
+              something, and never on a screen they are only reading.
             */}
             {user ? (
-              <ProfileMenu email={user.email} onSignOut={() => void logout()} />
+              <ProfileMenu account={user} onSignOut={() => void logout()} />
             ) : (
-              <Link className={styles.deviceNote} to="/login" title="Sign in to reach these reflections on another device">
+              /* Nobody yet, so nothing is saved yet. */
+              <Link className={styles.deviceNote} to="/login" title="Sign in to reach your reflections on any device">
                 <span className={styles.deviceDot} aria-hidden="true" />
-                Saved on this device
+                Sign in
               </Link>
             )}
           </div>

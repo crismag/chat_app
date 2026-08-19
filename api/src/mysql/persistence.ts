@@ -1,5 +1,10 @@
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 import {
+  readAccountType,
+  type AccountCreationContext,
+  type AccountType,
+} from '@chat/shared';
+import {
   parseChatType,
   parseStoredChatContent,
   validateChatContent,
@@ -23,6 +28,12 @@ export type UserRecord = {
   id: number;
   publicUuid: string;
   status: string;
+  /** ANONYMOUS for a guest, REGISTERED once an identity is attached. */
+  accountType: AccountType;
+  guestName: string | null;
+  registeredAt: string | null;
+  emailVerifiedAt: string | null;
+  mergedIntoUserId: number | null;
   lastLoginAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -192,6 +203,11 @@ function mapUser(row: RowDataPacket): UserRecord {
     id: asBigIntId(row.id),
     publicUuid: String(row.public_uuid),
     status: String(row.status),
+    accountType: readAccountType(row.account_type),
+    guestName: row.guest_name ? String(row.guest_name) : null,
+    registeredAt: row.registered_at ? String(row.registered_at) : null,
+    emailVerifiedAt: row.email_verified_at ? String(row.email_verified_at) : null,
+    mergedIntoUserId: row.merged_into_user_id ? asBigIntId(row.merged_into_user_id) : null,
     lastLoginAt: row.last_login_at ? String(row.last_login_at) : null,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
@@ -857,7 +873,136 @@ export class MysqlPersistence {
     return rows.map((row) => String(row.Field));
   }
 
+  /* ------------------------------------------------------- guest accounts */
+
+  /**
+   * A guest: an ordinary user row that has not been claimed yet.
+   *
+   * Everything about how it was made is written here, at the one moment it is
+   * known. Reconstructing it later from other columns would be guesswork, and
+   * the reason to have it at all is to find out whether the guest prompt is
+   * appearing somewhere useful.
+   */
+  async createGuestUser(
+    guestName: string,
+    context: AccountCreationContext,
+  ): Promise<UserRecord> {
+    const publicUuid = newPublicUuid();
+    const [result] = await this.pool.execute<ResultSetHeader>(
+      `INSERT INTO users
+         (public_uuid, status, account_type, guest_name, guest_created_at,
+          creation_method, creation_source, platform, device_class, last_seen_at)
+       VALUES (?, 'ACTIVE', 'ANONYMOUS', ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+      [
+        publicUuid,
+        guestName,
+        context.creationMethod,
+        context.creationSource,
+        context.platform,
+        context.deviceClass,
+      ],
+    );
+    const created = await this.getUserById(asBigIntId(result.insertId));
+    if (!created) throw new MysqlPersistenceError('guest insert did not persist');
+    return created;
+  }
+
+  /**
+   * The next number for a base name, handed out exactly once.
+   *
+   * `LAST_INSERT_ID(expression)` is the trick that makes this atomic without a
+   * transaction: the UPDATE both stores the incremented value and records it
+   * for this connection, so two callers arriving together are serialised by
+   * the row lock and read back different numbers. The stored column is the
+   * *next* number to hand out, so what was allocated is one less than what
+   * comes back.
+   */
+  async nextGuestNameSequence(baseName: string): Promise<number> {
+    await this.pool.execute(
+      'INSERT IGNORE INTO guest_name_sequences (base_name, next_sequence) VALUES (?, 1)',
+      [baseName],
+    );
+    await this.pool.execute(
+      'UPDATE guest_name_sequences SET next_sequence = LAST_INSERT_ID(next_sequence + 1) WHERE base_name = ?',
+      [baseName],
+    );
+    const [rows] = await this.pool.query<RowDataPacket[]>('SELECT LAST_INSERT_ID() AS allocated');
+    const allocated = Number(rows[0]?.allocated ?? 1);
+    return Math.max(1, allocated - 1);
+  }
+
+  /** The hash of a guest's credential. The credential itself is never here. */
+  async addAnonymousCredential(input: {
+    userId: number;
+    tokenHash: string;
+    platform: string;
+    installationId?: string | null;
+  }): Promise<number> {
+    const [result] = await this.pool.execute<ResultSetHeader>(
+      `INSERT INTO anonymous_credentials (user_id, token_hash, installation_id, platform, last_seen_at)
+       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+      [input.userId, input.tokenHash, input.installationId ?? null, input.platform],
+    );
+    return asBigIntId(result.insertId);
+  }
+
+  async findAnonymousCredential(tokenHash: string): Promise<{ id: number; userId: number } | null> {
+    const [rows] = await this.pool.execute<RowDataPacket[]>(
+      'SELECT id, user_id FROM anonymous_credentials WHERE token_hash = ? AND revoked_at IS NULL',
+      [tokenHash],
+    );
+    const row = rows[0];
+    return row ? { id: asBigIntId(row.id), userId: asBigIntId(row.user_id) } : null;
+  }
+
+  async touchAnonymousCredential(id: number): Promise<void> {
+    await this.pool.execute(
+      'UPDATE anonymous_credentials SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [id],
+    );
+  }
+
+  async revokeAnonymousCredentials(userId: number): Promise<void> {
+    await this.pool.execute(
+      'UPDATE anonymous_credentials SET revoked_at = CURRENT_TIMESTAMP WHERE user_id = ? AND revoked_at IS NULL',
+      [userId],
+    );
+  }
+
+  /**
+   * Registration, applied to the row that already exists.
+   *
+   * Guarded on the account still being a guest so two registrations racing on
+   * one guest cannot both win. The guest name is left alone: it is what this
+   * person has been called until now, and an audit trail that stops the moment
+   * somebody registers has a hole in it.
+   */
+  async markUserRegistered(userId: number): Promise<void> {
+    await this.pool.execute(
+      `UPDATE users
+          SET account_type = 'REGISTERED', registered_at = COALESCE(registered_at, CURRENT_TIMESTAMP)
+        WHERE id = ?`,
+      [userId],
+    );
+  }
+
+  async markEmailVerified(userId: number): Promise<void> {
+    await this.pool.execute(
+      'UPDATE users SET email_verified_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [userId],
+    );
+  }
+
+  /** The guest is retired, not deleted: a stale cookie must resolve to it. */
+  async markUserMerged(fromUserId: number, intoUserId: number): Promise<void> {
+    await this.pool.execute(
+      'UPDATE users SET merged_into_user_id = ?, status = \'MERGED\' WHERE id = ?',
+      [intoUserId, fromUserId],
+    );
+  }
+
   async deleteUserGraph(userId: number): Promise<void> {
+    await this.pool.execute('DELETE FROM anonymous_credentials WHERE user_id = ?', [userId]);
     await this.pool.execute(
       'UPDATE reflections SET current_revision_id = NULL WHERE user_id = ?',
       [userId],

@@ -1,8 +1,32 @@
 import { randomUUID } from 'node:crypto';
-export type StoredUser = {
+import { ACCOUNT_TYPES, type AccountType } from '@chat/shared';
+/**
+ * An account, whichever kind it is.
+ *
+ * Guests and registered users are the same record with different fields
+ * filled in -- which is the point. `email` and `passwordHash` are null for a
+ * guest, `guestName` survives registration, and `accountType` is the fact
+ * itself rather than something inferred from the nulls.
+ */
+export type StoredAccount = {
   id: string;
-  email: string;
-  passwordHash: string;
+  accountType: AccountType;
+  email: string | null;
+  passwordHash: string | null;
+  emailVerifiedAt: string | null;
+  displayName: string | null;
+  guestName: string | null;
+  registeredAt: string | null;
+  /** Set when this guest's work was moved into an account that existed. */
+  mergedIntoUserId: string | null;
+};
+
+/** Where an account came from, as it is written to a row. */
+export type StoredCreationContext = {
+  creationMethod: string;
+  creationSource: string;
+  platform: string;
+  deviceClass: string;
 };
 
 export type StoredSession = {
@@ -13,11 +37,11 @@ export type StoredSession = {
 export type StoredConversation = {
   id: string;
   /*
-   * Who it belongs to. Present from the first write, with or without an
-   * account behind it. There is deliberately no `userId` here: an owner may
-   * have an account attached, and a reflection does not care whether it does.
+   * Who wrote it. A guest's id and a registered user's id are the same kind of
+   * thing, so a reflection never has to be told which sort of person made it,
+   * and registering changes nothing here at all.
    */
-  ownerId: string;
+  userId: string;
   /** Which content format's rules this reflection is validated against. */
   format: 'full' | 'condensed';
   title: string;
@@ -115,99 +139,137 @@ export class MemoryMessageTable {
   }
 }
 
-/** An owner: a person's work, with or without an account behind it. */
-export type StoredOwner = {
-  id: string;
-  kind: 'anonymous' | 'user';
-  userId: string | null;
-  createdAt: string;
-  claimedAt: string | null;
-  expiresAt: string | null;
-};
-
 /**
- * The same owner surface as the SQLite table, in memory.
+ * The account surface the SQLite tables have, in memory.
  *
- * `merge` moves reflections between owners, so it is given the conversations
- * it has to rewrite. Keeping the two implementations behaviourally identical
- * matters more here than usual: the tests run against this one and the product
- * runs against the other, and a merge that behaved differently would be a bug
- * nothing could catch.
+ * Kept behaviourally identical on purpose. The suite runs against this one and
+ * the product runs against the other, so a difference here -- especially in
+ * `merge`, which moves reflections -- would be a bug nothing could catch.
  */
-export class MemoryOwnerTable {
-  private readonly rows = new Map<string, StoredOwner>();
+export class MemoryAccountTable {
+  private readonly rows = new Map<string, StoredAccount>();
+  private readonly sequences = new Map<string, number>();
   private readonly conversations: Map<string, StoredConversation>;
+  private readonly credentials: MemoryGuestCredentialTable;
 
-  constructor(conversations: Map<string, StoredConversation>) {
+  constructor(
+    conversations: Map<string, StoredConversation>,
+    credentials: MemoryGuestCredentialTable,
+  ) {
     this.conversations = conversations;
+    this.credentials = credentials;
   }
 
-  get(id: string): StoredOwner | undefined {
+  get(id: string): StoredAccount | undefined {
     const row = this.rows.get(id);
     return row ? { ...row } : undefined;
   }
 
-  forUser(userId: string): StoredOwner | undefined {
-    for (const row of this.rows.values()) if (row.userId === userId) return { ...row };
+  byEmail(email: string): StoredAccount | undefined {
+    for (const row of this.rows.values()) if (row.email === email) return { ...row };
     return undefined;
   }
 
-  createAnonymous(expiresAt: string | null = null): StoredOwner {
-    const owner: StoredOwner = {
-      id: randomUUID(),
-      kind: 'anonymous',
-      userId: null,
-      createdAt: new Date().toISOString(),
-      claimedAt: null,
-      expiresAt,
+  private static blank(id: string, accountType: AccountType): StoredAccount {
+    return {
+      id,
+      accountType,
+      email: null,
+      passwordHash: null,
+      emailVerifiedAt: null,
+      displayName: null,
+      guestName: null,
+      registeredAt: null,
+      mergedIntoUserId: null,
     };
-    this.rows.set(owner.id, owner);
-    return { ...owner };
   }
 
-  createForUser(userId: string): StoredOwner {
-    const now = new Date().toISOString();
-    const owner: StoredOwner = {
-      id: randomUUID(),
-      kind: 'user',
-      userId,
-      createdAt: now,
-      claimedAt: now,
-      expiresAt: null,
-    };
-    this.rows.set(owner.id, owner);
-    return { ...owner };
-  }
-
-  claim(ownerId: string, userId: string): StoredOwner | undefined {
-    const row = this.rows.get(ownerId);
-    if (!row || row.userId) return this.get(ownerId);
-    row.kind = 'user';
-    row.userId = userId;
-    row.claimedAt = new Date().toISOString();
-    row.expiresAt = null;
+  createRegistered(email: string, passwordHash: string): StoredAccount {
+    const row = MemoryAccountTable.blank(randomUUID(), ACCOUNT_TYPES.REGISTERED);
+    row.email = email;
+    row.passwordHash = passwordHash;
+    row.registeredAt = new Date().toISOString();
+    this.rows.set(row.id, row);
     return { ...row };
   }
 
-  merge(fromOwnerId: string, intoOwnerId: string): void {
-    if (fromOwnerId === intoOwnerId) return;
+  createGuest(name: string): StoredAccount {
+    const row = MemoryAccountTable.blank(randomUUID(), ACCOUNT_TYPES.ANONYMOUS);
+    row.guestName = name;
+    this.rows.set(row.id, row);
+    return { ...row };
+  }
+
+  claim(id: string, email: string, passwordHash: string): StoredAccount | undefined {
+    const row = this.rows.get(id);
+    if (!row || row.accountType !== ACCOUNT_TYPES.ANONYMOUS) return undefined;
+    row.accountType = ACCOUNT_TYPES.REGISTERED;
+    row.email = email;
+    row.passwordHash = passwordHash;
+    row.registeredAt = new Date().toISOString();
+    return { ...row };
+  }
+
+  setEmailVerified(id: string, at = new Date().toISOString()): void {
+    const row = this.rows.get(id);
+    if (row) row.emailVerifiedAt = at;
+  }
+
+  touch(): void {
+    /* Last-seen is a column in the table and nothing reads it back. */
+  }
+
+  merge(fromUserId: string, intoUserId: string): number {
+    if (fromUserId === intoUserId) return 0;
+    let moved = 0;
     for (const conversation of this.conversations.values()) {
-      if (conversation.ownerId === fromOwnerId) conversation.ownerId = intoOwnerId;
+      if (conversation.userId === fromUserId) {
+        conversation.userId = intoUserId;
+        moved += 1;
+      }
     }
-    const row = this.rows.get(fromOwnerId);
-    if (row) {
-      row.claimedAt = new Date().toISOString();
-      row.expiresAt = null;
-    }
+    const row = this.rows.get(fromUserId);
+    if (row) row.mergedIntoUserId = intoUserId;
+    this.credentials.revokeForUser(fromUserId);
+    return moved;
+  }
+
+  nextGuestSequence(baseName: string): number {
+    const next = this.sequences.get(baseName) ?? 1;
+    this.sequences.set(baseName, next + 1);
+    return next;
+  }
+}
+
+/** Guest credentials in memory, stored as hashes exactly as the table does. */
+export class MemoryGuestCredentialTable {
+  private readonly rows = new Map<string, { id: string; userId: string; revoked: boolean }>();
+
+  create(input: { userId: string; tokenHash: string }): string {
+    const id = randomUUID();
+    this.rows.set(input.tokenHash, { id, userId: input.userId, revoked: false });
+    return id;
+  }
+
+  findByTokenHash(tokenHash: string): { id: string; userId: string } | undefined {
+    const row = this.rows.get(tokenHash);
+    return row && !row.revoked ? { id: row.id, userId: row.userId } : undefined;
+  }
+
+  touch(): void {
+    /* Last-seen is a column in the table and nothing reads it back. */
+  }
+
+  revokeForUser(userId: string): void {
+    for (const row of this.rows.values()) if (row.userId === userId) row.revoked = true;
   }
 }
 
 export class MemoryStore {
-  users = new Map<string, StoredUser>();
-  usersByEmail = new Map<string, string>();
   sessions = new Map<string, StoredSession>();
   conversations = new Map<string, StoredConversation>();
   messages = new MemoryMessageTable();
   sections = new MemorySectionTable();
-  owners = new MemoryOwnerTable(this.conversations);
+  guestCredentials = new MemoryGuestCredentialTable();
+  accounts = new MemoryAccountTable(this.conversations, this.guestCredentials);
 }

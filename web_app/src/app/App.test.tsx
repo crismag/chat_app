@@ -37,7 +37,13 @@ function mockAuthenticatedFetch() {
     if (url.includes('/auth/me')) {
       return Promise.resolve({
         ok: true,
-        json: async () => ({ id: 'u1', email: 'ada@example.com' }),
+        json: async () => ({
+          id: 'u1',
+          accountType: 'REGISTERED',
+          email: 'ada@example.com',
+          guestName: null,
+          emailVerified: true,
+        }),
       })
     }
     /*
@@ -115,8 +121,11 @@ test('a visitor with no account lands in the app, not at a sign-in form', async 
   renderAt('/')
   expect(await screen.findByLabelText('Write your reflection')).toBeInTheDocument()
   expect(screen.queryByRole('heading', { name: 'Sign in' })).toBeNull()
-  /* And is told where their work is kept, once, quietly. */
-  expect(screen.getByText('Saved on this device')).toBeInTheDocument()
+  /*
+   * And is offered a way in, once and quietly -- not told their work is saved,
+   * because a visitor has no account and nothing is saved for them yet.
+   */
+  expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument()
 })
 
 test('the sign-in page is still there for anyone who wants it', async () => {
