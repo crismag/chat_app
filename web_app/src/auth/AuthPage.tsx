@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Navigate, useSearchParams } from 'react-router'
+import { Link, Navigate, useSearchParams } from 'react-router'
 import { ACCOUNT_TYPES } from '@chat/shared'
-import { ApiError } from '../shared/api/client.ts'
+import { ApiError, UNREACHABLE_STATUS } from '../shared/api/client.ts'
 import { ChatLetters, ChatWordmark } from '../shared/ui/ChatLetters.tsx'
 import { useAuth } from './useAuth.ts'
 import styles from './AuthPage.module.css'
@@ -20,6 +20,21 @@ type ErrorField = 'email' | null
 
 function fieldOf(caught: unknown): ErrorField {
   return caught instanceof ApiError && caught.status === 409 ? 'email' : null
+}
+
+/**
+ * Whether the server answered at all.
+ *
+ * A failed sign-in and an unreachable server are different facts and used to
+ * be the same sentence — "Failed to fetch", which reads like an accusation
+ * about the password somebody just typed. When nothing was reached, no field
+ * is marked, nothing is cleared, and the message says it is not their fault.
+ */
+function unreachable(caught: unknown): boolean {
+  return (
+    caught instanceof ApiError &&
+    (caught.status === UNREACHABLE_STATUS || caught.status >= 502)
+  )
 }
 
 export function AuthPage() {
@@ -51,7 +66,9 @@ export function AuthPage() {
   const [keepSignedIn, setKeepSignedIn] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState<{ message: string; field: ErrorField } | null>(null)
+  const [error, setError] = useState<
+    { message: string; field: ErrorField; outage?: boolean } | null
+  >(null)
   /*
    * In flight. The submit button was previously always enabled, so a second
    * press on a slow network sent a second registration — which came back 409,
@@ -110,16 +127,24 @@ export function AuthPage() {
     } catch (caught) {
       setError({
         message: caught instanceof Error ? caught.message : 'Unable to continue',
-        field: fieldOf(caught),
+        /* Nothing to correct when nothing was reached. */
+        field: unreachable(caught) ? null : fieldOf(caught),
+        outage: unreachable(caught),
       })
     } finally {
       setPending(false)
     }
   }
 
-  /** A field is implicated when the failure names it, or names neither. */
+  /**
+   * A field is implicated when the failure names it, or names neither.
+   *
+   * An outage names nothing: marking both fields invalid because the server
+   * was unreachable tells somebody their password is wrong when nobody has
+   * looked at it.
+   */
   const implicated = (field: 'email' | 'password') =>
-    error !== null && (error.field === null || error.field === field)
+    error !== null && !error.outage && (error.field === null || error.field === field)
 
   return (
     <div className={styles.page}>
@@ -225,7 +250,7 @@ export function AuthPage() {
             <p
               ref={alertRef}
               id={errorId}
-              className={styles.error}
+              className={error.outage ? styles.notice : styles.error}
               role="alert"
               tabIndex={-1}
             >
@@ -243,6 +268,15 @@ export function AuthPage() {
                 : 'Create account'}
           </button>
         </form>
+
+        {/* Offered where it is needed, and only there. */}
+        {mode === 'login' ? (
+          <p className={styles.switch}>
+            <Link className={styles.link} to="/forgot-password">
+              Forgotten your password?
+            </Link>
+          </p>
+        ) : null}
 
         <p className={styles.switch}>
           {mode === 'login' ? 'New here?' : 'Already have an account?'}{' '}

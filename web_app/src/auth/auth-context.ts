@@ -35,6 +35,13 @@ export type AuthContextValue = {
   register: (email: string, password: string) => Promise<RegisterOutcome>
   /** Take the guest option, explicitly, at the moment it was offered. */
   continueAsGuest: (creationSource: CreationSource) => Promise<AuthUser>
+  /**
+   * Ask for a link. The answer never says whether the address has an account
+   * — the page shows the same sentence either way, which is the protection.
+   */
+  requestPasswordReset: (email: string) => Promise<string>
+  /** Set a new password from a link, which also signs them in. */
+  resetPassword: (token: string, password: string) => Promise<void>
   logout: () => Promise<void>
   /**
    * Destructive, and separate from signing out on purpose.

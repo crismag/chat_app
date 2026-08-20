@@ -17,6 +17,15 @@ import {
   sessionTypeFor,
 } from './auth/identity.ts';
 import { AnonymousAiAllowance } from './ai/anonymous-allowance.ts';
+import { SlidingWindowRateLimiter } from './ai/rate-limit.ts';
+import { addressOf } from './http/address.ts';
+import { createMailer, type Mailer } from './mail/mailer.ts';
+import {
+  PASSWORD_MIN,
+  RESET_REQUESTED_MESSAGE,
+  resetEmail,
+  resetUrl,
+} from './auth/password-reset.ts';
 import { CAPABILITIES, isEnabled, unavailableReason } from './http/capabilities.ts';
 import { hashPassword, verifyPassword } from './auth/local-password.ts';
 import { webOrigins } from './http/origins.ts';
@@ -155,11 +164,25 @@ export function createApp(
    * hands in the MariaDB store when MYSQL_* is configured.
    */
   auth: AuthStore = new SqliteAuthStore(store, hashPassword, verifyPassword),
+  /* Injected in tests so a reset can be read without an SMTP server. */
+  options: { mailer?: Mailer } = {},
 ) {
   const app = new Hono();
   const aiService = new AiService(ai);
   /* One allowance for the life of the process, like the other rate limiters. */
   const anonymousAllowance = new AnonymousAiAllowance();
+
+  /*
+   * Whoever is asking, not whose address it is. Five an hour from one place is
+   * plenty for somebody who has genuinely lost a password, and few enough that
+   * this route cannot be used to post mail at somebody.
+   */
+  const resetLimiter = new SlidingWindowRateLimiter(5, Date.now, 60 * 60 * 1000);
+  const mailer = options.mailer ?? createMailer();
+
+  /** Where a reset link points: the web app, not the API. */
+  const webOrigin = (c: Context) =>
+    c.req.header('origin') ?? process.env.CHAT_WEB_ORIGINS?.split(',')[0]?.trim() ?? '';
   const bibleService = new BibleService();
   const biblePassages = createPassageStore(store);
   const studioCreations = createStudioCreationStore(store);
@@ -726,6 +749,97 @@ export function createApp(
    * ordinary "sign out" is exactly the accident this split exists to prevent.
    * Forgetting a guest is its own route, below, with its own warning.
    */
+  /**
+   * "I have forgotten my password."
+   *
+   * The reply never depends on whether that address has an account. Same
+   * status, same wording, whether a message was sent or nothing happened at
+   * all — a form that says "no account with that email" is a way to find out
+   * who writes here, and this is a place people write things they would not
+   * say out loud.
+   *
+   * Which means the failure modes are swallowed on purpose: an address with no
+   * account, a guest with no password, mail that is not configured. None of
+   * them may be visible from outside.
+   */
+  app.post('/api/auth/forgot-password', async (c) => {
+    const body = await c.req
+      .json<{ email?: string }>()
+      .catch(() => ({}) as { email?: string });
+    const email = body.email?.trim().toLowerCase() ?? '';
+
+    /*
+     * Metered by address, because this route sends email to whatever is typed
+     * into it. Refusals are the only thing here that may differ by caller —
+     * and they differ by who is asking, never by whose address it is.
+     */
+    const limited = resetLimiter.take(addressOf(c));
+    if (limited.allowed && email.includes('@')) {
+      const started = await auth.startPasswordReset(email).catch(() => null);
+      if (started) {
+        const link = resetUrl(webOrigin(c), started.token);
+        const message = resetEmail(link);
+        /*
+         * Awaited, but never fatal. A mail server that is refusing connections
+         * is not a reason to tell somebody their reset failed — and if it were
+         * reported, the report would only ever appear for addresses that have
+         * an account.
+         */
+        await mailer
+          .send({ to: started.email, ...message })
+          .catch((error: unknown) => console.warn('password reset mail failed:', error));
+      }
+    }
+
+    return c.json({ message: RESET_REQUESTED_MESSAGE });
+  });
+
+  /**
+   * Setting the new one.
+   *
+   * On success everything the old password could still reach is closed: the
+   * sessions, and the browsers that were remembered. Somebody resetting a
+   * password is often somebody who thinks another person has it, and leaving
+   * those alive would leave that person exactly where they were.
+   */
+  app.post('/api/auth/reset-password', async (c) => {
+    const body = await c.req
+      .json<{ token?: string; password?: string }>()
+      .catch(() => ({}) as { token?: string; password?: string });
+    const token = body.token?.trim() ?? '';
+    const password = body.password ?? '';
+
+    if (password.length < PASSWORD_MIN) {
+      return c.json(
+        {
+          error: `A password of at least ${PASSWORD_MIN} characters is required.`,
+          field: 'password',
+        },
+        400,
+      );
+    }
+
+    const user = token ? await auth.completePasswordReset(token, password) : null;
+    if (!user) {
+      /*
+       * One answer for expired, used and never-real. Distinguishing them tells
+       * somebody holding a stolen link which kind of stolen it is.
+       */
+      return c.json(
+        {
+          error:
+            'That link has expired or has already been used. Ask for a new one and it will work for an hour.',
+          field: 'token',
+        },
+        400,
+      );
+    }
+
+    /* Signed in on this browser, deliberately: they have just proved it. */
+    await beginSession(c, user, { installationId: null, persistent: false });
+    return c.json(accountBody(user));
+  });
+
   app.post('/api/auth/logout', async (c) => {
     const token = getCookie(c, SESSION_COOKIE);
     const session = token ? await auth.sessionForToken(token) : null;

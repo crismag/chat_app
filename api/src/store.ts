@@ -243,6 +243,11 @@ export class MemoryAccountTable {
     return { ...row };
   }
 
+  setPassword(id: string, passwordHash: string): void {
+    const row = this.rows.get(id);
+    if (row) row.passwordHash = passwordHash;
+  }
+
   setEmailVerified(id: string, at = new Date().toISOString()): void {
     const row = this.rows.get(id);
     if (row) row.emailVerifiedAt = at;
@@ -348,8 +353,35 @@ export class MemorySessionTable {
   }
 }
 
+/** Pending resets in memory, with the same surface the table has. */
+export class MemoryPasswordResetTable {
+  private readonly rows = new Map<
+    string,
+    { id: string; userId: string; expiresAt: number; used: boolean }
+  >();
+
+  create(userId: string, tokenHash: string, expiresAt: number): void {
+    this.rows.set(tokenHash, { id: randomUUID(), userId, expiresAt, used: false });
+  }
+
+  live(tokenHash: string): { id: string; userId: string } | undefined {
+    const row = this.rows.get(tokenHash);
+    if (!row || row.used || row.expiresAt <= Date.now()) return undefined;
+    return { id: row.id, userId: row.userId };
+  }
+
+  use(id: string): void {
+    for (const row of this.rows.values()) if (row.id === id) row.used = true;
+  }
+
+  spendOthers(userId: string): void {
+    for (const row of this.rows.values()) if (row.userId === userId) row.used = true;
+  }
+}
+
 export class MemoryStore {
   sessions = new MemorySessionTable();
+  passwordResets = new MemoryPasswordResetTable();
   conversations = new Map<string, StoredConversation>();
   messages = new MemoryMessageTable();
   sections = new MemorySectionTable();

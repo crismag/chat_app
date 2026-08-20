@@ -70,6 +70,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(account)
       return account
     },
+    async requestPasswordReset(email) {
+      const { message } = await api<{ message: string }>('/auth/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      })
+      return message
+    },
+    async resetPassword(token, password) {
+      /* It answers with the account, signed in: they have just proved it. */
+      setUser(
+        await api<AuthUser>('/auth/reset-password', {
+          method: 'POST',
+          body: JSON.stringify({ token, password }),
+        }),
+      )
+    },
     async logout() {
       await api('/auth/logout', { method: 'POST' })
       setUser(null)

@@ -1028,6 +1028,48 @@ export class MysqlPersistence {
     );
   }
 
+  /* --------------------------------------------------- password resets */
+
+  /**
+   * A pending reset, stored as the hash of the token that was emailed.
+   *
+   * The token itself is in somebody's inbox and is a way into their account
+   * for the hour it lives; a database that leaked must not contain one.
+   */
+  async createPasswordReset(userId: number, tokenHash: string, ttlMs: number): Promise<void> {
+    const seconds = Math.max(1, Math.ceil(ttlMs / 1000));
+    await this.pool.execute(
+      `INSERT INTO password_resets (user_id, token_hash, expires_at)
+       VALUES (?, ?, DATE_ADD(UTC_TIMESTAMP(), INTERVAL ? SECOND))`,
+      [userId, tokenHash, seconds],
+    );
+  }
+
+  /** Live means unused and unexpired. Anything else is simply not found. */
+  async findLivePasswordReset(tokenHash: string): Promise<{ id: number; userId: number } | null> {
+    const [rows] = await this.pool.execute<RowDataPacket[]>(
+      `SELECT id, user_id FROM password_resets
+        WHERE token_hash = ? AND used_at IS NULL AND expires_at > UTC_TIMESTAMP()`,
+      [tokenHash],
+    );
+    const row = rows[0];
+    return row ? { id: asBigIntId(row.id), userId: asBigIntId(row.user_id) } : null;
+  }
+
+  async usePasswordReset(id: number): Promise<void> {
+    await this.pool.execute('UPDATE password_resets SET used_at = UTC_TIMESTAMP() WHERE id = ?', [
+      id,
+    ]);
+  }
+
+  /** Asking twice and using the first link does not leave the second live. */
+  async spendOtherPasswordResets(userId: number): Promise<void> {
+    await this.pool.execute(
+      'UPDATE password_resets SET used_at = UTC_TIMESTAMP() WHERE user_id = ? AND used_at IS NULL',
+      [userId],
+    );
+  }
+
   /** Used when an account is retired: nothing it opened stays usable. */
   async revokeSessionsForUser(userId: number): Promise<void> {
     await this.pool.execute(
@@ -1077,6 +1119,7 @@ export class MysqlPersistence {
 
   async deleteUserGraph(userId: number): Promise<void> {
     await this.pool.execute('DELETE FROM account_installations WHERE user_id = ?', [userId]);
+    await this.pool.execute('DELETE FROM password_resets WHERE user_id = ?', [userId]);
     await this.pool.execute(
       'UPDATE reflections SET current_revision_id = NULL WHERE user_id = ?',
       [userId],

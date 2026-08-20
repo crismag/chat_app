@@ -23,6 +23,7 @@ import { ACCOUNT_TYPES, type AccountCreationContext, type AccountType } from '@c
 import { SESSION_TTL_MS } from '../db.ts';
 import { sha256Hex } from '../mysql/tokens.ts';
 import { GUEST_NAME_ATTEMPTS, guestName, randomGuestBaseName } from './guest-names.ts';
+import { RESET_TTL_MS, hashResetToken, newResetToken } from './password-reset.ts';
 import { verifyPassword as verifyArgon2 } from '../mysql/passwords.ts';
 import type { MysqlPersistence } from '../mysql/persistence.ts';
 import type {
@@ -105,6 +106,24 @@ export interface AuthStore {
   /** Move a guest's work into an account that already existed. */
   merge(fromUserId: string, intoUserId: string): Promise<number>;
   markEmailVerified(userId: string): Promise<void>;
+
+  /**
+   * Begin a password reset, if that address has an account.
+   *
+   * Returns the token to put in the link, or null when there is nobody to
+   * send to. The caller must answer identically either way — that is the
+   * whole protection, and it is why this returns null rather than throwing.
+   */
+  startPasswordReset(email: string): Promise<{ token: string; email: string } | null>;
+
+  /**
+   * Finish one. Null when the link is spent, expired or was never real.
+   *
+   * Everything the old password could reach is closed on success: the
+   * sessions, and the browsers that were remembered. Somebody resetting a
+   * password is often somebody who believes another person has it.
+   */
+  completePasswordReset(token: string, password: string): Promise<AuthUser | null>;
 }
 
 export const SESSION_TYPES = {
@@ -408,6 +427,30 @@ export class MysqlAuthStore implements AuthStore {
     const user = await this.db.getUserByPublicUuid(userId);
     if (user) await this.db.markEmailVerified(user.id);
   }
+
+  async startPasswordReset(email: string): Promise<{ token: string; email: string } | null> {
+    const handle = MysqlAuthStore.handle(email);
+    const userId = await this.db.findUserIdByLocalUsername(handle);
+    if (userId === null) return null;
+    const token = newResetToken();
+    await this.db.createPasswordReset(userId, hashResetToken(token), RESET_TTL_MS);
+    return { token, email: handle };
+  }
+
+  async completePasswordReset(token: string, password: string): Promise<AuthUser | null> {
+    const found = await this.db.findLivePasswordReset(hashResetToken(token));
+    if (!found) return null;
+    const handle = await this.db.getLocalUsername(found.userId);
+    if (!handle) return null;
+
+    await this.db.setLocalCredentials(found.userId, handle, password);
+    await this.db.usePasswordReset(found.id);
+    await this.db.spendOtherPasswordResets(found.userId);
+    /* Everything the old password could still reach. */
+    await this.db.revokeSessionsForUser(found.userId);
+    await this.db.revokeInstallationsForUser(found.userId);
+    return this.account(found.userId, handle);
+  }
 }
 
 /* ------------------------------------------------------------------- SQLite */
@@ -420,8 +463,15 @@ export class MysqlAuthStore implements AuthStore {
  */
 /** The account tables, as both `SqliteStore` and `MemoryStore` provide them. */
 export interface SqliteAuthTables {
+  passwordResets: {
+    create(userId: string, tokenHash: string, expiresAt: number): void;
+    live(tokenHash: string): { id: string; userId: string } | undefined;
+    use(id: string): void;
+    spendOthers(userId: string): void;
+  };
   accounts: {
     get(id: string): StoredAccount | undefined;
+    setPassword(id: string, passwordHash: string): void;
     byEmail(email: string): StoredAccount | undefined;
     createRegistered(email: string, passwordHash: string): StoredAccount;
     createGuest(name: string, context: StoredCreationContext): StoredAccount;
@@ -619,5 +669,31 @@ export class SqliteAuthStore implements AuthStore {
   markEmailVerified(userId: string): Promise<void> {
     this.store.accounts.setEmailVerified(userId);
     return Promise.resolve();
+  }
+
+  startPasswordReset(email: string): Promise<{ token: string; email: string } | null> {
+    const handle = email.trim().toLowerCase();
+    const account = this.store.accounts.byEmail(handle);
+    /* A guest has no password to reset, and nothing to send anywhere. */
+    if (!account?.email) return Promise.resolve(null);
+    const token = newResetToken();
+    this.store.passwordResets.create(
+      account.id,
+      hashResetToken(token),
+      Date.now() + RESET_TTL_MS,
+    );
+    return Promise.resolve({ token, email: handle });
+  }
+
+  completePasswordReset(token: string, password: string): Promise<AuthUser | null> {
+    const found = this.store.passwordResets.live(hashResetToken(token));
+    if (!found) return Promise.resolve(null);
+
+    this.store.accounts.setPassword(found.userId, this.hash(password));
+    this.store.passwordResets.use(found.id);
+    this.store.passwordResets.spendOthers(found.userId);
+    this.store.sessions.revokeForUser(found.userId);
+    this.store.installations.revokeForUser(found.userId);
+    return Promise.resolve(SqliteAuthStore.user(this.store.accounts.get(found.userId)));
   }
 }

@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router'
 import { AuthProvider } from '../auth/AuthContext.tsx'
 import { AuthPage } from '../auth/AuthPage.tsx'
+import { PasswordResetPage } from '../auth/PasswordResetPage.tsx'
 import { AppShell } from '../shared/layout/AppShell.tsx'
 import { ChatPage } from '../chat/ChatPage.tsx'
 import { ReflectionsPage } from '../reflections/ReflectionsPage.tsx'
@@ -35,6 +36,14 @@ export function App() {
       <DeepLinks />
       <Routes>
         <Route path="/login" element={<AuthPage />} />
+        {/*
+          Getting back in. Two addresses for one errand: the first is what a
+          person reaches from the sign-in form, the second is where the emailed
+          link lands. Both outside the shell — somebody who cannot sign in
+          cannot be asked to sign in to reach them.
+        */}
+        <Route path="/forgot-password" element={<PasswordResetPage />} />
+        <Route path="/reset-password" element={<PasswordResetPage />} />
         <Route path="/open-source-licenses" element={<OpenSourceLicencesPage />} />
         {/*
           About and the documents it links to sit outside the shell.
