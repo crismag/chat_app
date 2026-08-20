@@ -54,18 +54,55 @@ function needsAccount(status: number, body: unknown): body is { creationSource?:
   return status === 401 && (body as { needsAccount?: boolean } | null)?.needsAccount === true
 }
 
+/**
+ * What the browser says when it could not reach the server at all.
+ *
+ * "Failed to fetch" is Chrome's wording for every network-level failure —
+ * the API being down, DNS, a blocked CORS preflight, a lost connection. Shown
+ * to somebody typing a password it reads like "your password is wrong, in a
+ * strange font", and there is no way to tell the two apart. This is the
+ * distinction the interface owes them.
+ */
+export const UNREACHABLE_STATUS = 0;
+export const UNREACHABLE_MESSAGE =
+  'We could not reach C.H.A.T. just now — this is us, not you, and nothing you typed was wrong. Check your connection, or try again in a moment.';
+
 export async function api<T>(path: string, init?: RequestInit, retrying = false): Promise<T> {
-  const response = await fetch(`${apiBase}${path}`, {
-    ...init,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
-  })
+  let response: Response;
+  try {
+    response = await fetch(`${apiBase}${path}`, {
+      ...init,
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(init?.headers ?? {}),
+      },
+    });
+  } catch (caught: unknown) {
+    /*
+     * Never reached the server. Status 0 rather than a made-up one, so
+     * anything deciding what to do can tell "no answer" from "an answer that
+     * happened to be a failure" — a sign-in form should offer to retry here
+     * and should not mark the password field wrong.
+     */
+    throw new ApiError(UNREACHABLE_MESSAGE, UNREACHABLE_STATUS, { cause: String(caught) });
+  }
 
   if (!response.ok) {
-    const body = await response.json().catch(() => ({ error: response.statusText }))
+    const body = await response.json().catch(() => ({ error: response.statusText }));
+    /*
+     * The gateway answers 502 when the API process is not running. That is the
+     * same fact as a failed fetch from the person's point of view, so it gets
+     * the same sentence rather than "Bad Gateway".
+     */
+    if (response.status === 502 || response.status === 503 || response.status === 504) {
+      const stated = (body as { error?: string }).error;
+      throw new ApiError(
+        stated && !/gateway|unavailable/i.test(stated) ? stated : UNREACHABLE_MESSAGE,
+        response.status,
+        body,
+      );
+    }
     if (!retrying && accountRequired && needsAccount(response.status, body)) {
       const resolved = await accountRequired(body.creationSource ?? 'OTHER_PERSISTENT_ACTION')
       if (resolved) return api<T>(path, init, true)

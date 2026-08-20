@@ -47,6 +47,50 @@ production dependencies, applies migrations, repoints `current`, publishes the
 web app and restarts the API. Going back a release is repointing the symlink
 and running `restart-api.sh`.
 
+## Keeping the API up
+
+The API is a long-running Node process. Started over SSH it **is reaped by the
+host** — not predictably and without a message: the log ends with "listening",
+and the next line is the next start. While it is gone the PHP gateway answers
+502 and the browser shows "Failed to fetch", which to somebody typing a
+password is indistinguishable from being told it is wrong.
+
+Two ways to fix it, and the first is better:
+
+1. **hPanel → Setup Node.js App**, configured as below. The panel keeps its own
+   process alive and restarts it. This is the intended arrangement.
+2. **hPanel → Advanced → Cron Jobs**, running every minute:
+
+   ```
+   /home/u471078694/domains/reflections.crishub.com/private/chat_app/current/scripts-deploy/keepalive.sh
+   ```
+
+   `keepalive.sh` asks the API whether it is answering and starts it if not. It
+   does nothing when the API is up, and writes a line to
+   `private/chat_app/logs/keepalive.log` when it acts — so a pattern of
+   restarts is visible rather than silent.
+
+There is no `crontab` command on this host; cron is hPanel-only, so neither of
+these can be installed from a deploy script.
+
+## Sending mail
+
+Password reset needs somewhere to send from. Four values in `.env`:
+
+```
+SMTP_HOST=smtp.hostinger.com
+SMTP_PORT=465
+SMTP_USER=chat_app@crishub.com
+SMTP_PASSWORD=
+SMTP_FROM=chat_app@crishub.com
+```
+
+Without them the application still runs and the reset route still answers
+exactly as it does otherwise — the link is written to `logs/api.log` marked
+`MAIL NOT CONFIGURED` instead of being sent. That is deliberate: the reply to
+"I forgot my password" must never differ according to whether a message
+actually went, or the form becomes a way to find out who has an account.
+
 ## No build step on the host
 
 The remote installs `--omit=dev` and runs the API's TypeScript directly with
@@ -71,6 +115,7 @@ else comes from `.env`:
 | | |
 | --- | --- |
 | `MYSQL_*` | the Hostinger MariaDB, and what migrations run against |
+| `SMTP_*` | sending mail. Without it a password-reset link is written to the log instead of being sent, and the route still answers identically — see below |
 | `GEMINI_API_KEY`, `AI_ENABLED` | assistance, off unless switched on |
 | `YVP_APP_KEY` | Scripture lookup, on by default but inert without the key |
 

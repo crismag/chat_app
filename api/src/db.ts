@@ -121,6 +121,26 @@ function migrate(db: DatabaseSync): void {
      * appears to mean. Incremented inside a transaction, because the whole
      * value of a sequence is that two callers cannot be handed the same one.
      */
+    /*
+     * A pending "I have forgotten my password".
+     *
+     * Only the hash of the token is here: the token itself is in an email, and
+     * for the hour it lives it is a way into somebody's account. A leaked
+     * database must not contain one.
+     *
+     * usedAt rather than a delete, so a link that has already been used is
+     * distinguishable from one that never existed -- the first deserves
+     * "that link has been used", the second deserves nothing at all.
+     */
+    CREATE TABLE IF NOT EXISTS password_resets (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      tokenHash TEXT NOT NULL UNIQUE,
+      expiresAt INTEGER NOT NULL,
+      usedAt TEXT,
+      createdAt TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS guest_name_sequences (
       baseName TEXT PRIMARY KEY,
       nextSequence INTEGER NOT NULL
@@ -717,6 +737,11 @@ class AccountTable {
     return changed > 0 ? this.get(id) : undefined;
   }
 
+  /** A new password for somebody who already has an account. */
+  setPassword(id: string, passwordHash: string): void {
+    this.db.prepare('UPDATE users SET passwordHash = ? WHERE id = ?').run(passwordHash, id);
+  }
+
   setEmailVerified(id: string, at = new Date().toISOString()): void {
     this.db.prepare('UPDATE users SET emailVerifiedAt = ? WHERE id = ?').run(at, id);
   }
@@ -794,6 +819,59 @@ class AccountTable {
  * that never existed -- a browser presenting a revoked credential is told it
  * is nobody, not treated as a stranger who might be handed a new account.
  */
+/**
+ * Pending password resets.
+ *
+ * Found by hash, never by user: a link is presented, and the question is
+ * whether this exact one is live — not "does this person have a reset going",
+ * which is a question nobody asks.
+ */
+class PasswordResetTable {
+  private readonly db: DatabaseSync;
+
+  constructor(db: DatabaseSync) {
+    this.db = db;
+  }
+
+  create(userId: string, tokenHash: string, expiresAt: number): void {
+    this.db
+      .prepare(
+        `INSERT INTO password_resets (id, userId, tokenHash, expiresAt, usedAt, createdAt)
+         VALUES (?, ?, ?, ?, NULL, ?)`,
+      )
+      .run(randomUUID(), userId, tokenHash, expiresAt, new Date().toISOString());
+  }
+
+  /** Live means unused and unexpired. Anything else is not found. */
+  live(tokenHash: string): { id: string; userId: string } | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT id, userId FROM password_resets
+          WHERE tokenHash = ? AND usedAt IS NULL AND expiresAt > ?`,
+      )
+      .get(tokenHash, Date.now()) as Row | undefined;
+    return row ? { id: String(row['id']), userId: String(row['userId']) } : undefined;
+  }
+
+  use(id: string): void {
+    this.db
+      .prepare('UPDATE password_resets SET usedAt = ? WHERE id = ?')
+      .run(new Date().toISOString(), id);
+  }
+
+  /**
+   * Every other pending reset for this person, spent.
+   *
+   * Asking twice and using the first link should not leave the second one
+   * live: a reset is finished when it is finished.
+   */
+  spendOthers(userId: string): void {
+    this.db
+      .prepare('UPDATE password_resets SET usedAt = ? WHERE userId = ? AND usedAt IS NULL')
+      .run(new Date().toISOString(), userId);
+  }
+}
+
 class InstallationTable {
   private readonly db: DatabaseSync;
 
@@ -1185,6 +1263,7 @@ export class SqliteStore {
   readonly db: DatabaseSync;
   readonly accounts: AccountTable;
   readonly installations: InstallationTable;
+  readonly passwordResets: PasswordResetTable;
   readonly sessions: SessionTable;
   readonly conversations: ConversationTable;
   readonly messages: MessageTable;
@@ -1195,6 +1274,7 @@ export class SqliteStore {
     migrate(this.db);
     this.accounts = new AccountTable(this.db);
     this.installations = new InstallationTable(this.db);
+    this.passwordResets = new PasswordResetTable(this.db);
     this.sessions = new SessionTable(this.db);
     this.conversations = new ConversationTable(this.db);
     this.messages = new MessageTable(this.db);
