@@ -602,3 +602,88 @@
     inline-size: auto;
   }
 }
+
+/* --- the phone ------------------------------------------------------------ */
+
+/*
+ * A library, not a page about a library.
+ *
+ * What was here on a phone was a stack of introduction before any reflection:
+ * an eyebrow, a heading, a sentence explaining what the page is, a search box
+ * with an instruction inside it, a row of four controls, and then a "Recent"
+ * heading — most of a screen spent describing a list that was already visible
+ * underneath. And it overflowed, because the control row could not wrap and
+ * nothing was allowed to shrink.
+ *
+ * The introduction stays on desktop, where there is room for it and where a
+ * wide empty column would otherwise look unfinished.
+ */
+@media (max-width: 640px) {
+  .page {
+    /* Never wider than the phone, whatever a child asks for. */
+    max-width: 100%;
+    gap: var(--space-3);
+  }
+
+  /*
+   * The page says what it is once, in the navigation and in the heading. The
+   * eyebrow and the explanatory sentence are the first things to go.
+   */
+  .header :global(.eyebrow),
+  .description {
+    display: none;
+  }
+
+  .title {
+    font-size: var(--text-xl);
+  }
+
+  /*
+   * The controls stop being sticky. A sticky bar under a sticky app header on
+   * a 640px-tall screen is two fixed things competing for a third of it.
+   */
+  .controls {
+    position: static;
+    gap: var(--space-2);
+    padding-block: var(--space-2);
+  }
+
+  .search {
+    max-width: 100%;
+  }
+
+  /*
+   * The row wraps and every child is allowed to shrink — a flex child holding
+   * text refuses to go below its content width unless it is told it may, and
+   * that refusal is what pushed the page wider than the screen.
+   */
+  .controlRow,
+  .dateRow {
+    gap: var(--space-2);
+  }
+
+  .controlRow > *,
+  .dateRow > * {
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  /* Cards take the width, and long words break rather than push. */
+  .list {
+    gap: var(--space-3);
+  }
+
+  .list :global(article) {
+    max-inline-size: 100%;
+  }
+}
+
+/*
+ * Anything somebody typed can be arbitrarily long, and none of it may widen
+ * the page. This is not a mobile rule — it is true of a 40-character Scripture
+ * reference on any screen — so it sits outside the media query.
+ */
+.page :where(h2, h3, p, span, li) {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}

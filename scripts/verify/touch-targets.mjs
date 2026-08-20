@@ -112,14 +112,41 @@ const MEASURE = `
 `;
 
 async function look(driver, viewport, path, shot) {
-  await driver.sendDevToolsCommand('Emulation.setDeviceMetricsOverride', {
-    width: viewport.width,
-    height: viewport.height,
-    deviceScaleFactor: 2,
-    mobile: true,
-  });
-  await driver.get(`${WEB}${path}`);
+  /*
+   * Navigate first, then emulate, then check that it took.
+   *
+   * Applying the override before `get()` looked like it worked and did not:
+   * Chrome clamps its window to a minimum width, the page kept reporting 576,
+   * and every measurement was silently taken at a width no phone has. The
+   * assertion below is the point — a harness that quietly measures the wrong
+   * thing is worse than no harness, because its numbers get believed.
+   */
+  /*
+   * Moved through the application rather than through the browser.
+   *
+   * Every browser-level navigation — a `get`, even a refresh — drops the
+   * mobile emulation and the page silently goes back to 576px. A router
+   * navigation does not reload, so the emulation stands and what is measured
+   * is the width that was asked for. It is also how a person gets there.
+   */
+  if (path !== '/') {
+    await driver.executeScript(
+      `const link = [...document.querySelectorAll('a')].find((a) => a.getAttribute('href') === ${JSON.stringify(path)});
+       if (link) link.click();`,
+    );
+  }
   await wait(2500);
+
+  /*
+   * Checked anyway. A harness that quietly measures the wrong width is worse
+   * than no harness, because its numbers get believed.
+   */
+  const actual = await driver.executeScript('return window.innerWidth');
+  if (actual !== viewport.width) {
+    throw new Error(
+      `Emulation did not take: asked for ${viewport.width}px, the page reports ${actual}px.`,
+    );
+  }
 
   const report = JSON.parse(await driver.executeScript(MEASURE));
   console.log(`\n--- ${viewport.name}px  ${path} ---`);
@@ -141,25 +168,104 @@ async function look(driver, viewport, path, shot) {
   console.log(`  horizontal overflow: ${report.horizontalScroll}px`);
 
   if (shot) {
-    writeFileSync(new URL(`touch-${label}-${viewport.name}.png`, OUT), await driver.takeScreenshot(), 'base64');
+    const page = path === '/' ? 'editor' : 'reflections';
+    writeFileSync(
+      new URL(`touch-${label}-${page}-${viewport.name}.png`, OUT),
+      await driver.takeScreenshot(),
+      'base64',
+    );
   }
   return report;
 }
 
-const driver = await new Builder()
-  .forBrowser('chrome')
-  .setChromeOptions(
-    new chrome.Options().addArguments('--headless=new', '--no-sandbox', '--window-size=430,932'),
-  )
-  .build();
+/*
+ * Emulation set when the browser starts, not afterwards.
+ *
+ * `Emulation.setDeviceMetricsOverride` over CDP kept reverting — Selenium
+ * opens a fresh CDP session per command, and the override goes with it — which
+ * is how a whole afternoon of measurements came to be taken at 576px while
+ * reporting 390. Mobile emulation given at launch belongs to the browser and
+ * cannot quietly stop applying.
+ */
+const newDriver = (viewport) =>
+  new Builder()
+    .forBrowser('chrome')
+    .setChromeOptions(
+      new chrome.Options()
+        .addArguments('--headless=new', '--no-sandbox')
+        .setMobileEmulation({
+          deviceMetrics: {
+            width: viewport.width,
+            height: viewport.height,
+            pixelRatio: 2,
+            touch: true,
+          },
+        }),
+    )
+    .build();
 
-try {
-  let worst = 0;
-  for (const viewport of VIEWPORTS) {
-    const report = await look(driver, viewport, '/', viewport.name === '390' || viewport.name === '360');
-    worst = Math.max(worst, report.small.length);
-  }
-  console.log(`\nshots in scripts/verify/out/touch-${label}-*.png`);
-} finally {
-  await driver.quit();
+/**
+ * A guest with two reflections, so the collection has something in it.
+ *
+ * A page measured empty is a page with no cards, no dates and no overflow —
+ * which is exactly where the interesting failures are. Written through the API
+ * rather than the interface because this is setup, not the thing under test.
+ */
+async function seed(driver, path) {
+  /*
+   * Loaded at the page being measured, and never navigated again.
+   *
+   * A second navigation drops the mobile emulation — `/` measured correctly
+   * and `/reflections`, reached from it, silently reverted to 576px. Seeding
+   * from the destination costs nothing: the API calls work from any origin.
+   */
+  await driver.get(WEB);
+  await wait(1800);
+  await driver.executeScript(`
+    const post = (p, b) => fetch(p, { method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }).then((r) => r.json());
+    const patch = (p, b) => fetch(p, { method: 'PATCH', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }).then((r) => r.status);
+    return (async () => {
+      await post('/api/auth/guest', { creationSource: 'REFLECTION_CREATE' });
+      const seeds = [
+        ['Becoming intentional and consistent', 'Luke 22:46'],
+        ['The comfort and home of God\u2019s love', 'John 3:16'],
+      ];
+      for (const [title, reference] of seeds) {
+        const made = await post('/api/conversations', { title, scriptureReference: reference });
+        await patch('/api/conversations/' + made.id + '/sections', { type: 'content',
+          content: reference + ' (NIV) \u2014 Why are you sleeping? he asked. Get up and pray so that you will not fall into temptation.' });
+        await patch('/api/conversations/' + made.id + '/sections', { type: 'heart',
+          content: 'I have slept through this more often than I have prayed through it, which is its own answer.' });
+        await patch('/api/conversations/' + made.id + '/sections', { type: 'application',
+          content: 'I will pray before I react this week, rather than after it has gone wrong.' });
+        await patch('/api/conversations/' + made.id + '/sections', { type: 'testimony',
+          content: 'He kept me awake for this one.' });
+      }
+      return 'seeded';
+    })();
+  `);
+  await wait(800);
 }
+
+/*
+ * A browser per measurement.
+ *
+ * The device override survives one navigation and then quietly stops taking,
+ * which is how these numbers came to be gathered at 576px. Rather than fight
+ * it, each measurement gets a fresh browser: seed, navigate, emulate, measure,
+ * quit. It is slower and it is trustworthy, and only one of those is optional.
+ */
+for (const path of ['/', '/reflections']) {
+  for (const viewport of VIEWPORTS) {
+    const driver = await newDriver(viewport);
+    try {
+      await seed(driver, path);
+      await look(driver, viewport, path, viewport.name === '390' || viewport.name === '360');
+    } finally {
+      await driver.quit();
+    }
+  }
+}
+console.log(`\nshots in scripts/verify/out/touch-${label}-*.png`);

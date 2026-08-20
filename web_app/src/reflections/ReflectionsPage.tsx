@@ -914,7 +914,7 @@ export function ReflectionsPage() {
               className={`input ${styles.search}`}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search reflections, Scripture or words you wrote"
+              placeholder="Search reflections…"
             />
           </div>
           <div className={styles.controlRow}>

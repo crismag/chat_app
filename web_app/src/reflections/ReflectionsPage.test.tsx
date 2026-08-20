@@ -88,12 +88,17 @@ function renderPage() {
   )
 }
 
+/*
+ * Short, because a placeholder is not documentation. The long version — which
+ * listed what the search covers — was three lines of instruction inside the
+ * field on a phone, and the field is the one place a person is about to type.
+ */
 test('lists reflections with the specified search placeholder', async () => {
   vi.stubGlobal('fetch', mockFetch())
   renderPage()
   expect(await screen.findByText('Trusting while I cannot see')).toBeInTheDocument()
   expect(
-    screen.getByPlaceholderText('Search reflections, Scripture or words you wrote'),
+    screen.getByPlaceholderText('Search reflections…'),
   ).toBeInTheDocument()
   // Completion is read from the conversation detail, not guessed.
   expect(await screen.findAllByLabelText(/C\.H\.A\.T\. progress: 2 of 4 sections written/)).toHaveLength(2)
@@ -126,7 +131,7 @@ test('writes the empty state rather than an oversized search container', async (
   renderPage()
   expect(await screen.findByText('Your reflections will appear here')).toBeInTheDocument()
   expect(
-    screen.queryByPlaceholderText('Search reflections, Scripture or words you wrote'),
+    screen.queryByPlaceholderText('Search reflections…'),
   ).not.toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Start your first reflection' })).toBeInTheDocument()
 })
