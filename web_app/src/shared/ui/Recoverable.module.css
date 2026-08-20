@@ -1,0 +1,62 @@
+/*
+ * A failure that takes as much room as it needs and no more.
+ *
+ * Bordered rather than filled: a solid red band is an alarm, and most of what
+ * appears here is a connection that dropped for a second. It reads as
+ * something to deal with, not something that has gone irreversibly wrong.
+ */
+.root {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--line));
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+  color: var(--ink);
+}
+
+.text {
+  flex: 1 1 14rem;
+  min-inline-size: 0;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.message {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  /* Long messages wrap rather than pushing the actions off the screen. */
+  overflow-wrap: anywhere;
+}
+
+.detail {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  color: var(--ink-muted, var(--muted));
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+}
+
+/*
+ * On a phone the actions take the full width underneath rather than being two
+ * small buttons squeezed beside the text.
+ */
+@media (max-width: 640px) {
+  .actions {
+    flex: 1 1 100%;
+  }
+
+  .actions :global(.btn) {
+    flex: 1 1 auto;
+  }
+}

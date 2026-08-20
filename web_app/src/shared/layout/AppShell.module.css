@@ -298,3 +298,114 @@
     gap: 0;
   }
 }
+
+/* --- the phone ------------------------------------------------------------ */
+
+/*
+ * A composition for a narrow screen, not the desktop one folded up.
+ *
+ * Everything below is about a thumb: the header controls grow to a real target
+ * and step away from the sides of the screen, the bottom navigation clears the
+ * home indicator, and the page keeps room underneath so the last field is not
+ * hidden behind the bar that never scrolls away.
+ */
+@media (max-width: 640px) {
+  /*
+   * The notch, and the rounded corners beside it. Applied here rather than on
+   * the page, because this is the element actually against the top edge.
+   */
+  .header {
+    padding-top: var(--safe-top);
+    padding-inline: max(var(--safe-left), 0px) max(var(--safe-right), 0px);
+  }
+
+  .headerInner {
+    padding-inline: var(--edge);
+    gap: var(--space-2);
+  }
+
+  /*
+   * The wordmark shrinks to the letters. The tagline underneath is the first
+   * thing to go: it is an explanation, and there is a whole page of the
+   * application under it doing the explaining.
+   */
+  .brand {
+    min-height: var(--tap);
+    align-content: center;
+  }
+
+  /* The class the tagline actually uses. */
+  .tagline {
+    display: none;
+  }
+
+  /* Both header controls become real targets rather than 36px squares. */
+  .deviceNote,
+  .newAction {
+    min-height: var(--tap);
+    /* Wide as well as tall: 43×44 is still a miss at 320px. */
+    min-inline-size: var(--tap);
+    padding-inline: var(--space-3);
+  }
+
+  /*
+   * Bottom navigation: comfortably tall, clear of the home indicator, and
+   * clear of the browser's own toolbar. The active destination is marked by
+   * weight and a bar as well as colour — colour alone is not a state.
+   */
+  .mobileNav {
+    padding-bottom: max(var(--safe-bottom), var(--space-2));
+    padding-inline: max(var(--safe-left), 0px) max(var(--safe-right), 0px);
+  }
+
+  .mobileLink {
+    min-height: var(--tap-comfortable);
+    align-content: center;
+    padding-block: var(--space-2);
+    font-size: var(--text-sm);
+  }
+
+  /* `.active` is what the router marks; it is not an aria attribute here. */
+  .mobileLink.active {
+    color: var(--accent);
+    font-weight: 650;
+  }
+
+  /*
+   * Room under the last thing on the page for the bar that floats over it.
+   * Without this the final C.H.A.T. field and its controls sit behind the
+   * navigation, which is exactly where somebody is trying to type.
+   */
+  .main {
+    padding-inline: var(--edge);
+    padding-bottom: calc(var(--tap-comfortable) + var(--safe-bottom) + var(--space-5));
+  }
+
+  /*
+   * The keyboard is open: the navigation goes, because it is three
+   * destinations nobody wants while they are writing a sentence, and it is
+   * sitting exactly where the keyboard wants to be.
+   */
+  :global(body[data-keyboard='open']) .mobileNav {
+    display: none;
+  }
+
+  :global(body[data-keyboard='open']) .main {
+    padding-bottom: var(--space-5);
+  }
+}
+
+/* The skip link is a control too, wherever it lands. */
+.skip {
+  min-height: var(--tap);
+  display: inline-flex;
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  /* Clear of the corner, like everything else that lands against an edge. */
+  .skip {
+    left: var(--edge);
+    top: calc(var(--safe-top) + var(--space-2));
+  }
+}

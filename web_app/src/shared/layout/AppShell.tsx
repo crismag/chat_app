@@ -2,6 +2,7 @@ import { Link, NavLink, Outlet, useNavigate } from 'react-router'
 import { useAuth } from '../../auth/useAuth.ts'
 import { ChatIcon, CommunityIcon, LibraryIcon, PlusIcon } from '../ui/icons.tsx'
 import { ProfileMenu } from '../ui/ProfileMenu.tsx'
+import { useSoftKeyboard } from '../ui/useSoftKeyboard.ts'
 import styles from './AppShell.module.css'
 
 /*
@@ -31,6 +32,12 @@ const letters = [
 
 export function AppShell() {
   const { user, ready, logout, forgetThisBrowser } = useAuth()
+  /*
+   * One place watches for the software keyboard and marks the body; the
+   * layout reads that attribute. Three components each deciding for
+   * themselves would give three answers to one question.
+   */
+  useSoftKeyboard()
   const navigate = useNavigate()
 
   if (!ready) {

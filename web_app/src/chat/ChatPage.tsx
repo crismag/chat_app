@@ -44,6 +44,7 @@ import {
 import { shareWithPlatform } from '../shared/native/share.ts'
 import { ChatArtifact } from './ChatArtifact.tsx'
 import { MoreMenu } from './MoreMenu.tsx'
+import { Recoverable } from '../shared/ui/Recoverable.tsx'
 import { NARROW_QUERY, useMediaQuery } from '../shared/ui/useMediaQuery.ts'
 import { ChatHelper } from './ChatHelper.tsx'
 import {
@@ -1670,9 +1671,14 @@ export function ChatPage() {
               </span>
             ) : null}
 
+            {/*
+              Share is the loudest control only once there is something to
+              share. On an empty reflection it is the quietest thing that still
+              looks like a button — what matters then is writing.
+            */}
             <button
               type="button"
-              className="btn btn-primary btn-sm"
+              className={`btn btn-sm ${written > 0 ? 'btn-primary' : 'btn-secondary'}`}
               disabled={!detail}
               onClick={() => setShareOpen(true)}
             >
@@ -1801,10 +1807,19 @@ export function ChatPage() {
           </p>
         </div>
 
+        {/*
+          A failure that can be acted on and put away, rather than a permanent
+          red band saying "Load failed". Dismissible because everything that
+          reaches here is a load or a send that can simply be tried again —
+          nothing anybody typed is at stake, and it says so.
+        */}
         {error ? (
-          <p className={styles.error} role="alert">
-            {error}
-          </p>
+          <Recoverable
+            message={error}
+            detail="Nothing you have written has been lost."
+            onRetry={() => refreshList()}
+            onDismiss={() => setError(null)}
+          />
         ) : null}
 
         <div className={styles.artifactBody}>

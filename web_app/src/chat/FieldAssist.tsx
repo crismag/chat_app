@@ -100,7 +100,13 @@ export function AssistMenu({
       /* Named, because a sparkle is not a word. */
       label={`Assistance for ${name}`}
       triggerClassName={styles.assistTrigger}
-      trigger={<SparkIcon className={styles.tinyIcon} />}
+      trigger={
+        <>
+          <SparkIcon className={styles.assistIcon} />
+          {/* A word on a phone, where an unlabelled speck is not a control. */}
+          <span className={styles.assistLabel}>Assist</span>
+        </>
+      }
       busy={busy !== null}
       items={[
         { label: 'Ask me questions', reason: askReason, onSelect: onAsk },

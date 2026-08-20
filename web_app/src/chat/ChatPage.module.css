@@ -2735,3 +2735,307 @@
   font-size: var(--text-sm);
   line-height: 1.5;
 }
+
+/* The label belongs to the phone; a pointer has the tooltip and the width. */
+.assistLabel {
+  display: none;
+}
+
+.assistIcon {
+  inline-size: 1rem;
+  block-size: 1rem;
+}
+
+@media (max-width: 640px) {
+  .assistLabel {
+    display: inline;
+  }
+}
+
+/* --- the phone ------------------------------------------------------------ */
+
+/*
+ * The editor, composed for a thumb.
+ *
+ * The measurements this answers, taken at 390px before any of it existed:
+ * thirteen controls under 44px, five inputs under 16px (which makes iOS zoom
+ * the page the moment one is focused), seven pairs closer together than 8px,
+ * and the passage button, title and tags all rendering at 24–35px tall.
+ *
+ * Nothing is hidden and nothing moves into a menu that was not already in one.
+ * All four C.H.A.T. sections stay open and editable, because they are the
+ * page — what changes is that everything around them is big enough to hit.
+ */
+@media (max-width: 640px) {
+  .workspace {
+    gap: var(--space-3);
+  }
+
+  /*
+   * 12–16px of page margin, and the card stops adding its own on top. The
+   * writing area is what the width is for.
+   */
+  .artifact {
+    border-radius: var(--radius-md);
+  }
+
+  .artifactHead,
+  .artifactMeta,
+  .artifactBody {
+    padding-inline: var(--space-3);
+  }
+
+  /*
+   * The order the brief asks for: title first, then the passage, then one
+   * status line, then the fields. What was here put a lone icon button beside
+   * a centred "ADD BIBLE PASSAGE" and pushed the title under both.
+   */
+  .artifactHead {
+    padding-top: var(--space-3);
+    gap: var(--space-2);
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /*
+   * The list button sits beside the title, on the title's line — centred
+   * against a two-line block it read as an orphan indenting everything else.
+   */
+  .artifactHeadMain {
+    flex: 1 1 auto;
+    align-items: flex-start;
+  }
+
+  .artifactHeadMain .headerButton {
+    margin-block-start: 0;
+  }
+
+  .identity {
+    /* Title above, passage under it — the reflection names itself first. */
+    flex: 1 1 auto;
+    gap: var(--space-2);
+  }
+
+  .identity .titleInput {
+    order: -1;
+  }
+
+  /*
+   * A chip, not a banner.
+   *
+   * It was a full-width pill in letter-spaced capitals, which made the thing a
+   * reflection is written *against* the loudest element above the writing.
+   * Now it is the size of the label it carries.
+   */
+  .passageButton {
+    align-self: start;
+    /* The identity block is a grid: without this the chip stretches. */
+    justify-self: start;
+    inline-size: auto;
+    max-inline-size: 100%;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-pill);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  /* The assist control, with its word. */
+  .assistTrigger {
+    inline-size: auto;
+    min-inline-size: var(--tap);
+    padding-inline: var(--space-3);
+    gap: var(--space-2);
+  }
+
+  .assistLabel {
+    font-size: var(--text-xs);
+    font-weight: 600;
+  }
+
+  .assistIcon {
+    /* 20px: recognisable, which a 14px speck is not. */
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+  }
+
+  /*
+   * One row of actions, and Share does not dominate an empty page.
+   * Everything else is already behind the ⋯, where it costs nothing.
+   */
+  /*
+   * The action row is a row of its own, the width of the card.
+   *
+   * `flex: 1 1 100%` is a *height* basis once the header is a column, which is
+   * how three buttons ended up starting 299px into a 320px screen. An explicit
+   * width says what is meant regardless of the direction above it.
+   */
+  .artifactHeadSide {
+    inline-size: 100%;
+    flex: 0 0 auto;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  /* Wide enough to read, free to shrink rather than overflow. */
+  .artifactHeadSide :global(.btn) {
+    flex: 1 1 6rem;
+    min-inline-size: 0;
+  }
+
+  .artifactHeadSide .iconButton {
+    flex: 0 0 auto;
+  }
+
+  /* Saved / Private read as status, and wrap out of the way of the buttons. */
+  .saveState,
+  .privacy {
+    order: -1;
+    flex: 1 0 100%;
+    font-size: var(--text-xs);
+  }
+
+  /* Passage, title and tags: three real targets, not three thin lines. */
+  .passageButton {
+    min-height: var(--tap);
+    padding-inline: var(--space-3);
+    font-size: var(--text-sm);
+  }
+
+  .titleInput {
+    min-height: var(--tap);
+    /* 16px or the page zooms itself when this is focused. */
+    font-size: max(16px, var(--text-lg));
+  }
+
+  .tagsInput {
+    min-height: var(--tap);
+    inline-size: 100%;
+    font-size: 16px;
+  }
+
+  .formatButton {
+    min-height: var(--tap);
+    padding-inline: var(--space-3);
+    font-size: var(--text-sm);
+  }
+
+  /*
+   * The two icon-only controls in the header. Both keep a real target while
+   * the icon inside stays the size it reads best at — a bigger hit area is
+   * not a bigger picture.
+   */
+  .headerButton,
+  .iconButton {
+    min-inline-size: var(--tap);
+    min-block-size: var(--tap);
+  }
+
+  /* Eight clear pixels between neighbours, which is what a thumb needs. */
+  .artifactHeadSide,
+  .artifactHeadMain {
+    gap: var(--space-2);
+  }
+
+  .identity {
+    gap: var(--space-2);
+  }
+
+  /*
+   * The inline inputs pull themselves left by a few pixels so their text
+   * lines up with the heading above. On a phone that eats the gap between
+   * them and the control beside them, which is the one thing a thumb needs.
+   */
+  .titleInput,
+  .tagsInput,
+  .passageButton {
+    margin-inline-start: 0;
+  }
+
+  /*
+   * One compact status line: what kind of C.H.A.T. this is, how much of it is
+   * written, how long it is. Three rows became one, and it wraps rather than
+   * overlapping on the narrowest screens.
+   */
+  .artifactMeta {
+    gap: var(--space-2);
+    padding-bottom: var(--space-3);
+    font-size: var(--text-xs);
+  }
+
+  .tagsInput {
+    flex: 1 1 8rem;
+    inline-size: auto;
+    min-inline-size: 6rem;
+  }
+
+  .artifactMeta .progress {
+    flex: 1 1 100%;
+    margin-inline-start: 0;
+    justify-content: space-between;
+  }
+
+  .progressTrack {
+    flex: 1 1 auto;
+    inline-size: auto;
+    margin-inline: var(--space-2);
+  }
+
+  /*
+   * The assistance mark was a 30px sparkle floating on its own. It keeps its
+   * icon and gains a target, and its label already travels with it.
+   */
+  /*
+   * The assist control reads as a control.
+   *
+   * A 30px sparkle floating unlabelled beside a heading is the thing the brief
+   * names outright. It keeps its icon — the target is bigger than the picture
+   * — and gains a border so there is something visibly pressable there.
+   */
+  .assistTrigger {
+    inline-size: var(--tap);
+    block-size: var(--tap);
+    border-color: var(--line);
+    color: var(--ink-muted, var(--muted));
+  }
+
+  /*
+   * The fields themselves: nearly the full width, a comfortable starting
+   * height, and never below 16px so nothing zooms. They still grow with what
+   * is written in them.
+   */
+  .fieldInput {
+    min-height: 8.5rem;
+    padding: var(--space-3);
+    font-size: max(16px, var(--text-base));
+  }
+
+  .field {
+    padding: var(--space-2) var(--space-2) var(--space-3);
+  }
+
+  .fieldHead {
+    min-height: var(--tap);
+    gap: var(--space-2);
+  }
+
+  /*
+   * A sheet is against the bottom edge, so it clears the home indicator and
+   * the browser's toolbar rather than putting its last button under them.
+   */
+  .sheet {
+    padding-bottom: calc(var(--space-4) + var(--safe-bottom));
+  }
+
+  .sheetFoot {
+    gap: var(--space-2);
+  }
+
+  .sheetFoot :global(.btn) {
+    flex: 1 1 auto;
+  }
+}
