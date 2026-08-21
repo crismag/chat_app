@@ -217,12 +217,17 @@ export function CommunityPage() {
    */
   const guest = user?.accountType === 'ANONYMOUS'
   /*
-   * Public, for a guest. "Shared" means the communities you belong to, and
-   * landing somebody on a destination that is empty by definition reads as an
-   * application with nothing in it.
+   * A visitor is anybody who belongs to no community: a guest, or somebody
+   * with no session at all who has arrived on a link. Both are shown Public.
+   *
+   * "Shared" means the communities you belong to, so landing either of them
+   * there is landing them on a destination that is empty by definition — and
+   * for the session-less it was worse than empty, because asking for it is
+   * what produced "You are no longer signed in" on a first visit.
    */
+  const visitor = !user || guest
   const [destination, setDestination] = useState<Destination>(
-    user?.accountType === 'ANONYMOUS' ? 'public' : 'shared',
+    user && user.accountType !== 'ANONYMOUS' ? 'shared' : 'public',
   )
   const [items, setItems] = useState<Publication[]>([])
   const [hashtags, setHashtags] = useState<Hashtag[]>([])
@@ -242,7 +247,14 @@ export function CommunityPage() {
     setFailure(null)
     try {
       if (destination === 'communities') {
-        setCommunities(await fetchCommunities())
+        /*
+         * A visitor has no communities of their own, and asking for them is
+         * what produced "You are no longer signed in" on a first visit —
+         * `/communities` needs an account, while the directory does not. So
+         * they are given the directory and an empty list of their own, which
+         * is the truth rather than a failure.
+         */
+        setCommunities(visitor ? { communities: [], invitations: [] } : await fetchCommunities())
       } else {
         const feed = await fetchFeed({
           scope: destination,
@@ -258,7 +270,7 @@ export function CommunityPage() {
     } finally {
       setLoading(false)
     }
-  }, [destination, query, tag])
+  }, [destination, query, tag, visitor])
 
   useEffect(() => {
     /* Search updates while typing, but not on every keystroke's round trip. */
@@ -348,7 +360,7 @@ export function CommunityPage() {
       */}
       <div className={styles.controls}>
         <div className={styles.tabs} role="tablist" aria-label="Community destinations">
-          {DESTINATIONS.filter((entry) => !(guest && entry.id === 'shared')).map((entry) => (
+          {DESTINATIONS.filter((entry) => !(visitor && entry.id === 'shared')).map((entry) => (
             <button
               key={entry.id}
               type="button"

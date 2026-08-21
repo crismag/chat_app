@@ -221,8 +221,99 @@ test('a guest may not join or request membership', async () => {
   expect(joined.body.code).toBe('ACCOUNT_REQUIRED');
 });
 
-test('nobody at all is still refused, and differently', async () => {
-  const nobody = await call<{ error: string }>('', '/api/publications?scope=public');
-  expect(nobody.status).toBe(401);
-  expect(nobody.body.error).toBe('Unauthenticated.');
+/* ------------------------------------------------- the first visit of all */
+
+/*
+ * Somebody arriving on a link, with no session of any kind.
+ *
+ * This is the case that was wrong: they were answered 401, so a link to a
+ * public reflection put a login wall in front of words anybody may read. The
+ * fix is not to mint them a guest account on arrival — that is silent account
+ * creation, and an identity is made when somebody keeps something, not when
+ * they read.
+ */
+async function firstVisit<T>(path: string) {
+  const response = await app.request(path, { headers: { 'Content-Type': 'application/json' } });
+  return { status: response.status, body: (await response.json().catch(() => null)) as T };
+}
+
+test('a first-time visitor with no session reads the public feed', async () => {
+  const author = await register('author@example.com');
+  const conversationId = await writeReflection(author, 'Working even where I cannot see');
+  await call(author, '/api/publications', {
+    method: 'POST',
+    body: JSON.stringify({ conversationId, audience: AUDIENCES.PUBLIC }),
+  });
+
+  const feed = await firstVisit<{ items: { title: string }[] }>('/api/publications?scope=public');
+  expect(feed.status).toBe(200);
+  expect(feed.body.items.map((item) => item.title)).toContain('Working even where I cannot see');
+});
+
+test('a first-time visitor opens a public reflection by its own address', async () => {
+  const author = await register('author@example.com');
+  const conversationId = await writeReflection(author, 'Working even where I cannot see');
+  const published = await call<{ id: string }>(author, '/api/publications', {
+    method: 'POST',
+    body: JSON.stringify({ conversationId, audience: AUDIENCES.PUBLIC }),
+  });
+
+  const one = await firstVisit<{ title: string }>(`/api/publications/${published.body.id}`);
+  expect(one.status).toBe(200);
+  expect(one.body.title).toBe('Working even where I cannot see');
+});
+
+test('a first-time visitor sees the discoverable communities', async () => {
+  const owner = await register('owner@example.com');
+  await call(owner, '/api/communities', {
+    method: 'POST',
+    body: JSON.stringify({ name: 'Morning Readers', description: 'A circle.', preset: 'public' }),
+  });
+
+  const found = await firstVisit<{ communities: { name: string }[] }>('/api/communities/discover');
+  expect(found.status).toBe(200);
+  expect(found.body.communities.map((community) => community.name)).toContain('Morning Readers');
+});
+
+test('reading without a session creates no session', async () => {
+  const response = await app.request('/api/publications?scope=public');
+  expect(response.status).toBe(200);
+  /*
+   * No cookie comes back. A reader who has kept nothing has no identity, and
+   * arriving on a link is not consent to be given one.
+   */
+  expect(response.headers.get('set-cookie')).toBeNull();
+});
+
+test('a first-time visitor still sees no member-only content', async () => {
+  const owner = await register('owner@example.com');
+  const communityBody = await call<{ id: string }>(owner, '/api/communities', {
+    method: 'POST',
+    body: JSON.stringify({ name: 'Quiet Circle', description: 'Members only.', preset: 'private' }),
+  });
+  const conversationId = await writeReflection(owner, 'Only for the circle');
+  const published = await call<{ id: string }>(owner, '/api/publications', {
+    method: 'POST',
+    body: JSON.stringify({
+      conversationId,
+      audience: AUDIENCES.COMMUNITY,
+      communityId: communityBody.body.id,
+    }),
+  });
+
+  const feed = await firstVisit<{ items: { title: string }[] }>('/api/publications?scope=public');
+  expect(feed.body.items.map((item) => item.title)).not.toContain('Only for the circle');
+  expect((await firstVisit(`/api/publications/${published.body.id}`)).status).toBe(404);
+});
+
+test('a first-time visitor may not write, and is told an account is needed', async () => {
+  const attempt = await firstVisit<{ error: string }>('/api/publications');
+  /* A GET on the publish route is not a publish; the write path is checked below. */
+  const posted = await app.request('/api/publications', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ conversationId: 'nope', audience: AUDIENCES.PUBLIC }),
+  });
+  expect(attempt.status).toBeLessThan(500);
+  expect(posted.status).toBe(401);
 });

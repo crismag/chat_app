@@ -278,26 +278,36 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
   };
 
   /**
-   * For reading what is public. A guest passes; a stranger still does not.
+   * For reading what is public. Nobody at all passes.
    *
-   * `registered` comes back with the reader so a handler can widen what it
-   * offers rather than branch on the session twice.
+   * Public means public. A first-time visitor arriving on a link to a public
+   * reflection has no session yet, and answering them 401 puts a login wall in
+   * front of something anybody may read — while the same words are readable to
+   * anyone the link was forwarded to. Minting them a guest account instead
+   * would be silent account creation, which this product does not do: an
+   * identity is made when somebody keeps something, not when they read.
+   *
+   * So a reader with no session is given a viewer id that matches nothing.
+   * Every clause of `VISIBLE_TO` that could widen what they see is a
+   * comparison against that id — authorship, hides, mutes, membership — and
+   * none of them can match, so what is left is exactly the public rows. The
+   * absence of a session is expressed as a viewer who owns nothing and belongs
+   * nowhere, rather than as a special case threaded through the queries.
    */
+  const NOBODY = '';
+
   const readerGuard = async (c: Context) => {
     if (!store) {
-      return { reader: null, registered: false, store: null, response: c.json({ error: UNAVAILABLE }, 503) };
-    }
-    const reader = await currentReader(c);
-    if (!reader) {
       return {
-        reader: null,
+        viewerId: NOBODY,
         registered: false,
         store: null,
-        response: c.json({ error: 'Unauthenticated.' }, 401),
+        response: c.json({ error: UNAVAILABLE }, 503),
       };
     }
-    const registered = (await currentUser(c)) !== null;
-    return { reader, registered, store, response: null };
+    const reader = await currentReader(c);
+    const registered = reader !== null && (await currentUser(c)) !== null;
+    return { viewerId: reader?.id ?? NOBODY, registered, store, response: null };
   };
 
   /* ---------------------------------------------------------- communities */
@@ -405,11 +415,11 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
      * directory by construction. A guest sees the same rows a registered
      * stranger sees, with their own membership state — which is always none.
      */
-    const { reader: user, store: db, response } = await readerGuard(c);
-    if (!user || !db) return response;
+    const { viewerId, store: db, response } = await readerGuard(c);
+    if (!db) return response;
     const query = c.req.query('q') ?? '';
     return c.json({
-      communities: db.discoverable(user.id, query).map((community) => ({
+      communities: db.discoverable(viewerId, query).map((community) => ({
         id: community.id,
         name: community.name,
         description: community.description,
@@ -858,8 +868,8 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
   });
 
   app.get('/publications', async (c) => {
-    const { reader: user, registered, store: db, response } = await readerGuard(c);
-    if (!user || !db) return response;
+    const { viewerId, registered, store: db, response } = await readerGuard(c);
+    if (!db) return response;
 
     const scopeParam = c.req.query('scope') ?? 'shared';
     const asked =
@@ -882,7 +892,7 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
      * guessed cannot be used to probe for a community's existence through an
      * empty-versus-forbidden difference in the answer.
      */
-    if (communityId && !activeMembership(db, communityId, user.id)) {
+    if (communityId && !activeMembership(db, communityId, viewerId)) {
       return c.json({ error: 'No community found.' }, 404);
     }
 
@@ -896,7 +906,7 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     const [parsed] = rawTag ? parseHashtags([rawTag]) : [];
 
     const origin = originOf(c);
-    const items = db.feed(user.id, {
+    const items = db.feed(viewerId, {
       scope,
       query: (c.req.query('q') ?? '').trim() || undefined,
       tag: parsed?.tag,
@@ -906,7 +916,7 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     return c.json({
       scope,
       items: items.map((view) => serve(view, origin)),
-      hashtags: db.hashtagsFor(user.id, scope),
+      hashtags: db.hashtagsFor(viewerId, scope),
       reportReasons: PUBLICATION_REPORT_REASONS,
     });
   });
@@ -1174,10 +1184,10 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
      * member-only content is refused by the same predicate that has always
      * refused it — this widens who may ask, not what the answer can be.
      */
-    const { reader: user, store: db, response } = await readerGuard(c);
-    if (!user || !db) return response;
+    const { viewerId, store: db, response } = await readerGuard(c);
+    if (!db) return response;
 
-    const view = db.publication(user.id, c.req.param('id'));
+    const view = db.publication(viewerId, c.req.param('id'));
     if (!view) return c.json({ error: 'This publication is not available.' }, 404);
     return c.json(serve(view, originOf(c)));
   });
