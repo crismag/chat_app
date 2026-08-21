@@ -42,14 +42,22 @@
  * into its neighbour: two targets that overlap are worse than one that is
  * small, because the wrong thing happens rather than nothing.
  */
+/*
+ * 44px, in pixels, deliberately.
+ *
+ * A touch target is a physical size — the width of a thumb — and does not
+ * grow because somebody has chosen larger text. Sized in rem these buttons
+ * doubled at 200% text, three of them took 264px of a 390px bar, and the
+ * title was squeezed to "Re" across two lines. Type scales; thumbs do not.
+ */
 .barButton {
   position: relative;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  inline-size: 2.75rem;
-  block-size: 2.75rem;
+  inline-size: 44px;
+  block-size: 44px;
   padding: 0;
   border: 0;
   border-radius: var(--radius-md);

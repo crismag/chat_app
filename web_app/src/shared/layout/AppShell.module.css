@@ -482,16 +482,35 @@
   font-weight: 600;
   line-height: var(--leading-tight);
   color: var(--ink);
-  white-space: nowrap;
+  /*
+   * Wraps to a second line rather than being cut off.
+   *
+   * `nowrap` with an ellipsis is right for a long title on an ordinary
+   * screen and wrong at 200% text, where even a short one no longer fits and
+   * "Reflections" became "Reflec…". At ordinary sizes these titles are one
+   * line anyway, so allowing two costs nothing and stops the one case that
+   * clipped. The bar grows; the actions still never wrap.
+   */
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
+/*
+ * 8px between the bar's buttons.
+ *
+ * The outer row was widened to 8px earlier and this inner group was not, so
+ * the three actions still sat 4px apart — close enough that a press near a
+ * boundary can land on the wrong one.
+ */
 .barActions {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-2);
 }
 
 .barBack {
@@ -508,14 +527,22 @@
  * exactly what they say, which is easier to reason about than an invisible
  * 2px everywhere.
  */
+/*
+ * 44px, in pixels, deliberately.
+ *
+ * A touch target is a physical size — the width of a thumb — and does not
+ * grow because somebody has chosen larger text. Sized in rem these buttons
+ * doubled at 200% text, three of them took 264px of a 390px bar, and the
+ * title was squeezed to "Re" across two lines. Type scales; thumbs do not.
+ */
 .barBack,
 .barAction {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  inline-size: 2.75rem;
-  block-size: 2.75rem;
+  inline-size: 44px;
+  block-size: 44px;
   padding: 0;
   border: 0;
   border-radius: var(--radius-md);
@@ -557,4 +584,24 @@
   font-weight: 700;
   line-height: 1.125rem;
   text-align: center;
+}
+
+/*
+ * Room to reflow when the text is large.
+ *
+ * At 200% browser text these three were the only things on the four screens
+ * that could not give way: a row of three navigation labels that had to stay
+ * on one line, a field heading whose parts refused to shrink, and a card's
+ * action row with nowhere to wrap to. Each pushed the page wider than the
+ * phone, which is the one failure that makes everything else unusable.
+ */
+.mobileLink {
+  min-inline-size: 0;
+}
+
+.mobileLink span {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+  text-align: center;
+  line-height: var(--leading-tight);
 }

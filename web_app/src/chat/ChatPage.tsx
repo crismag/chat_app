@@ -1632,9 +1632,22 @@ export function ChatPage() {
    * rendered here, so there is exactly one bar on the screen — the shell's own
    * wordmark header steps aside for it.
    */
+  /*
+   * `moreItems` is deliberately not a dependency here.
+   *
+   * It is rebuilt on every render, so including it made this effect run on
+   * every render; the effect writes the shared bar configuration, that rewrite
+   * re-rendered everything reading it — this page included — and the next
+   * render built another new array. React stopped it with "Maximum update
+   * depth exceeded", which is the loop saying so out loud.
+   *
+   * The menu is rendered in the page body instead of inside the bar, so the
+   * bar no longer needs to know about the items at all, and this depends only
+   * on the things actually shown in it.
+   */
   useMobileBar(
     () => ({ title: 'Reflection', replace: editorBar }),
-    [detail?.id, titleDraft, detail?.title, saveStatus, saveLabel, moreItems],
+    [detail?.id, titleDraft, detail?.title, saveStatus, saveLabel],
   )
 
   const editorBar = (
@@ -1678,7 +1691,12 @@ export function ChatPage() {
       >
         <MoreIcon className={styles.smallIcon} />
       </button>
-      {menuOpen ? (
+    </div>
+  )
+
+
+  const editorMenu = (
+    menuOpen ? (
       <PageMenu
         open
         onClose={() => setMenuOpen(false)}
@@ -1689,10 +1707,8 @@ export function ChatPage() {
           danger: item.danger,
         }))}
       />
-      ) : null}
-    </div>
+    ) : null
   )
-
 
   return (
     <section
@@ -1706,6 +1722,8 @@ export function ChatPage() {
         The C.H.A.T. is what is being made here, so it holds the middle and is
         shown whole; the conversation is the tool beside it.
       */}
+      {editorMenu}
+
       <div className={styles.artifact}>
         <div className={styles.artifactHead}>
           <div className={styles.artifactHeadMain}>

@@ -1612,8 +1612,8 @@
   display: grid;
   place-items: center;
   /* The visual mark is small; the target is not. */
-  inline-size: 2.75rem;
-  block-size: 2.75rem;
+  inline-size: 44px;
+  block-size: 44px;
   margin-inline-start: -0.4rem;
   border: none;
   border-radius: var(--radius-md);
@@ -3059,14 +3059,22 @@
   min-inline-size: 0;
 }
 
+/*
+ * 44px, in pixels, deliberately.
+ *
+ * A touch target is a physical size — the width of a thumb — and does not
+ * grow because somebody has chosen larger text. Sized in rem these buttons
+ * doubled at 200% text, three of them took 264px of a 390px bar, and the
+ * title was squeezed to "Re" across two lines. Type scales; thumbs do not.
+ */
 .mobileBarButton {
   position: relative;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  inline-size: 2.75rem;
-  block-size: 2.75rem;
+  inline-size: 44px;
+  block-size: 44px;
   padding: 0;
   border: 0;
   border-radius: var(--radius-md);
@@ -3308,4 +3316,14 @@
 .statusLine [data-status='over'] {
   color: var(--heart);
   font-weight: 600;
+}
+
+/* The heading wraps rather than widening the page at large text sizes. */
+.fieldHead {
+  flex-wrap: wrap;
+  min-inline-size: 0;
+}
+
+.fieldHead > * {
+  min-inline-size: 0;
 }
