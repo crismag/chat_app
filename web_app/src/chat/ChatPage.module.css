@@ -3148,8 +3148,15 @@
   min-inline-size: 0;
 }
 
+/*
+ * Share flows with the line rather than being pushed to the far end.
+ *
+ * `margin-inline-start: auto` looks tidy on a wide row and forces a wrap on a
+ * narrow one: it claims all the leftover space, so the moment the row is
+ * within a button's width of full, Share drops to a line of its own.
+ */
 .mobileShare {
-  margin-inline-start: auto;
+  flex: 0 0 auto;
 }
 
 /* --- the phone: one editor, not a card inside a page ---------------------- */
@@ -3198,48 +3205,29 @@
   }
 
   /*
-   * Type, tags, completion and length on one line together.
+   * The desktop's status parts are not shown twice.
    *
-   * Each had a row of its own — three rows of status above a page for
-   * writing. They are one fact between them: what kind of reflection this is
-   * and how far along it is.
+   * Hidden one by one rather than by hiding their container, because the
+   * phone's own status line is a child of that container — hiding the parent
+   * took the replacement with it, and the screen went from three rows of
+   * status to none at all.
+   *
+   * Tags are among them: secondary, still on desktop, and not worth a row of
+   * a phone screen on their own.
    */
   .artifactMeta {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--space-2);
+    display: block;
     margin-block-end: var(--space-2);
-    min-inline-size: 0;
   }
 
-  /*
-   * The status lines sit close enough to read as one block rather than as
-   * three separate announcements stacked above the writing.
-   */
-  .mobileStatus {
-    margin-block-end: var(--space-2);
+  .artifactMeta > .formatButton,
+  .artifactMeta > .tagsInput,
+  .artifactMeta > .progress {
+    display: none;
   }
 
   .artifactMeta > * {
     min-inline-size: 0;
-  }
-
-  .progress {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    margin-block: 0 var(--space-4);
-    font-size: var(--text-sm);
-  }
-
-  /*
-   * The bar of progress goes. The words beside it said the same thing, and
-   * on a narrow screen it was the widest element in a row that needed to
-   * shrink.
-   */
-  .progressTrack {
-    display: none;
   }
 
   /* The ⋯ in the bar matches the other bar buttons rather than being a slab. */
@@ -3249,4 +3237,48 @@
     border: 0;
     background: transparent;
   }
+}
+
+/* --- the phone's one status line ------------------------------------------ */
+
+.statusLine {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  min-inline-size: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+/*
+ * The format is a control inside a line of text rather than a button beside
+ * it. It still announces and focuses as a button; what it does not do is look
+ * like one more thing in a toolbar.
+ */
+.statusFormat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  min-block-size: var(--tap);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.statusFormat:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Over the recommended length is said in colour and in the number itself. */
+.statusLine [data-status='over'] {
+  color: var(--heart);
+  font-weight: 600;
 }

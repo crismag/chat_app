@@ -47,6 +47,8 @@ import { MoreMenu, type MoreMenuItem } from './MoreMenu.tsx'
 import { Recoverable } from '../shared/ui/Recoverable.tsx'
 import { NARROW_QUERY, useMediaQuery } from '../shared/ui/useMediaQuery.ts'
 import { useMobileBar } from '../shared/mobile/MobileBar.tsx'
+import { PageMenu } from '../shared/mobile/PageMenu.tsx'
+import { MoreIcon } from '../shared/ui/icons.tsx'
 import { ChatHelper } from './ChatHelper.tsx'
 import {
   DeleteSheet,
@@ -254,6 +256,7 @@ export function ChatPage() {
   const viewGeneration = useRef(0)
 
   const isNarrow = useMediaQuery(NARROW_QUERY)
+  const [menuOpen, setMenuOpen] = useState(false)
   /*
    * Below this the three panes cannot all have room, and the artifact is the
    * one that must not be squeezed — it is the thing being made. The history
@@ -473,6 +476,33 @@ export function ChatPage() {
       { replace: true },
     )
     void startNew()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
+  /*
+   * Open with the share sheet already up, when something sent us here to
+   * share.
+   *
+   * This is how a card in the collection offers Share without owning any of
+   * the logic: it opens the reflection and asks for the flow, and the flow is
+   * the one and only share sheet, with its destinations, its permission rules
+   * and its limits. Duplicating any of that on a card would be a second
+   * implementation of the rules that decide who may see somebody's writing.
+   *
+   * The parameter is consumed on arrival, like `new`, so a refresh does not
+   * reopen a sheet the reader has closed.
+   */
+  useEffect(() => {
+    if (searchParams.get('share') !== '1') return
+    setSearchParams(
+      (current) => {
+        const params = new URLSearchParams(current)
+        params.delete('share')
+        return params
+      },
+      { replace: true },
+    )
+    setShareOpen(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
@@ -1627,7 +1657,32 @@ export function ChatPage() {
           {saveLabel}
         </span>
       ) : null}
-      <MoreMenu label="More actions for this reflection" items={moreItems} />
+      {/*
+        The same ⋮ in the same corner as every other screen, opening the same
+        sheet: this reflection's actions, then the account. Delete is here —
+        on the reflection being edited, behind its existing confirmation —
+        rather than on a card in a list.
+      */}
+      <button
+        type="button"
+        className={styles.mobileBarButton}
+        aria-label="Menu"
+        onClick={() => setMenuOpen(true)}
+      >
+        <MoreIcon className={styles.smallIcon} />
+      </button>
+      {menuOpen ? (
+      <PageMenu
+        open
+        onClose={() => setMenuOpen(false)}
+        items={moreItems.map((item) => ({
+          label: item.label,
+          onSelect: item.onSelect,
+          reason: item.reason ?? null,
+          danger: item.danger,
+        }))}
+      />
+      ) : null}
     </div>
   )
 
@@ -1853,6 +1908,20 @@ export function ChatPage() {
             something worth sharing, which is the same rule the desktop head
             uses rather than a second one invented for phones.
           */}
+          {/*
+            One line of status, not three.
+            What was here was the format on its own row, then the passage and
+            Share on another, then completion and length on a third — three
+            separate announcements stacked above a page for writing, each
+            saying one small thing. They are one fact between them: what kind
+            of reflection this is, how far along it is, and what it is written
+            against.
+
+            It wraps at 320px rather than truncating, because a Scripture
+            reference cut to "Luke 22…" is the one part somebody needs whole.
+            It does not become a toolbar again: the parts are text and two
+            controls, not a row of buttons.
+          */}
           {isNarrow ? (
             <div className={styles.mobileStatus}>
               <button
@@ -1862,10 +1931,65 @@ export function ChatPage() {
                 onClick={() => setPassageOpen(true)}
               >
                 <BookIcon className={styles.tinyIcon} />
+                {/*
+                  "Add passage" rather than "Add Bible passage" here only.
+                  This is the one label long enough to push Share onto a second
+                  line at 390px, and the book beside it already says which kind
+                  of passage. Once a reference is chosen the label is short
+                  anyway, so the long form was costing a row precisely when
+                  there was nothing to show for it.
+                */}
                 {detail?.scriptureReference?.trim()
                   ? detail.scriptureReference.trim()
-                  : 'Add Bible passage'}
+                  : 'Add passage'}
               </button>
+
+              <p className={styles.statusLine}>
+                <button
+                  type="button"
+                  className={styles.statusFormat}
+                  onClick={() => {
+                    if (!detail) {
+                      void ensureConversation().then((id) => {
+                        if (id) setFormatOpen(true)
+                      })
+                      return
+                    }
+                    setFormatOpen(true)
+                  }}
+                >
+                  {format === CHAT_FORMATS.CONDENSED ? 'Short' : 'Full'}
+                  <span aria-hidden="true">▾</span>
+                  <span className="sr-only"> C.H.A.T. — change the format</span>
+                </button>
+                <span aria-hidden="true">·</span>
+                {/*
+                  "2/4" rather than "2 of 4". The same fact in half the width,
+                  matching the length counter beside it — and the words are
+                  still there for anybody listening rather than looking.
+                */}
+                <span>
+                  {written}/{fields.length}
+                  <span className="sr-only"> sections written</span>
+                </span>
+                {/*
+                  Length, once it means something.
+                  "0/2000" on an empty page is a measurement of nothing, and
+                  it was the widest part of the line — enough to push Share
+                  onto a second row at 390px, which is the whole thing this
+                  consolidation was for. It appears as soon as there is
+                  anything to count, and colours when it is over.
+                */}
+                {liveValidation && liveValidation.combined.length > 0 ? (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span data-status={liveValidation.combined.status}>
+                      {liveValidation.combined.length}/{liveValidation.combined.recommended}
+                      <span className="sr-only"> characters used</span>
+                    </span>
+                  </>
+                ) : null}
+              </p>
 
               {detail ? (
                 <span className={styles.privacy}>
@@ -1889,7 +2013,11 @@ export function ChatPage() {
                 disabled={!detail}
                 onClick={() => setShareOpen(true)}
               >
-                <ShareIcon className={styles.tinyIcon} />
+                {/*
+                  The word alone. The icon was 22px of a line that has to hold
+                  three other things, and "Share" is not a word that needs a
+                  picture to be understood.
+                */}
                 Share
               </button>
             </div>
