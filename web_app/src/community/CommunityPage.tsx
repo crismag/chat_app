@@ -40,6 +40,7 @@ import { ApiError } from '../shared/api/client.ts'
 import { shareWithPlatform } from '../shared/native/share.ts'
 import { useMobileBar } from '../shared/mobile/MobileBar.tsx'
 import { PageMenu } from '../shared/mobile/PageMenu.tsx'
+import { useAccountRequired } from '../shared/mobile/AccountRequired.tsx'
 import { NARROW_QUERY, useMediaQuery } from '../shared/ui/useMediaQuery.ts'
 import { MoreIcon } from '../shared/ui/icons.tsx'
 import { Link } from 'react-router'
@@ -226,6 +227,13 @@ export function CommunityPage() {
    * what produced "You are no longer signed in" on a first visit.
    */
   const visitor = !user || guest
+  /*
+   * Encourage, Save and Report need an account. They stay on the card — the
+   * product is not smaller for a visitor — but pressing one now explains
+   * rather than waiting for the server to refuse it and rendering that
+   * refusal as though the session had gone wrong.
+   */
+  const account = useAccountRequired()
   const [destination, setDestination] = useState<Destination>(
     user && user.accountType !== 'ANONYMOUS' ? 'shared' : 'public',
   )
@@ -344,6 +352,8 @@ export function CommunityPage() {
         is still a second `h1` for anything that reads the document rather
         than looking at it.
       */}
+      {account.sheet}
+
       {narrow ? null : (
       <header className={styles.header}>
         <div>
@@ -506,6 +516,7 @@ export function CommunityPage() {
                 now={now}
                 reportReasons={reportReasons}
                 onEncourage={(next) =>
+                  account.guard(() =>
                   void act(async () => {
                     const result = await setEncouraged(publication.id, next)
                     replace(publication.id, (item) => ({
@@ -513,14 +524,18 @@ export function CommunityPage() {
                       encouraged: result.encouraged,
                     }))
                     return result.message
-                  })
+                  }))()
                 }
                 onSave={(next) =>
+                  account.guard(() =>
                   void act(async () => {
                     const result = await setSaved(publication.id, next)
                     replace(publication.id, (item) => ({ ...item, saved: result.saved }))
                     return result.message
-                  })
+                  }))()
+                }
+                onAccountRequired={
+                  account.needsAccount ? account.guard(() => {}) : null
                 }
                 onReport={async (reason, note) => {
                   /* The dialog shows its own confirmation, so no notice here. */

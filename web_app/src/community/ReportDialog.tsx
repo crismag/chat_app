@@ -40,6 +40,17 @@ export function ReportDialog({
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [sent, setSent] = useState(false)
+  /*
+   * A failure that can be tried again, said out loud.
+   *
+   * Submitting used to be `.then(setSent).finally(clearBusy)` with no catch:
+   * a refused or dropped request left the dialog exactly as it was, the button
+   * enabled again, and nothing on screen to say why nothing happened — plus an
+   * unhandled rejection in the console. The reason and the sentence somebody
+   * typed are deliberately untouched here, because asking them to write it
+   * twice is the one thing a failed submit must not do.
+   */
+  const [problem, setProblem] = useState<string | null>(null)
   const headingId = useId()
   const firstRef = useRef<HTMLInputElement>(null)
 
@@ -121,6 +132,12 @@ export function ReportDialog({
                   : 'Anything that would help somebody understand the problem.'
               }
             />
+            {problem ? (
+              <p className={styles.hint} role="alert">
+                {problem}
+              </p>
+            ) : null}
+
             {reason === 'other' && !submittable ? (
               <p className={styles.hint}>
                 “Something else” needs a sentence — otherwise nobody can act on it.
@@ -142,12 +159,20 @@ export function ReportDialog({
                 onClick={() => {
                   if (!reason) return
                   setBusy(true)
+                  setProblem(null)
                   void onSubmit(reason, note)
                     .then(() => setSent(true))
+                    .catch((caught: unknown) => {
+                      setProblem(
+                        caught instanceof Error && caught.message
+                          ? caught.message
+                          : 'That could not be sent. Your report is still here — try again.',
+                      )
+                    })
                     .finally(() => setBusy(false))
                 }}
               >
-                {busy ? 'Sending…' : 'Submit report'}
+                {busy ? 'Sending…' : problem ? 'Try again' : 'Submit report'}
               </button>
             </div>
           </>

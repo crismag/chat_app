@@ -70,3 +70,41 @@ test('afterwards it says the report arrived, and promises nothing', async () => 
   /* Not "we will remove this" — nobody has looked at it yet. */
   expect(screen.queryByText(/will be removed/i)).toBeNull()
 })
+
+test('a failed report keeps what was typed, and says it can be tried again', async () => {
+  /*
+   * The failure path had no catch at all: a refused request left the dialog
+   * unchanged with nothing on screen to explain it, and an unhandled
+   * rejection behind the scenes. What must never happen is being asked to
+   * write the sentence a second time.
+   */
+  const onSubmit = vi
+    .fn<(reason: string, note: string) => Promise<void>>()
+    .mockRejectedValueOnce(new Error('The network dropped. Nothing was sent.'))
+    .mockResolvedValueOnce(undefined)
+
+  render(
+    <ReportDialog
+      reasons={[...PUBLICATION_REPORT_REASONS]}
+      onClose={() => {}}
+      onSubmit={onSubmit}
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('radio', { name: /something else/i }))
+  const note = screen.getByLabelText(/tell us more/i)
+  fireEvent.change(note, { target: { value: 'This is the sentence I do not want to retype.' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Submit report' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(/network dropped/i)
+  /* Still there, every word of it. */
+  expect(screen.getByLabelText(/tell us more/i)).toHaveValue(
+    'This is the sentence I do not want to retype.',
+  )
+  expect(screen.getByRole('radio', { name: /something else/i })).toBeChecked()
+
+  /* And it can simply be sent again. */
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+  expect(await screen.findByText('Report received.')).toBeInTheDocument()
+  expect(onSubmit).toHaveBeenCalledTimes(2)
+})
