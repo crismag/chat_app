@@ -41,6 +41,15 @@ export type MobileBarConfig = {
   actions?: ReactNode
   /** Replaces the whole bar — used by search, which takes it over entirely. */
   replace?: ReactNode
+  /**
+   * An immersive screen: the application's own furniture steps aside.
+   *
+   * Create Studio is an editor, not a page of the site. On a phone it needs
+   * the whole screen, and a masthead above it plus three destinations below it
+   * are 120px of somewhere-else while somebody is trying to move a caption a
+   * few pixels. The shell keeps them for every other route.
+   */
+  immersive?: boolean
 }
 
 const BarContext = createContext<{

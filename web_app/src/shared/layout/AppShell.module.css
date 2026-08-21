@@ -605,3 +605,37 @@
   text-align: center;
   line-height: var(--leading-tight);
 }
+
+
+/* --- an immersive screen --------------------------------------------------- */
+
+/*
+ * An editor gets the whole phone.
+ *
+ * Create Studio is not a page of this site; it is a tool that happens to live
+ * at one of its addresses. A masthead above it and three destinations below it
+ * are 120px of somewhere-else, permanently on screen, while somebody is trying
+ * to nudge a caption. The shell keeps both for every other route — this is a
+ * state, not a removal.
+ *
+ * The shell also stops being a scrolling document: the editor sizes itself to
+ * the viewport and its own panels scroll, so the page behind must not scroll
+ * too or the canvas slides out from under the controls that act on it.
+ */
+@media (max-width: 899px) {
+  .shell[data-immersive='true'] {
+    block-size: 100dvh;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .mobileNav[data-immersive='true'] {
+    display: none;
+  }
+
+  .shell[data-immersive='true'] .main {
+    min-block-size: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+}

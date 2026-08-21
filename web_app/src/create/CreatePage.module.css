@@ -97,3 +97,134 @@
     width: 100%;
   }
 }
+
+/* --- the phone: an editor, not a page ------------------------------------- */
+
+/*
+ * What this replaces was the desktop editor stacked vertically: setup form,
+ * toolbar, page controls, the whole Layers panel, then the canvas at 1402px
+ * down an 844px screen, then the whole Properties panel. The canvas — the
+ * only thing anybody came here to look at — was two and a half screens below
+ * the fold, and the browser scrolled the entire editor as one long document.
+ */
+
+.editorBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
+/* A thumb, in pixels: a target does not grow because the text does. */
+.barButton {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 44px;
+  block-size: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.barButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.barIcon {
+  inline-size: 1.375rem;
+  block-size: 1.375rem;
+}
+
+.barTitle {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-md);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Whole words, always: "S…" is not a state anybody can read. */
+.barSave {
+  flex: 0 0 auto;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.barSave[data-state='failed'] {
+  color: var(--heart);
+  font-weight: 600;
+}
+
+.menuRows {
+  display: grid;
+  gap: 2px;
+}
+
+.menuRow {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  min-block-size: 3rem;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: max(16px, var(--text-base));
+  text-align: start;
+  cursor: pointer;
+}
+
+.menuRow small {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.menuRow:hover {
+  background: var(--surface-2);
+}
+
+@media (max-width: 899px) {
+  /*
+   * The editor fills the phone and stops being a scrolling document. Its own
+   * regions scroll; the page behind them does not, so the canvas cannot slide
+   * out from under the controls that act on it.
+   */
+  .page[data-narrow='true'] {
+    display: flex;
+    flex-direction: column;
+    min-block-size: 0;
+    block-size: 100%;
+    padding: 0;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  /*
+   * The Studio itself is the workspace. It is package-owned DOM, so what the
+   * host can do is give it the whole remaining screen and let it scroll
+   * inside its own bounds rather than through the document.
+   */
+  .page[data-narrow='true'] :global(.create-studio) {
+    flex: 1 1 auto;
+    min-block-size: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-inline: var(--space-3);
+    padding-block-end: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  }
+}

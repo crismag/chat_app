@@ -87,7 +87,7 @@ function Shell() {
    */
 
   return (
-    <div className={styles.shell}>
+    <div className={styles.shell} data-immersive={bar?.immersive ? 'true' : 'false'}>
       <a className={styles.skip} href="#main">
         Skip to content
       </a>
@@ -203,7 +203,16 @@ function Shell() {
         place to reach. It carries the same destinations as the header, and
         icons let the labels stay legible instead of shrinking to fit.
       */}
-      <nav className={styles.mobileNav} aria-label="Primary phone">
+      {/*
+        Hidden on an immersive screen, not removed from the application. The
+        editor supplies its own way back, so this would be a second navigation
+        competing with it.
+      */}
+      <nav
+        className={styles.mobileNav}
+        aria-label="Primary phone"
+        data-immersive={bar?.immersive ? 'true' : 'false'}
+      >
         {navItems.map(({ to, label, end, Icon }) => (
           <NavLink
             key={to}
