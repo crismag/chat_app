@@ -2,6 +2,20 @@
   min-height: 100svh;
   display: grid;
   grid-template-rows: auto 1fr auto;
+  /*
+   * The column is stated, and it is allowed to be narrower than its content.
+   *
+   * An implicit grid column sizes to max-content, so anything inside that
+   * refused to shrink — a long word, a row that would not wrap, a fixed width
+   * — made this grid wider than the screen, and the header, the page and the
+   * bottom navigation all grew with it. That is how the whole application
+   * came to be 408px wide on a 320px phone: not one overflowing element, but
+   * a container that agreed to whatever was asked of it.
+   *
+   * `minmax(0, 1fr)` is the "may be smaller than its content" part; without
+   * the 0 the minimum is auto, which is where this started.
+   */
+  grid-template-columns: minmax(0, 1fr);
 }
 
 /* Present only to a keyboard, and only once it is wanted. */

@@ -13,6 +13,13 @@
   container-name: reflections;
 
   display: grid;
+  /*
+   * The same "may be narrower than its content" the shell needs, for the same
+   * reason: an implicit grid column sizes to max-content, so the widest thing
+   * on the page — here the search field's own preferred width — decided how
+   * wide the page was, and everything else was dragged along with it.
+   */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-5);
   align-content: start;
   width: 100%;
@@ -82,8 +89,22 @@
   min-height: 2.125rem;
 }
 
+/*
+ * The row may be narrower than the field inside it.
+ *
+ * `.search` carries `max-width: 34rem`, which reads as a ceiling — but an
+ * input's *preferred* width is its own, and inside a grid track that sizes to
+ * content that preference became the width of the page. Nothing here is
+ * allowed to be a floor.
+ */
 .searchRow {
   display: block;
+  min-inline-size: 0;
+}
+
+.searchRow .search {
+  inline-size: 100%;
+  min-inline-size: 0;
 }
 
 .search {
@@ -96,6 +117,16 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+  min-inline-size: 0;
+}
+
+/*
+ * A flex child will not go below its content width unless it is told it may,
+ * and a row of controls that cannot shrink is a row that widens the page
+ * instead of wrapping.
+ */
+.controlRow > * {
+  min-inline-size: 0;
 }
 
 .chips {
@@ -133,10 +164,24 @@
   color: var(--on-accent);
 }
 
+/*
+ * The controls wrap. All of them, at every level.
+ *
+ * This row did not, so four controls sat on one line whatever the screen was
+ * and the line simply got longer than the phone. `flex-wrap` has to be said on
+ * every flex container in a toolbar — one that forgets is the one that decides
+ * how wide the page is.
+ */
 .rightControls {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  min-inline-size: 0;
+}
+
+.rightControls > * {
+  min-inline-size: 0;
 }
 
 .select {
@@ -686,4 +731,48 @@
 .page :where(h2, h3, p, span, li) {
   overflow-wrap: anywhere;
   min-width: 0;
+}
+
+/*
+ * The controls, at the size of a thumb.
+ *
+ * These were all built to sit in a desktop toolbar — a 34px select, a 30px
+ * segment, 13px labels — and they were never resized for a phone, where they
+ * are the only way to sort, filter or change the view. The global mobile rules
+ * in `ui.css` did not reach them: those match `input, textarea, select`, an
+ * element selector, and every one of these carries a class, which wins.
+ *
+ * 16px on the selects is not a taste decision. iOS zooms the whole page when a
+ * field smaller than that takes focus, and then leaves it zoomed — the page is
+ * suddenly too wide and has to be pinched back. The size is the fix.
+ */
+@media (max-width: 640px) {
+  .select,
+  .dateInput,
+  .chip,
+  .filtersButton {
+    min-block-size: var(--tap);
+    font-size: max(16px, var(--text-base));
+  }
+
+  .select,
+  .dateInput {
+    padding: 0.35rem 0.6rem;
+  }
+
+  .filtersButton,
+  .chip {
+    padding-inline: 0.9rem;
+  }
+
+  /*
+   * The segmented control keeps its shared edges — two large cells meeting is
+   * easier to hit than two small ones with a gap — but the cells themselves
+   * have to be big enough to mean it.
+   */
+  .segment {
+    min-block-size: var(--tap);
+    padding-inline: 1rem;
+    font-size: max(16px, var(--text-base));
+  }
 }

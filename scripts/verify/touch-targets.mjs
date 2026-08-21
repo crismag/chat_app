@@ -60,19 +60,55 @@ const MEASURE = `
   const segmented = (el) => {
     const parent = el.parentElement;
     if (!parent) return false;
-    const box = parent.getBoundingClientRect();
-    return (
-      Math.round(box.width) >= innerWidth - 1 &&
-      getComputedStyle(parent).display.includes('grid') &&
-      parent.childElementCount > 1
-    );
+    const style = getComputedStyle(parent);
+    if (parent.childElementCount < 2) return false;
+    if (!style.display.includes('grid') && !style.display.includes('flex')) return false;
+    /*
+     * Two kinds of deliberate adjacency, and nothing else.
+     *
+     * A full-width row of cells — the bottom navigation — where the cells
+     * share edges because a corner is the easiest place on a screen to reach.
+     * And a segmented control, where the cells touch on purpose and the
+     * boundary between two large targets is easier to hit than two small ones
+     * separated by dead space. Both require the cells to be big enough for the
+     * shared edge to be an advantage rather than an excuse, so this is checked
+     * against the parent having no gap at all — a container that meant to
+     * separate its children would have said so.
+     */
+    const fullWidth = Math.round(parent.getBoundingClientRect().width) >= innerWidth - 1;
+    /* A flex container's default column gap is the word normal, which is none. */
+    const gap = style.columnGap === 'normal' ? 0 : parseFloat(style.columnGap || '0');
+    const touching = gap === 0;
+    return fullWidth || touching;
+  };
+
+  /*
+   * The target is what can be pressed, which is not always what can be seen.
+   *
+   * A "stretched link" — a small anchor whose ::after is absolutely positioned
+   * over its whole card — is the standard way to make a card open something,
+   * and it is the shape this application uses for every reflection. Measuring
+   * the anchor's own box calls a full-card target a 17px one, which is how a
+   * list of real problems came to have two invented ones in it.
+   *
+   * So: if the ::after covers an ancestor, that ancestor is the target.
+   */
+  const hitArea = (el) => {
+    const after = getComputedStyle(el, '::after');
+    const stretched =
+      after.content !== 'none' && after.position === 'absolute' &&
+      ['0px', 'auto'].includes(after.top) && ['0px', 'auto'].includes(after.left);
+    if (!stretched) return el.getBoundingClientRect();
+    for (let node = el.parentElement; node; node = node.parentElement) {
+      if (getComputedStyle(node).position !== 'static') return node.getBoundingClientRect();
+    }
+    return el.getBoundingClientRect();
   };
 
   const small = [];
   const edges = [];
   for (const el of controls) {
-    const box = el.getBoundingClientRect();
-    /* A larger invisible hit area counts, so the target is what is clickable. */
+    const box = hitArea(el);
     if (box.width < MIN || box.height < MIN) {
       small.push({ name: name(el), w: Math.round(box.width), h: Math.round(box.height) });
     }
