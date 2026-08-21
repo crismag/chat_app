@@ -25,7 +25,7 @@ const press = (selector) => `
 const STATES = {
   'reflections-search': [press('[aria-label="Search reflections"]')],
   'reflections-filters': [press('[aria-label^="Filters"]')],
-  'reflections-view': [press('[aria-label="View settings"]')],
+  'reflections-view': [press('[aria-label="Menu"]')],
   'reflections-actions': [press('[aria-label^="Actions for"]')],
   'reflections-end': [`window.scrollTo(0, document.body.scrollHeight); return 'ok';`],
 };

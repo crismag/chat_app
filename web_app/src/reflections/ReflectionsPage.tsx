@@ -923,7 +923,14 @@ export function ReflectionsPage() {
           >
             <FilterIcon />
           </BarAction>
-          <BarAction label="View settings" onClick={() => setViewOpen(true)}>
+          {/*
+            "Menu", as on every other screen. It opened as "View settings"
+            when it held only the density preference; it now holds the account
+            as well, in the same corner and the same sheet as the other three
+            screens, and naming it differently made the one control people
+            need to find twice look like two controls.
+          */}
+          <BarAction label="Menu" onClick={() => setViewOpen(true)}>
             <MoreIcon />
           </BarAction>
         </>
@@ -1308,13 +1315,7 @@ export function ReflectionsPage() {
         />
       </Sheet>
 
-      {/*
-        Mounted only while open. The menu reads the account, so mounting it on
-        every render would make every screen that contains one require an
-        auth context merely to render its list.
-      */}
-      {narrow && viewOpen ? (
-      <PageMenu open onClose={() => setViewOpen(false)}>
+      <PageMenu open={narrow && viewOpen} onClose={() => setViewOpen(false)}>
         {/*
           Density stays available as a preference, moved out of the toolbar
           rather than deleted. Layout and page size are not offered here: a
@@ -1329,7 +1330,6 @@ export function ReflectionsPage() {
           onChange={(next) => chooseDensity(next as Density)}
         />
       </PageMenu>
-      ) : null}
     </div>
   )
 }

@@ -324,7 +324,7 @@ export function CommunityPage() {
 
   return (
     <section className={styles.page}>
-      {menuOpen ? <PageMenu open onClose={() => setMenuOpen(false)} /> : null}
+      <PageMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
 
       {/*
         Not rendered on a phone, rather than rendered and hidden. The bar

@@ -170,7 +170,7 @@ const SCREENS = [
   {
     name: 'page-menu',
     path: '/reflections',
-    open: '[aria-label="View settings"], [aria-label="Menu"]',
+    open: '[aria-label="Menu"]',
   },
 ];
 

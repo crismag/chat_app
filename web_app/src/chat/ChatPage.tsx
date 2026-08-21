@@ -1696,9 +1696,9 @@ export function ChatPage() {
 
 
   const editorMenu = (
-    menuOpen ? (
+    (
       <PageMenu
-        open
+        open={menuOpen}
         onClose={() => setMenuOpen(false)}
         items={moreItems.map((item) => ({
           label: item.label,
@@ -1707,7 +1707,7 @@ export function ChatPage() {
           danger: item.danger,
         }))}
       />
-    ) : null
+    )
   )
 
   return (

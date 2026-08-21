@@ -203,9 +203,8 @@ export function ReflectionViewPage() {
         reflection — rather than on a card in a list, where a destructive
         action sits under a thumb that is scrolling.
       */}
-      {menuOpen ? (
       <PageMenu
-        open
+        open={menuOpen}
         onClose={() => setMenuOpen(false)}
         items={
           detail
@@ -216,7 +215,6 @@ export function ReflectionViewPage() {
             : []
         }
       />
-      ) : null}
 
       {passage ? (
         <section className={styles.passage} aria-label={`${passage.reference}, ${passage.name}`}>
