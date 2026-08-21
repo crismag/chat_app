@@ -40,6 +40,7 @@ import {
 import { NARROW_QUERY, useMediaQuery } from '../shared/ui/useMediaQuery.ts'
 import { useMobileBar } from '../shared/mobile/MobileBar.tsx'
 import { Sheet } from '../shared/mobile/Sheet.tsx'
+import { PageMenu } from '../shared/mobile/PageMenu.tsx'
 import { FilterIcon, MoreIcon } from '../shared/ui/icons.tsx'
 import { previewFor } from './preview.ts'
 import { groupByDay } from './grouping.ts'
@@ -1299,12 +1300,13 @@ export function ReflectionsPage() {
         />
       </Sheet>
 
-      <Sheet
-        open={narrow && viewOpen}
-        onClose={() => setViewOpen(false)}
-        title="View"
-        description="Your desktop layout and page size are kept as you set them."
-      >
+      {/*
+        Mounted only while open. The menu reads the account, so mounting it on
+        every render would make every screen that contains one require an
+        auth context merely to render its list.
+      */}
+      {narrow && viewOpen ? (
+      <PageMenu open onClose={() => setViewOpen(false)}>
         {/*
           Density stays available as a preference, moved out of the toolbar
           rather than deleted. Layout and page size are not offered here: a
@@ -1318,7 +1320,8 @@ export function ReflectionsPage() {
           value={density}
           onChange={(next) => chooseDensity(next as Density)}
         />
-      </Sheet>
+      </PageMenu>
+      ) : null}
     </div>
   )
 }

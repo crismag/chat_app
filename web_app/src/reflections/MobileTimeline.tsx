@@ -98,9 +98,21 @@ export function MobileCard({
             label={`Actions for ${item.title}`}
             triggerClassName={styles.overflow}
             trigger={<MoreIcon />}
+            /*
+             * No "Open": pressing the card already does that, and a menu whose
+             * first item repeats the gesture that opened it teaches nothing.
+             *
+             * No "Delete" either. A destructive action does not belong under a
+             * thumb that is scrolling a list; it lives on the reflection
+             * itself, behind the confirmation the editor already has.
+             *
+             * Share hands off to the editor's own share sheet rather than
+             * carrying destinations of its own — the rules about who may see
+             * somebody's writing are written once.
+             */
             items={[
-              { label: 'Open reflection', onSelect: () => void navigate(`/reflections/${item.id}`) },
               { label: 'Edit reflection', onSelect: () => void navigate(`/?c=${item.id}`) },
+              { label: 'Share', onSelect: () => void navigate(`/?c=${item.id}&share=1`) },
               { label: 'Create image', onSelect: () => void navigate(`/create?c=${item.id}`) },
             ]}
           />

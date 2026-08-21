@@ -23,9 +23,9 @@ import type { BiblePassage } from '@chat/shared'
 import { CONDENSED_FIELDS } from '../chat/sections.ts'
 import { ApiError, api } from '../shared/api/client.ts'
 import { SECTIONS, StateBadge, formatDate } from '../shared/ui/ReflectionCard.tsx'
-import { ActionMenu } from '../shared/ui/ActionMenu.tsx'
 import { MoreIcon } from '../shared/ui/icons.tsx'
 import { useMobileBar } from '../shared/mobile/MobileBar.tsx'
+import { PageMenu } from '../shared/mobile/PageMenu.tsx'
 import styles from './ReflectionViewPage.module.css'
 
 type Detail = ConversationSummary & {
@@ -45,6 +45,7 @@ export function ReflectionViewPage() {
    * thing on a page meant for reading.
    */
   const [passage, setPassage] = useState<BiblePassage | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
   const now = Date.now()
 
   useEffect(() => {
@@ -94,19 +95,18 @@ export function ReflectionViewPage() {
       title: detail?.scriptureReference || 'Reflection',
       onBack: () => void navigate('/reflections'),
       backLabel: 'Back to Reflections',
-      actions: detail ? (
-        <ActionMenu
-          label="Reflection actions"
-          triggerClassName={styles.barAction}
-          trigger={<MoreIcon />}
-          items={[
-            { label: 'Edit this reflection', onSelect: () => void navigate(`/?c=${detail.id}`) },
-            { label: 'Create image', onSelect: () => void navigate(`/create?c=${detail.id}`) },
-          ]}
-        />
-      ) : undefined,
+      actions: (
+        <button
+          type="button"
+          className={styles.barAction}
+          aria-label="Menu"
+          onClick={() => setMenuOpen(true)}
+        >
+          <MoreIcon />
+        </button>
+      ),
     }),
-    [detail?.id, detail?.scriptureReference, navigate],
+    [detail?.id, detail?.scriptureReference],
   )
 
   if (error) {
@@ -185,6 +185,27 @@ export function ReflectionViewPage() {
           Edit this reflection
         </button>
       </div>
+
+      {/*
+        The reflection's own actions and the account, in the one sheet every
+        screen opens from the same place. Delete lives here — on the owned
+        reflection — rather than on a card in a list, where a destructive
+        action sits under a thumb that is scrolling.
+      */}
+      {menuOpen ? (
+      <PageMenu
+        open
+        onClose={() => setMenuOpen(false)}
+        items={
+          detail
+            ? [
+                { label: 'Edit this reflection', onSelect: () => void navigate(`/?c=${detail.id}`) },
+                { label: 'Create image', onSelect: () => void navigate(`/create?c=${detail.id}`) },
+              ]
+            : []
+        }
+      />
+      ) : null}
 
       {passage ? (
         <section className={styles.passage} aria-label={`${passage.reference}, ${passage.name}`}>

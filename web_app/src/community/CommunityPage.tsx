@@ -39,6 +39,8 @@ import {
 import { ApiError } from '../shared/api/client.ts'
 import { shareWithPlatform } from '../shared/native/share.ts'
 import { useMobileBar } from '../shared/mobile/MobileBar.tsx'
+import { PageMenu } from '../shared/mobile/PageMenu.tsx'
+import { MoreIcon } from '../shared/ui/icons.tsx'
 import { Link } from 'react-router'
 import { useAuth } from '../auth/useAuth.ts'
 import { ReflectionCardSkeleton } from '../shared/ui/ReflectionCard.tsx'
@@ -103,13 +105,32 @@ const DESTINATIONS: {
  * all four into the one message that helps with none of them.
  */
 type Failure = {
-  kind: 'unavailable' | 'unauthorised' | 'community-gone' | 'removed' | 'offline'
+  kind:
+    | 'unavailable'
+    | 'unauthorised'
+    | 'account-required'
+    | 'community-gone'
+    | 'removed'
+    | 'offline'
   message: string
   action: string
 }
 
 function describe(caught: unknown): Failure {
   if (caught instanceof ApiError) {
+    /*
+     * A guest reaching something that needs an account. Distinct from 401 on
+     * purpose: they *are* signed in, so offering a sign-in is offering them
+     * what they already have. The server writes the sentence, because the
+     * server is what knows the rule.
+     */
+    if (caught.status === 403) {
+      return {
+        kind: 'account-required',
+        message: caught.message,
+        action: 'Create an account',
+      }
+    }
     if (caught.status === 401) {
       return {
         kind: 'unauthorised',
@@ -185,7 +206,23 @@ function Skeletons() {
 /* ------------------------------------------------------------------- page */
 
 export function CommunityPage() {
-  const [destination, setDestination] = useState<Destination>('shared')
+  const { user } = useAuth()
+  /*
+   * A guest has a session and no account. They may read what is public; they
+   * may not publish, join, or take part. That is the whole distinction, and it
+   * is applied per action rather than at the door — what was here before shut
+   * the entire screen and told them, beside their own avatar, that they were
+   * signed out.
+   */
+  const guest = user?.accountType === 'ANONYMOUS'
+  /*
+   * Public, for a guest. "Shared" means the communities you belong to, and
+   * landing somebody on a destination that is empty by definition reads as an
+   * application with nothing in it.
+   */
+  const [destination, setDestination] = useState<Destination>(
+    user?.accountType === 'ANONYMOUS' ? 'public' : 'shared',
+  )
   const [items, setItems] = useState<Publication[]>([])
   const [hashtags, setHashtags] = useState<Hashtag[]>([])
   const [reportReasons, setReportReasons] = useState<ReportReason[]>([])
@@ -194,18 +231,7 @@ export function CommunityPage() {
   const [tag, setTag] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [failure, setFailure] = useState<Failure | null>(null)
-  const { user } = useAuth()
-  /*
-   * Community is for people with an account, and a guest has a session but not
-   * an account. That is a rule of the product and is not changed here — what
-   * was wrong was what the screen said about it.
-   *
-   * The community endpoints answer 401 to a guest, and 401 was described as
-   * "You are no longer signed in", offering "Sign in again". Both false: the
-   * guest is signed in, the header shows their avatar while it says so, and
-   * signing in again as the same guest would fail in exactly the same way.
-   */
-  const guest = user?.accountType === 'ANONYMOUS'
+  const [menuOpen, setMenuOpen] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [now] = useState(() => Date.now())
 
@@ -278,12 +304,26 @@ export function CommunityPage() {
    * on the word somebody just pressed to get here.
    */
   useMobileBar(
-    () => ({ title: current?.heading ?? 'Community' }),
+    () => ({
+      title: current?.heading ?? 'Community',
+      actions: (
+        <button
+          type="button"
+          className={styles.barAction}
+          aria-label="Menu"
+          onClick={() => setMenuOpen(true)}
+        >
+          <MoreIcon />
+        </button>
+      ),
+    }),
     [current?.heading],
   )
 
   return (
     <section className={styles.page}>
+      {menuOpen ? <PageMenu open onClose={() => setMenuOpen(false)} /> : null}
+
       <header className={styles.header}>
         <div>
           <p className="eyebrow">Community</p>
@@ -298,7 +338,7 @@ export function CommunityPage() {
       */}
       <div className={styles.controls}>
         <div className={styles.tabs} role="tablist" aria-label="Community destinations">
-          {DESTINATIONS.map((entry) => (
+          {DESTINATIONS.filter((entry) => !(guest && entry.id === 'shared')).map((entry) => (
             <button
               key={entry.id}
               type="button"
@@ -327,7 +367,7 @@ export function CommunityPage() {
           {notice}
         </p>
 
-        {destination === 'communities' || guest ? null : (
+        {destination === 'communities' ? null : (
           <>
             {/*
               Not offered to a guest. There is nothing here for them to search,
@@ -378,34 +418,29 @@ export function CommunityPage() {
       </div>
 
       <div id="community-panel" role="tabpanel" aria-labelledby={`tab-${destination}`}>
-        {guest ? (
-          <section className={styles.failure}>
-            <p>
-              Community is for people with an account. Your reflections are
-              already saved here — creating an account keeps them, and lets you
-              read and join communities.
-            </p>
-            <Link className="btn btn-primary" to="/login?create=1">
-              Create an account
-            </Link>
-          </section>
-        ) : failure ? (
+        {failure ? (
           <section className={styles.failure} role="alert">
             <p>{failure.message}</p>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => {
-                if (failure.kind === 'unauthorised') {
-                  window.location.assign('/login')
-                  return
-                }
-                setTag(null)
-                void load()
-              }}
-            >
-              {failure.action}
-            </button>
+            {failure.kind === 'account-required' ? (
+              <Link className="btn btn-primary" to="/login?create=1">
+                {failure.action}
+              </Link>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  if (failure.kind === 'unauthorised') {
+                    window.location.assign('/login')
+                    return
+                  }
+                  setTag(null)
+                  void load()
+                }}
+              >
+                {failure.action}
+              </button>
+            )}
           </section>
         ) : loading ? (
           <Skeletons />

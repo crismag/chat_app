@@ -781,3 +781,24 @@
     display: none;
   }
 }
+
+/* The page overflow, matching every other screen's bar button. */
+.barAction {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.barAction:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
