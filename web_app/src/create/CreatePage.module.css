@@ -200,6 +200,30 @@
 
 @media (max-width: 899px) {
   /*
+   * The overflow note is a note.
+   *
+   * Three lines of explanation across the top of an image editor is a banner
+   * where the image should be — and it is advice about one text box, which is
+   * not the most important thing on the screen. It keeps its words and gives
+   * up its prominence.
+   */
+  .page[data-narrow='true'] .overflow {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-sm);
+  }
+
+  .page[data-narrow='true'] .overflow p {
+    margin: 0;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+  }
+
+  /*
    * The editor fills the phone and stops being a scrolling document. Its own
    * regions scroll; the page behind them does not, so the canvas cannot slide
    * out from under the controls that act on it.

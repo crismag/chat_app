@@ -633,9 +633,16 @@
     display: none;
   }
 
-  .shell[data-immersive='true'] .main {
+  /*
+   * The padding that reserves room for the bottom bar has to go too. The bar
+   * is hidden here, so the space it was holding was simply dead — 64px of
+   * nothing under the editor's own dock.
+   */
+  .shell[data-immersive='true'] .main,
+  .shell[data-immersive='true'] .main.main {
     min-block-size: 0;
     padding: 0;
+    padding-bottom: 0;
     overflow: hidden;
   }
 }
