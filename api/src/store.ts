@@ -243,6 +243,23 @@ export class MemoryAccountTable {
     return { ...row };
   }
 
+  /** A registered account reached through a provider, with no password. */
+  createForIdentity(email: string | null): StoredAccount {
+    const free = email && !this.byEmail(email) ? email : null;
+    return this.createRegistered(free ?? `identity+${randomUUID()}@invalid.local`, '');
+  }
+
+  /** The same upgrade as `claim`, without a password to set. */
+  claimForIdentity(id: string, email: string | null): StoredAccount | undefined {
+    const row = this.rows.get(id);
+    if (!row || row.accountType !== ACCOUNT_TYPES.ANONYMOUS) return undefined;
+    const taken = email ? this.byEmail(email) : undefined;
+    row.accountType = ACCOUNT_TYPES.REGISTERED;
+    if (email && (!taken || taken.id === id)) row.email = email;
+    row.registeredAt = new Date().toISOString();
+    return { ...row };
+  }
+
   setPassword(id: string, passwordHash: string): void {
     const row = this.rows.get(id);
     if (row) row.passwordHash = passwordHash;
@@ -379,7 +396,40 @@ export class MemoryPasswordResetTable {
   }
 }
 
+/** The in-memory twin of the SQLite identity table; see db.ts for the rules. */
+export class MemoryIdentityTable {
+  private readonly rows = new Map<string, { userId: string; email: string | null }>();
+
+  private static key(provider: string, providerUserId: string): string {
+    return `${provider}::${providerUserId}`;
+  }
+
+  byProvider(provider: string, providerUserId: string): { userId: string } | undefined {
+    const found = this.rows.get(MemoryIdentityTable.key(provider, providerUserId));
+    return found ? { userId: found.userId } : undefined;
+  }
+
+  link(input: {
+    userId: string;
+    provider: string;
+    providerUserId: string;
+    email: string | null;
+  }): boolean {
+    const key = MemoryIdentityTable.key(input.provider, input.providerUserId);
+    /* The unique key, kept honestly: a second link cannot replace the first. */
+    if (this.rows.has(key)) return false;
+    this.rows.set(key, { userId: input.userId, email: input.email });
+    return true;
+  }
+
+  touch(provider: string, providerUserId: string, email: string | null): void {
+    const found = this.rows.get(MemoryIdentityTable.key(provider, providerUserId));
+    if (found && email) found.email = email;
+  }
+}
+
 export class MemoryStore {
+  identities = new MemoryIdentityTable();
   sessions = new MemorySessionTable();
   passwordResets = new MemoryPasswordResetTable();
   conversations = new Map<string, StoredConversation>();

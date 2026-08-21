@@ -53,8 +53,35 @@ export interface AuthUser {
   createdAt: string | null;
 }
 
+/** A verified identity from an external provider, ready to attach. */
+export interface ProviderIdentity {
+  /** 'google', and whatever comes later. */
+  provider: string;
+  /** The provider's own stable subject. Never an email address. */
+  subject: string;
+  email: string | null;
+  /** The account to upgrade in place, when this browser already has a guest. */
+  claimUserId?: string | null;
+}
+
 export interface AuthStore {
   findByEmail(email: string): Promise<AuthUser | null>;
+  /** The application user a verified provider identity belongs to, if any. */
+  findByIdentity(provider: string, subject: string): Promise<AuthUser | null>;
+  /**
+   * Attach a verified identity to an account.
+   *
+   * A guest is upgraded in place — same row, same id, so everything they have
+   * written stays theirs and nothing is migrated. Otherwise a new registered
+   * account is made.
+   *
+   * Returns null when the identity already belongs to somebody else, including
+   * when two sign-ins race: the unique key decides, and the loser is told
+   * rather than left with half an account.
+   */
+  linkIdentity(identity: ProviderIdentity): Promise<AuthUser | null>;
+  /** Record that an existing identity was used to sign in. */
+  touchIdentity(provider: string, subject: string, email: string | null): Promise<void>;
   /**
    * Create an account, or claim the guest already making this request.
    *
@@ -312,6 +339,51 @@ export class MysqlAuthStore implements AuthStore {
     return this.account(created.id, handle);
   }
 
+  async findByIdentity(provider: string, subject: string): Promise<AuthUser | null> {
+    const userId = await this.db.findUserIdByIdentity(provider, subject);
+    return userId === null ? null : this.account(userId);
+  }
+
+  async linkIdentity(identity: ProviderIdentity): Promise<AuthUser | null> {
+    /* Already somebody's. What to do about that is the caller's decision. */
+    if (await this.db.findUserIdByIdentity(identity.provider, identity.subject)) return null;
+
+    /*
+     * A guest keeps their row. The same invariant registration relies on:
+     * the identity is attached to the account that already owns the
+     * reflections, so nothing is moved and nothing can be lost on the way.
+     */
+    const claiming = identity.claimUserId
+      ? await this.db.getUserByPublicUuid(identity.claimUserId)
+      : null;
+    const upgrading = claiming && claiming.accountType === ACCOUNT_TYPES.ANONYMOUS ? claiming : null;
+    const target = upgrading ?? (await this.db.createUser());
+
+    const linked = await this.db.linkIdentity({
+      userId: target.id,
+      provider: identity.provider,
+      subject: identity.subject,
+      email: identity.email,
+    });
+    if (!linked) {
+      /*
+       * Lost the race for this identity. A guest that was going to be upgraded
+       * is left exactly as it was — still a guest, still owning everything —
+       * and a user row created for this attempt is removed rather than left as
+       * an account nobody can reach.
+       */
+      if (!upgrading) await this.db.deleteUserGraph(target.id).catch(() => undefined);
+      return null;
+    }
+
+    await this.db.markUserRegisteredWithoutCredentials(target.id);
+    return this.account(target.id, identity.email);
+  }
+
+  async touchIdentity(provider: string, subject: string, email: string | null): Promise<void> {
+    await this.db.touchIdentity(provider, subject, email);
+  }
+
   async verify(email: string, password: string): Promise<AuthUser | null> {
     const handle = MysqlAuthStore.handle(email);
     const userId = await this.db.findUserIdByLocalUsername(handle);
@@ -469,8 +541,20 @@ export interface SqliteAuthTables {
     use(id: string): void;
     spendOthers(userId: string): void;
   };
+  identities: {
+    byProvider(provider: string, providerUserId: string): { userId: string } | undefined;
+    link(input: {
+      userId: string;
+      provider: string;
+      providerUserId: string;
+      email: string | null;
+    }): boolean;
+    touch(provider: string, providerUserId: string, email: string | null): void;
+  };
   accounts: {
     get(id: string): StoredAccount | undefined;
+    createForIdentity(email: string | null): StoredAccount;
+    claimForIdentity(id: string, email: string | null): StoredAccount | undefined;
     setPassword(id: string, passwordHash: string): void;
     byEmail(email: string): StoredAccount | undefined;
     createRegistered(email: string, passwordHash: string): StoredAccount;
@@ -526,6 +610,46 @@ export class SqliteAuthStore implements AuthStore {
 
   findByEmail(email: string): Promise<AuthUser | null> {
     return Promise.resolve(SqliteAuthStore.user(this.store.accounts.byEmail(email.trim().toLowerCase())));
+  }
+
+  findByIdentity(provider: string, subject: string): Promise<AuthUser | null> {
+    const found = this.store.identities.byProvider(provider, subject);
+    return Promise.resolve(found ? SqliteAuthStore.user(this.store.accounts.get(found.userId)) : null);
+  }
+
+  linkIdentity(identity: ProviderIdentity): Promise<AuthUser | null> {
+    /* Already somebody's. The caller decides what to do about it. */
+    if (this.store.identities.byProvider(identity.provider, identity.subject)) {
+      return Promise.resolve(null);
+    }
+
+    const claiming = identity.claimUserId ? this.store.accounts.get(identity.claimUserId) : undefined;
+    const account =
+      claiming?.accountType === ACCOUNT_TYPES.ANONYMOUS
+        ? this.store.accounts.claimForIdentity(claiming.id, identity.email)
+        : this.store.accounts.createForIdentity(identity.email);
+    if (!account) return Promise.resolve(null);
+
+    const linked = this.store.identities.link({
+      userId: account.id,
+      provider: identity.provider,
+      providerUserId: identity.subject,
+      email: identity.email,
+    });
+    if (!linked) {
+      /*
+       * Lost a race. A guest that was upgraded on the way stays upgraded —
+       * their reflections are unaffected either way — but this sign-in is
+       * refused rather than being attached to the wrong person.
+       */
+      return Promise.resolve(null);
+    }
+    return Promise.resolve(SqliteAuthStore.user(this.store.accounts.get(account.id)));
+  }
+
+  touchIdentity(provider: string, subject: string, email: string | null): Promise<void> {
+    this.store.identities.touch(provider, subject, email);
+    return Promise.resolve();
   }
 
   register(email: string, password: string, claimUserId?: string | null): Promise<AuthUser | null> {

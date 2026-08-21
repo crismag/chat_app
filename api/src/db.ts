@@ -141,6 +141,35 @@ function migrate(db: DatabaseSync): void {
       createdAt TEXT NOT NULL
     );
 
+    /*
+     * An account can be reached through more than one door.
+     *
+     * Google, a password, and whatever comes later all attach to the same
+     * application user, so the identity is kept beside the account rather than
+     * on it. The pair (provider, subject) is unique because that is the whole
+     * guarantee: signing in with the same Google account twice can only ever
+     * arrive at the same row, so a second sign-in cannot make a second person.
+     *
+     * The subject is Google's own subject claim, never the email address.
+     * Addresses are
+     * reassigned, changed and shared; a subject is stable for the life of the
+     * account, which is what a permanent key has to be.
+     */
+    CREATE TABLE IF NOT EXISTS user_identities (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      provider TEXT NOT NULL,
+      providerUserId TEXT NOT NULL,
+      email TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      lastLoginAt TEXT,
+      UNIQUE (provider, providerUserId)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_user_identities_user
+      ON user_identities (userId);
+
     CREATE TABLE IF NOT EXISTS guest_name_sequences (
       baseName TEXT PRIMARY KEY,
       nextSequence INTEGER NOT NULL
@@ -737,6 +766,55 @@ class AccountTable {
     return changed > 0 ? this.get(id) : undefined;
   }
 
+  /**
+   * A brand-new account reached through a provider rather than a password.
+   *
+   * The address is recorded on the account only when it is free. Two different
+   * Google accounts can present the same address over time, and a password
+   * account may already hold it — and since identities are matched on the
+   * provider's subject and never on the address, an address that cannot be
+   * stored here costs nothing: it stays on the identity row, where it is
+   * descriptive rather than load-bearing.
+   */
+  createForIdentity(email: string | null): StoredAccount {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    const free = email && !this.byEmail(email) ? email : null;
+    this.db
+      .prepare(
+        `INSERT INTO users (id, accountType, email, registeredAt,
+                            creationMethod, createdAt, lastSeenAt)
+         VALUES (?, 'REGISTERED', ?, ?, 'REGISTRATION', ?, ?)`,
+      )
+      .run(id, free, now, now, now);
+    return this.get(id) as StoredAccount;
+  }
+
+  /**
+   * A guest becoming a registered account through a provider.
+   *
+   * The same upgrade `claim` performs, without a password: somebody signing in
+   * with Google never chooses one, and inventing a hash for them would create
+   * a credential nobody knows and nobody can use. The row, the id and
+   * everything pointing at it are untouched — which is the whole reason the
+   * guest keeps their reflections.
+   */
+  claimForIdentity(id: string, email: string | null): StoredAccount | undefined {
+    /* Only if the address is not already somebody else's; see createForIdentity. */
+    const taken = email ? this.byEmail(email) : undefined;
+    const free = email && (!taken || taken.id === id) ? email : null;
+    const changed = this.db
+      .prepare(
+        `UPDATE users
+            SET accountType = 'REGISTERED',
+                email = COALESCE(?, email),
+                registeredAt = ?
+          WHERE id = ? AND accountType = 'ANONYMOUS'`,
+      )
+      .run(free, new Date().toISOString(), id).changes;
+    return changed > 0 ? this.get(id) : undefined;
+  }
+
   /** A new password for somebody who already has an account. */
   setPassword(id: string, passwordHash: string): void {
     this.db.prepare('UPDATE users SET passwordHash = ? WHERE id = ?').run(passwordHash, id);
@@ -826,6 +904,66 @@ class AccountTable {
  * whether this exact one is live — not "does this person have a reset going",
  * which is a question nobody asks.
  */
+/**
+ * The doors an account can be reached through.
+ *
+ * Reads and writes only; every decision about *whether* to link is made in the
+ * auth store, where the guest-upgrade rule and the already-taken case live
+ * together and can be reasoned about in one place.
+ */
+class IdentityTable {
+  private readonly db: DatabaseSync;
+
+  constructor(db: DatabaseSync) {
+    this.db = db;
+  }
+
+  byProvider(provider: string, providerUserId: string): { userId: string } | undefined {
+    return this.db
+      .prepare('SELECT userId FROM user_identities WHERE provider = ? AND providerUserId = ?')
+      .get(provider, providerUserId) as { userId: string } | undefined;
+  }
+
+  /**
+   * Attach an identity, or fail because somebody else already has it.
+   *
+   * The unique key decides races rather than a prior read: two sign-ins
+   * landing together both see nothing, and only one insert can win.
+   */
+  link(input: {
+    userId: string;
+    provider: string;
+    providerUserId: string;
+    email: string | null;
+  }): boolean {
+    const now = new Date().toISOString();
+    try {
+      this.db
+        .prepare(
+          `INSERT INTO user_identities
+             (id, userId, provider, providerUserId, email, createdAt, updatedAt, lastLoginAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(randomUUID(), input.userId, input.provider, input.providerUserId, input.email, now, now, now);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Record that this door was used, without touching who it belongs to. */
+  touch(provider: string, providerUserId: string, email: string | null): void {
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `UPDATE user_identities
+            SET lastLoginAt = ?, updatedAt = ?, email = COALESCE(?, email)
+          WHERE provider = ? AND providerUserId = ?`,
+      )
+      .run(now, now, email, provider, providerUserId);
+  }
+}
+
 class PasswordResetTable {
   private readonly db: DatabaseSync;
 
@@ -1263,6 +1401,7 @@ export class SqliteStore {
   readonly db: DatabaseSync;
   readonly accounts: AccountTable;
   readonly installations: InstallationTable;
+  readonly identities: IdentityTable;
   readonly passwordResets: PasswordResetTable;
   readonly sessions: SessionTable;
   readonly conversations: ConversationTable;
@@ -1274,6 +1413,7 @@ export class SqliteStore {
     migrate(this.db);
     this.accounts = new AccountTable(this.db);
     this.installations = new InstallationTable(this.db);
+    this.identities = new IdentityTable(this.db);
     this.passwordResets = new PasswordResetTable(this.db);
     this.sessions = new SessionTable(this.db);
     this.conversations = new ConversationTable(this.db);

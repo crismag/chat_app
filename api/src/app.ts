@@ -5,6 +5,12 @@ import { cors } from 'hono/cors';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { sessionCookieOptions } from './auth/session-cookie.ts';
 import { SqliteAuthStore, type AuthStore, type AuthUser } from './auth/store.ts';
+import {
+  GoogleTokenError,
+  createGoogleVerifier,
+  readGoogleClientId,
+  type GoogleVerifier,
+} from './auth/google.ts';
 import { dropUserForeignKeys } from './db.ts';
 import {
   PERSISTENCE_TYPES,
@@ -165,8 +171,25 @@ export function createApp(
    */
   auth: AuthStore = new SqliteAuthStore(store, hashPassword, verifyPassword),
   /* Injected in tests so a reset can be read without an SMTP server. */
-  options: { mailer?: Mailer } = {},
+  /*
+   * `googleVerifier` is injectable so the suite never depends on Google being
+   * reachable, and so the failures that matter — a token for another audience,
+   * an expired one, one identifying nobody — can be exercised without minting
+   * real tokens.
+   */
+  options: { mailer?: Mailer; googleVerifier?: GoogleVerifier } = {},
 ) {
+  const googleClientId = readGoogleClientId();
+  /*
+   * Absent configuration is not an error at startup: a checkout without a
+   * Google client id runs, and the route says plainly that it is not
+   * configured rather than failing in a way that looks like a bug.
+   */
+  const googleVerifier: GoogleVerifier | null =
+    options.googleVerifier ?? (googleClientId ? createGoogleVerifier(googleClientId) : null);
+  /* Ten attempts a minute from one address is generous for a person and mean for a script. */
+  const googleAttempts = new SlidingWindowRateLimiter(10);
+
   const app = new Hono();
   const aiService = new AiService(ai);
   /* One allowance for the life of the process, like the other rate limiters. */
@@ -747,6 +770,128 @@ export function createApp(
     await beginSession(c, user, { installationId, persistent: keepSignedIn });
     return c.json({ ...accountBody(user), ...(merged > 0 ? { merged } : {}) });
   });
+
+  /*
+   * Signing in with Google.
+   *
+   * Identity only. Google is asked one question — is this the person they say
+   * they are — and once it has answered, Google is out of the picture: the
+   * application's own session carries every request afterwards, and no access
+   * token, refresh token or scope is requested, stored or wanted.
+   *
+   * Nothing the browser says about who it is, is believed. The credential is a
+   * token signed by Google and is verified server-side against Google's
+   * published keys and this application's client id; the subject inside it is
+   * the only identifier used, and the address it carries is descriptive.
+   */
+  app.post('/api/auth/google', async (c) => {
+    if (!googleVerifier) {
+      return c.json({ error: 'Signing in with Google is not configured on this server.' }, 503);
+    }
+
+    /*
+     * By address, because this route is reachable before anybody is anybody.
+     * A ceiling here is what stops a stolen or forged credential being tried
+     * repeatedly.
+     */
+    const decision = googleAttempts.take(addressOf(c));
+    if (!decision.allowed) {
+      c.header('Retry-After', String(decision.retryAfterSeconds));
+      return c.json({ error: 'Too many sign-in attempts. Try again shortly.' }, 429);
+    }
+
+    const body = await c.req
+      .json<{ credential?: unknown; keepSignedIn?: boolean }>()
+      .catch(() => ({}) as { credential?: unknown; keepSignedIn?: boolean });
+    const credential = typeof body.credential === 'string' ? body.credential : '';
+
+    let identity;
+    try {
+      identity = await googleVerifier.verify(credential);
+    } catch (error: unknown) {
+      /*
+       * The reason is logged and never returned. A verification message can
+       * name key ids, audiences and clock skew; the browser gets one sentence,
+       * and no part of the token is echoed back or written to the log.
+       */
+      const code = error instanceof GoogleTokenError ? error.code : 'unknown';
+      console.warn(`google sign-in refused: ${code}`);
+      return c.json({ error: 'That Google sign-in could not be verified. Try again.' }, 401);
+    }
+
+    const recognised = await recognisedAccount(c, auth);
+    const guest =
+      recognised && recognised.user.accountType === ACCOUNT_TYPES.ANONYMOUS ? recognised.user : null;
+
+    try {
+      const existing = await auth.findByIdentity('google', identity.subject);
+      let user = existing;
+      let merged = 0;
+
+      if (existing) {
+        /*
+         * This Google account already has a CHAT account. A guest in this
+         * browser cannot be upgraded into it — it exists and is not to be
+         * overwritten — so their work moves into it, exactly as it does when
+         * somebody signs in with a password they had forgotten they had.
+         * Nothing is duplicated and nothing is discarded.
+         */
+        if (guest && guest.id !== existing.id) {
+          merged = store.accounts.merge(guest.id, existing.id);
+          await auth.merge(guest.id, existing.id);
+          clearInstallationCookie(c);
+        }
+        await auth.touchIdentity('google', identity.subject, identity.email);
+      } else {
+        /*
+         * Nobody has this Google identity yet. A guest in this browser is
+         * upgraded in place — same row, same id — so their reflections, drafts
+         * and images stay theirs with nothing to migrate.
+         */
+        user = await auth.linkIdentity({
+          provider: 'google',
+          subject: identity.subject,
+          email: identity.email,
+          claimUserId: guest?.id ?? null,
+        });
+        /*
+         * Null means the identity was claimed between the read and the write.
+         * Rather than guess, look again: whoever won is the account to sign
+         * in to.
+         */
+        if (!user) user = await auth.findByIdentity('google', identity.subject);
+      }
+
+      if (!user) {
+        return c.json({ error: 'That Google account could not be signed in. Try again.' }, 409);
+      }
+
+      const keepSignedIn = body.keepSignedIn === true;
+      const installationId = keepSignedIn
+        ? await rememberInstallation(c, auth, user.id, PERSISTENCE_TYPES.REGISTERED_PERSISTENT)
+        : null;
+      /* A fresh session token, so authenticating rotates what identifies it. */
+      await beginSession(c, user, { installationId, persistent: keepSignedIn });
+      return c.json({ ...accountBody(user), ...(merged > 0 ? { merged } : {}) });
+    } catch (error: unknown) {
+      console.warn(
+        `google sign-in failed after verification: ${error instanceof Error ? error.name : 'unknown'}`,
+      );
+      return c.json({ error: 'That Google sign-in could not be completed. Try again.' }, 500);
+    }
+  });
+
+  /*
+   * The Google client id, for the browser.
+   *
+   * Not a secret — Google Identity Services needs it in the page — and served
+   * from the environment so the deployed configuration is the single source.
+   * The client secret is not read anywhere in this flow, so there is nothing
+   * here that could leak one.
+   */
+  app.get('/api/auth/google/config', (c) =>
+    c.json({ clientId: googleClientId, configured: googleClientId !== null }),
+  );
 
   /*
    * Ending the interaction, not the account.

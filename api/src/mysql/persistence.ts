@@ -364,6 +364,88 @@ export class MysqlPersistence {
     });
   }
 
+  /* ------------------------------------------------ provider identities */
+
+  /**
+   * The account a provider identity belongs to.
+   *
+   * Keyed on the provider's own subject, never on an email address: addresses
+   * are reassigned, changed and shared, and a subject is stable for the life
+   * of the account.
+   */
+  async findUserIdByIdentity(provider: string, subject: string): Promise<number | null> {
+    const [rows] = await this.pool.execute<RowDataPacket[]>(
+      `SELECT user_id FROM user_identities
+        WHERE provider = ? AND provider_user_id = ?`,
+      [provider, subject],
+    );
+    const row = rows[0];
+    return row ? asBigIntId(row['user_id']) : null;
+  }
+
+  /**
+   * Attach an identity, or report that somebody already has it.
+   *
+   * The unique key on (provider, provider_user_id) decides races rather than a
+   * prior read, so two sign-ins landing together cannot both succeed. Duplicate
+   * entry is the expected outcome of a race, not a fault, so it is answered
+   * with `false` rather than thrown.
+   */
+  async linkIdentity(input: {
+    userId: number;
+    provider: string;
+    subject: string;
+    email: string | null;
+  }): Promise<boolean> {
+    try {
+      await this.pool.execute(
+        `INSERT INTO user_identities (user_id, provider, provider_user_id, provider_data)
+         VALUES (?, ?, ?, ?)`,
+        [
+          input.userId,
+          input.provider,
+          input.subject,
+          /*
+           * Only the address, and only as description. Nothing here is matched
+           * on, and no token, credential or scope is kept: this flow
+           * establishes who somebody is and then has no further use for Google.
+           *
+           * JSON is written as a string because this column is JSON on MariaDB
+           * and LONGTEXT on some hosts; a string is valid for both.
+           */
+          JSON.stringify(input.email ? { email: input.email } : {}),
+        ],
+      );
+      return true;
+    } catch (error: unknown) {
+      const code = (error as { code?: string }).code;
+      if (code === 'ER_DUP_ENTRY') return false;
+      throw error;
+    }
+  }
+
+  /** Record that an identity was used, without changing who it belongs to. */
+  async touchIdentity(provider: string, subject: string, email: string | null): Promise<void> {
+    await this.pool.execute(
+      `UPDATE user_identities
+          SET provider_data = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE provider = ? AND provider_user_id = ?`,
+      [JSON.stringify(email ? { email } : {}), provider, subject],
+    );
+  }
+
+  /**
+   * A guest becoming registered through a provider.
+   *
+   * The same upgrade registration performs, without credentials: somebody
+   * signing in with Google never chooses a password, and inventing a hash for
+   * them would create one nobody knows. The row and its id are untouched, so
+   * everything the guest has written stays theirs.
+   */
+  async markUserRegisteredWithoutCredentials(userId: number): Promise<void> {
+    await this.markUserRegistered(userId);
+  }
+
   async setLocalCredentials(userId: number, username: string, password: string): Promise<void> {
     const passwordHash = await hashPassword(password);
     assertArgon2idHash(passwordHash);
