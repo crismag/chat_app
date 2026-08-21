@@ -40,6 +40,7 @@ import { ApiError } from '../shared/api/client.ts'
 import { shareWithPlatform } from '../shared/native/share.ts'
 import { useMobileBar } from '../shared/mobile/MobileBar.tsx'
 import { PageMenu } from '../shared/mobile/PageMenu.tsx'
+import { NARROW_QUERY, useMediaQuery } from '../shared/ui/useMediaQuery.ts'
 import { MoreIcon } from '../shared/ui/icons.tsx'
 import { Link } from 'react-router'
 import { useAuth } from '../auth/useAuth.ts'
@@ -232,6 +233,7 @@ export function CommunityPage() {
   const [loading, setLoading] = useState(true)
   const [failure, setFailure] = useState<Failure | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const narrow = useMediaQuery(NARROW_QUERY)
   const [notice, setNotice] = useState<string | null>(null)
   const [now] = useState(() => Date.now())
 
@@ -324,6 +326,13 @@ export function CommunityPage() {
     <section className={styles.page}>
       {menuOpen ? <PageMenu open onClose={() => setMenuOpen(false)} /> : null}
 
+      {/*
+        Not rendered on a phone, rather than rendered and hidden. The bar
+        already carries this heading, and a second copy behind `display: none`
+        is still a second `h1` for anything that reads the document rather
+        than looking at it.
+      */}
+      {narrow ? null : (
       <header className={styles.header}>
         <div>
           <p className="eyebrow">Community</p>
@@ -331,6 +340,7 @@ export function CommunityPage() {
           <p className={styles.description}>{current?.description}</p>
         </div>
       </header>
+      )}
 
       {/*
         Destinations, as tabs. Three, all of them live — the interface must not

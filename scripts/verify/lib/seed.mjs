@@ -11,12 +11,37 @@
  * already on, because a second navigation drops the mobile emulation.
  */
 
+/**
+ * A stored passage, fixed rather than fetched.
+ *
+ * The viewer shows the passage when one is stored, and until now nothing
+ * seeded ever stored one — so that whole branch had been written and never
+ * seen. The endpoint takes the passage body directly and does not call the
+ * provider, which means this fixture is deterministic: no key, no network, and
+ * the same words every run.
+ *
+ * It is written through the API into the same store the browser reads, so it
+ * touches nothing that is not part of the seeded guest's own data.
+ */
+export const PASSAGE = {
+  translationId: 111,
+  abbreviation: 'NIV',
+  name: 'New International Version',
+  passageId: 'JHN.3.16',
+  reference: 'John 3:16',
+  content:
+    'For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life.',
+  copyright: 'Scripture quotations are illustrative fixture text.',
+  retrievedAt: '2026-08-20T00:00:00.000Z',
+}
+
 /** The reflections the evidence needs, each one there for a reason. */
 export const REFLECTIONS = [
   {
     key: 'complete',
     title: 'The comfort and home of God’s love',
     reference: 'John 3:16',
+    passage: true,
     sections: {
       content: 'John 3:16 (NIV) — For God so loved the world that he gave his one and only Son.',
       heart: 'I have read this so often that I had stopped hearing it. Today the word “gave” stopped me.',
@@ -73,6 +98,9 @@ export const REFLECTIONS = [
 
 /** Runs in the browser: creates a guest, then the reflections above. */
 const SCRIPT = `
+  const put = (p, b) => fetch(p, { method: 'PUT', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) })
+    .then((r) => r.status);
   const post = (p, b) => fetch(p, { method: 'POST', credentials: 'include',
     headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) })
     .then((r) => r.json());
@@ -94,6 +122,10 @@ const SCRIPT = `
       }
       /* Re-assert the title: creating from a first message can retitle. */
       await patch('/api/conversations/' + created.id, { title: spec.title });
+      /* Only where the fixture asks for one, so the absent case is covered too. */
+      if (spec.passage) {
+        await put('/api/bible/reflections/' + created.id + '/passage', PASSAGE);
+      }
     }
     return JSON.stringify(made);
   })();
@@ -102,7 +134,9 @@ const SCRIPT = `
 /** Seed the current browser session. Returns key → conversation id. */
 export async function seed(driver, specs = REFLECTIONS) {
   const made = await driver.executeScript(
-    `const SPECS = ${JSON.stringify(specs)};\n${SCRIPT}`,
+    `const SPECS = ${JSON.stringify(specs)};
+     const PASSAGE = ${JSON.stringify(PASSAGE)};
+${SCRIPT}`,
   )
   return JSON.parse(made || '{}')
 }

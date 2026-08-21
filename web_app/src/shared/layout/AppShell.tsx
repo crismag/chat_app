@@ -113,7 +113,11 @@ function Shell() {
                     <BackIcon className={styles.barIcon} />
                   </button>
                 ) : null}
-                <h1 className={styles.barTitle}>{bar.title}</h1>
+                {bar.titleIsHeading === false ? (
+                  <p className={styles.barTitle}>{bar.title}</p>
+                ) : (
+                  <h1 className={styles.barTitle}>{bar.title}</h1>
+                )}
                 {bar.actions ? <div className={styles.barActions}>{bar.actions}</div> : null}
               </>
             )}

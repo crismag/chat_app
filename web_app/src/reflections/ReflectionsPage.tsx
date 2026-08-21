@@ -810,7 +810,15 @@ export function ReflectionsPage() {
         additions[`${item.id}:${item.updatedAt}`] = {
           excerpt: excerptFrom(result.value),
           preview: previewFor(
-            result.value.sections,
+            /*
+             * A Short reflection keeps its writing in `condensed`, not in
+             * `sections` — so a Short card previewed nothing at all until the
+             * right map was handed over.
+             */
+            result.value.format === CHAT_FORMATS.CONDENSED
+              ? ((result.value as { condensed?: Record<string, { content?: string }> }).condensed ??
+                {})
+              : result.value.sections,
             result.value.format,
             result.value.scriptureReference,
           ),

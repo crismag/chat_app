@@ -1639,6 +1639,13 @@ export function ChatPage() {
 
   const editorBar = (
     <div className={styles.mobileBar}>
+      {/*
+        The screen's heading, for anything reading the document rather than
+        looking at it. The visible name of the reflection is the field beside
+        this, and a text input is not a heading — so without this the editor
+        was the one screen with no `h1` at all.
+      */}
+      <h1 className="sr-only">Reflection editor</h1>
       <button
         type="button"
         className={styles.mobileBarButton}

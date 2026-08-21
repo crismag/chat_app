@@ -16,7 +16,6 @@ import {
   CHAT_FORMATS,
   type ChatFormat,
   type ChatSection,
-  type ChatSectionType,
   type ConversationSummary,
 } from '@chat/shared'
 import type { BiblePassage } from '@chat/shared'
@@ -31,6 +30,13 @@ import styles from './ReflectionViewPage.module.css'
 type Detail = ConversationSummary & {
   format?: ChatFormat
   sections: Record<string, ChatSection | undefined>
+  /*
+   * A Short reflection's two fields travel in their own map, beside the four
+   * rather than inside them — that is what lets a format change keep both
+   * drafts. Reading `sections` for a Short reflection therefore finds nothing,
+   * which is why this page showed a complete Short reflection as empty.
+   */
+  condensed?: Record<string, ChatSection | undefined>
 }
 
 export function ReflectionViewPage() {
@@ -93,6 +99,8 @@ export function ReflectionViewPage() {
   useMobileBar(
     () => ({
       title: detail?.scriptureReference || 'Reflection',
+      /* The reflection's own title is this page's heading, just below. */
+      titleIsHeading: false,
       onBack: () => void navigate('/reflections'),
       backLabel: 'Back to Reflections',
       actions: (
@@ -141,7 +149,10 @@ export function ReflectionViewPage() {
     detail.format === CHAT_FORMATS.CONDENSED
       ? CONDENSED_FIELDS.map(({ type, letter, name }) => ({ type, letter, name }))
       : SECTIONS.map(({ type, letter, label }) => ({ type, letter, name: label }))
-  const written = fields.filter((field) => (detail.sections?.[field.type]?.content ?? '').trim())
+  /* Whichever map this format keeps its writing in. */
+  const draft =
+    detail.format === CHAT_FORMATS.CONDENSED ? (detail.condensed ?? {}) : (detail.sections ?? {})
+  const written = fields.filter((field) => (draft[field.type]?.content ?? '').trim())
 
   return (
     <main className={styles.page} id="main">
@@ -241,9 +252,7 @@ export function ReflectionViewPage() {
                 `pre-wrap`, because these are the author's own line breaks and
                 a paragraph they split in two was split on purpose.
               */}
-              <p className={styles.body}>
-                {detail.sections?.[field.type as ChatSectionType]?.content}
-              </p>
+              <p className={styles.body}>{draft[field.type]?.content}</p>
             </section>
           ))}
         </div>

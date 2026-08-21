@@ -25,6 +25,15 @@ import {
 export type MobileBarConfig = {
   /** What this screen is. Shown as the bar's heading. */
   title: string
+  /**
+   * Whether the bar's title is the page's heading.
+   *
+   * On the collection and on Community it is: their own headings were removed
+   * because the bar says the same thing. On the viewer it is not — the bar
+   * names the passage, and the page's heading is the reflection's title, in
+   * full, directly underneath. Both being `h1` gave those pages two.
+   */
+  titleIsHeading?: boolean
   /** A back affordance, when this screen is somewhere you go *into*. */
   onBack?: () => void
   backLabel?: string
