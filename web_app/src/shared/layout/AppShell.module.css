@@ -423,3 +423,137 @@
     top: calc(var(--safe-top) + var(--space-2));
   }
 }
+
+/* --- the phone's app bar --------------------------------------------------- */
+
+/*
+ * One bar, and only one.
+ *
+ * The screen showing describes what belongs up here and the shell renders it.
+ * What this rule guarantees is that the wordmark header and the screen's bar
+ * are never both on a phone at once — which is the failure this replaces: a
+ * brand bar saying what the product is called, and under it a page heading
+ * saying what the page is, together taking a fifth of the screen before any
+ * content.
+ *
+ * Above the phone breakpoint the desktop header is the only one rendered, so
+ * the desktop layout is untouched.
+ */
+.mobileBar {
+  display: none;
+}
+
+@media (max-width: 899px) {
+  .header[data-mobile-bar='true'] .headerInner {
+    display: none;
+  }
+
+  .header[data-mobile-bar='true'] .mobileBar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    /*
+     * One row, and it does not wrap. A title long enough to crowd the actions
+     * truncates; the actions never move to a second line and never shrink
+     * below a thumb.
+     */
+    flex-wrap: nowrap;
+    min-block-size: 3.5rem;
+    padding-inline: var(--space-2);
+    padding-inline-start: max(var(--space-2), var(--safe-left));
+    padding-inline-end: max(var(--space-2), var(--safe-right));
+  }
+}
+
+.barTitle {
+  flex: 1 1 auto;
+  /* May be narrower than its text; that is what makes the ellipsis possible. */
+  min-inline-size: 0;
+  margin: 0;
+  padding-inline: var(--space-2);
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.barActions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.barBack {
+  flex: 0 0 auto;
+}
+
+/*
+ * Compact to look at, a thumb to press.
+ *
+ * The visible button is 40px so a row of three does not read as a toolbar of
+ * slabs, and the hit area is expanded to 44 by a pseudo-element. They are
+ * spaced so those expanded areas do not overlap — an invisible target that
+ * steals its neighbour's presses is worse than a small one.
+ */
+.barBack,
+.barAction {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.barBack::after,
+.barAction::after {
+  content: '';
+  position: absolute;
+  /* 40px visible, 44px pressable: 2px of reach on every side. */
+  inset: -2px;
+}
+
+.barBack:hover,
+.barAction:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.barBack:focus-visible,
+.barAction:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.barIcon {
+  inline-size: 1.375rem;
+  block-size: 1.375rem;
+}
+
+/* A count on the filter button, so a narrowed list is never a mystery. */
+.barBadge {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  min-inline-size: 1.125rem;
+  padding-inline: 0.25rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--surface);
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.125rem;
+  text-align: center;
+}

@@ -241,3 +241,36 @@ export function UseInIcon({ className }: { className?: string }) {
     </svg>
   )
 }
+
+export function BackIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M15 5 8 12l7 7" />
+    </svg>
+  )
+}
+
+/*
+ * Filters, drawn as a funnel rather than as sliders.
+ *
+ * Sliders read as "settings"; a funnel reads as "fewer things come out than
+ * went in", which is what this control actually does to the list.
+ */
+export function FilterIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 6h16l-6 7v5l-4 2v-7Z" />
+    </svg>
+  )
+}
+
+/** Vertical, because it lives in an app bar rather than in a row. */
+export function MoreIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}

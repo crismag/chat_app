@@ -1,0 +1,141 @@
+.root {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+}
+
+.scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: color-mix(in srgb, var(--ink) 45%, transparent);
+  cursor: pointer;
+  animation: fade var(--fast, 160ms) var(--ease, ease) both;
+}
+
+.surface {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  /*
+   * Capped, and scrolled inside. A sheet taller than the screen would push its
+   * own heading off the top, which is the one part that says what it is.
+   */
+  max-block-size: min(85svh, 40rem);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-lg, 0 -8px 32px rgb(0 0 0 / 18%));
+}
+
+/* --- the phone: up from the bottom --------------------------------------- */
+
+[data-shape='sheet'] .surface {
+  margin-block-start: auto;
+  inline-size: 100%;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  /* Clear of the home indicator, never merely of the viewport edge. */
+  padding-block-end: env(safe-area-inset-bottom, 0px);
+  animation: rise var(--normal, 220ms) var(--ease, ease) both;
+}
+
+/* --- wider: a centred dialog --------------------------------------------- */
+
+[data-shape='dialog'] {
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+}
+
+[data-shape='dialog'] .surface {
+  inline-size: min(30rem, 100%);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  animation: fade var(--fast, 160ms) var(--ease, ease) both;
+}
+
+[data-shape='dialog'] .grip {
+  display: none;
+}
+
+.head {
+  flex: 0 0 auto;
+  padding: var(--space-3) var(--space-4) var(--space-2);
+  border-block-end: 1px solid var(--line);
+}
+
+.grip {
+  display: block;
+  inline-size: 2.25rem;
+  block-size: 4px;
+  margin: 0 auto var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--line-strong);
+}
+
+.title {
+  margin: 0;
+  /* Sans: this is the application speaking, not something anybody wrote. */
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.description {
+  margin: var(--space-1) 0 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.body {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-4);
+  /* Content may be narrower than its widest child; it may not widen the sheet. */
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.foot {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-block-start: 1px solid var(--line);
+}
+
+.foot > * {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+@keyframes rise {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/*
+ * Reduced motion keeps the change of state and drops the travel: a sheet that
+ * slides is telling you where it came from, and a sheet that fades is telling
+ * you it arrived. Only one of those can make somebody ill.
+ */
+@media (prefers-reduced-motion: reduce) {
+  [data-shape='sheet'] .surface,
+  [data-shape='dialog'] .surface,
+  .scrim {
+    animation: fade 1ms linear both;
+  }
+}

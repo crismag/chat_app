@@ -1,8 +1,9 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router'
 import { useAuth } from '../../auth/useAuth.ts'
-import { ChatIcon, CommunityIcon, LibraryIcon, PlusIcon } from '../ui/icons.tsx'
+import { BackIcon, ChatIcon, CommunityIcon, LibraryIcon, PlusIcon } from '../ui/icons.tsx'
 import { ProfileMenu } from '../ui/ProfileMenu.tsx'
 import { useSoftKeyboard } from '../ui/useSoftKeyboard.ts'
+import { MobileBarProvider, useMobileBarConfig } from '../mobile/MobileBar.tsx'
 import styles from './AppShell.module.css'
 
 /*
@@ -31,7 +32,20 @@ const letters = [
 ] as const
 
 export function AppShell() {
+  /*
+   * The provider wraps the shell rather than sitting inside it, because the
+   * shell is what reads the configuration a screen writes.
+   */
+  return (
+    <MobileBarProvider>
+      <Shell />
+    </MobileBarProvider>
+  )
+}
+
+function Shell() {
   const { user, ready, logout, forgetThisBrowser } = useAuth()
+  const bar = useMobileBarConfig()
   /*
    * One place watches for the software keyboard and marks the body; the
    * layout reads that attribute. Three components each deciding for
@@ -65,7 +79,34 @@ export function AppShell() {
         Skip to content
       </a>
 
-      <header className={styles.header}>
+      <header className={styles.header} data-mobile-bar={bar ? 'true' : 'false'}>
+        {/*
+          The phone's bar, when the screen showing has described one. It is a
+          sibling of the desktop header rather than a replacement for it: CSS
+          shows exactly one, so neither can be rendered twice and the desktop
+          layout is untouched.
+        */}
+        {bar ? (
+          <div className={styles.mobileBar}>
+            {bar.replace ?? (
+              <>
+                {bar.onBack ? (
+                  <button
+                    type="button"
+                    className={styles.barBack}
+                    aria-label={bar.backLabel ?? 'Back'}
+                    onClick={bar.onBack}
+                  >
+                    <BackIcon className={styles.barIcon} />
+                  </button>
+                ) : null}
+                <h1 className={styles.barTitle}>{bar.title}</h1>
+                {bar.actions ? <div className={styles.barActions}>{bar.actions}</div> : null}
+              </>
+            )}
+          </div>
+        ) : null}
+
         <div className={styles.headerInner}>
           <NavLink to="/" className={styles.brand}>
             <span className={styles.wordmark}>
