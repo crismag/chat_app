@@ -35,6 +35,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       /* How much of their guest work moved into this account, if any. */
       return { merged: account.merged ?? 0 }
     },
+    async continueWithGoogle(credential, keepSignedIn) {
+      const account = await api<AuthUser & { merged?: number }>('/auth/google', {
+        method: 'POST',
+        body: JSON.stringify({ credential, keepSignedIn }),
+      })
+      setUser(account)
+      /* How much of their guest work moved into this account, if any. */
+      return { merged: account.merged ?? 0 }
+    },
     async register(email, password): Promise<RegisterOutcome> {
       try {
         setUser(
@@ -88,6 +97,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     async logout() {
       await api('/auth/logout', { method: 'POST' })
+      /*
+       * Tell Google not to choose an account for us next time.
+       *
+       * Signing out of CHAT is not signing out of Google, and it should not
+       * be. But if Google is left free to select an account automatically,
+       * the next visit signs the person straight back in — which makes
+       * "sign out" a button that appears not to work. This is harmless when
+       * the library was never loaded.
+       */
+      try {
+        window.google?.accounts?.id?.disableAutoSelect()
+      } catch {
+        /* Google's script is not ours to depend on; failing here changes nothing. */
+      }
       setUser(null)
     },
     async forgetThisBrowser() {

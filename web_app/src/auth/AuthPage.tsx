@@ -4,6 +4,7 @@ import { ACCOUNT_TYPES } from '@chat/shared'
 import { ApiError, UNREACHABLE_STATUS } from '../shared/api/client.ts'
 import { ChatLetters, ChatWordmark } from '../shared/ui/ChatLetters.tsx'
 import { useAuth } from './useAuth.ts'
+import { GoogleSignIn } from './GoogleSignIn.tsx'
 import styles from './AuthPage.module.css'
 
 /**
@@ -182,6 +183,24 @@ export function AuthPage() {
                 : ' you can carry on there.'}
           </p>
         ) : null}
+
+        {/*
+          Offered before the form, because it is the shorter road: nothing to
+          remember and nothing to choose. The page already sends a registered
+          user to `next`, so signing in this way resumes whatever brought them
+          here without any extra plumbing.
+        */}
+        {/*
+          Nothing to do on success: setting the account re-renders this page,
+          which sends a registered user to `next` — the same redirect the
+          password form relies on. Anything shown here would be replaced
+          before it could be read.
+        */}
+        <GoogleSignIn keepSignedIn={keepSignedIn} onSignedIn={() => {}} />
+
+        <p className={styles.divider}>
+          <span>or</span>
+        </p>
 
         <form className={styles.form} onSubmit={onSubmit}>
           <div className="field">

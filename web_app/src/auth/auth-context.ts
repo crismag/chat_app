@@ -27,6 +27,14 @@ export type AuthContextValue = {
    */
   login: (email: string, password: string, keepSignedIn: boolean) => Promise<{ merged: number }>
   /**
+   * Sign in with a credential from Google Identity Services.
+   *
+   * The credential is a token Google signed; it is sent straight to the
+   * server, which is the only place it is believed. Nothing here reads it, and
+   * nothing about the person is taken from the browser's word for it.
+   */
+  continueWithGoogle: (credential: string, keepSignedIn: boolean) => Promise<{ merged: number }>
+  /**
    * Claim the account this person already has.
    *
    * For a guest this upgrades their existing user, so everything they have
