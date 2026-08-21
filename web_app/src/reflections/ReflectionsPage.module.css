@@ -776,3 +776,112 @@
     font-size: max(16px, var(--text-base));
   }
 }
+
+/* --- sheet contents -------------------------------------------------------- */
+
+.sheetGroup {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
+}
+
+.sheetLegend {
+  padding: 0 0 var(--space-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sheetOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/*
+ * A chip, not a row.
+ *
+ * Four questions as four columns of radio rows made the sheet twice the height
+ * of the screen, so choosing a sort order meant scrolling past everything
+ * else. Three or four short answers fit on a line, and a line of chips shows
+ * the whole question at once — which is the point of asking it in a sheet
+ * rather than in a menu.
+ *
+ * The radio is still a radio: it is only visually replaced, so arrow keys walk
+ * the group and a screen reader hears a radio group, as it should.
+ */
+.sheetOption {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 2.75rem;
+  padding-inline: var(--space-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-sans);
+  font-size: max(16px, var(--text-base));
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.sheetOption:hover {
+  background: var(--surface-2);
+}
+
+.sheetOption:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.sheetOption:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/*
+ * Hidden from the eye, kept for everything else. `appearance: none` with no
+ * size still receives focus and still announces, unlike `display: none`.
+ */
+.sheetOption input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+  margin: 0;
+}
+
+.sheetOption span {
+  display: grid;
+  min-inline-size: 0;
+  text-align: start;
+}
+
+.sheetOption small {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+
+/*
+ * Room under the last card for the floating action, on top of the room the
+ * shell already reserves for the bottom bar.
+ *
+ * Measured rather than guessed, because the first guess was wrong and the
+ * screenshot showed it: the action sat squarely over the third card's privacy
+ * badge and its overflow button, which is the exact failure of "no action
+ * hidden behind fixed navigation". The action's top edge is its own height
+ * plus its offset above the bar, so that is what has to be cleared, plus a
+ * gap so the last card is clear rather than merely touching.
+ */
+@media (max-width: 899px) {
+  .page {
+    padding-block-end: calc(3rem + var(--space-4) + var(--space-5));
+  }
+}

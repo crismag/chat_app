@@ -1,0 +1,152 @@
+/* --- search, filling the app bar ------------------------------------------ */
+
+.searchBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.searchField {
+  flex: 1 1 auto;
+  /* May be narrower than its content: an input's preferred width is not a floor. */
+  min-inline-size: 0;
+  block-size: 2.75rem;
+  padding-inline: var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  /* 16px exactly: anything smaller and iOS zooms the page and leaves it zoomed. */
+  font-size: max(16px, var(--text-base));
+}
+
+.searchField:focus {
+  outline: none;
+}
+
+.searchField::placeholder {
+  color: var(--faint);
+}
+
+/* The browser's own X is tiny and unlabelled; ours is a real target. */
+.searchField::-webkit-search-cancel-button {
+  display: none;
+}
+
+/* --- app bar buttons ------------------------------------------------------ */
+
+/*
+ * 40px to look at, 44px to press. The expansion is even, so no button reaches
+ * into its neighbour: two targets that overlap are worse than one that is
+ * small, because the wrong thing happens rather than nothing.
+ */
+.barButton {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.barButton::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+}
+
+.barButton:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.barButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.barIcon {
+  inline-size: 1.375rem;
+  block-size: 1.375rem;
+}
+
+.badge {
+  position: absolute;
+  inset-block-start: 0.125rem;
+  inset-inline-end: 0.125rem;
+  min-inline-size: 1.05rem;
+  padding-inline: 0.2rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--surface);
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.05rem;
+  text-align: center;
+}
+
+/* --- the floating action -------------------------------------------------- */
+
+.fab {
+  position: fixed;
+  inset-inline-end: var(--edge);
+  /*
+   * Above the bottom navigation and the home indicator both. The timeline
+   * reserves the same room underneath, so this never covers the last card.
+   */
+  inset-block-end: calc(var(--space-4) + 4rem + env(safe-area-inset-bottom, 0px));
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 3rem;
+  padding-inline: var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--surface);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 600;
+  text-decoration: none;
+  /*
+   * A shadow is a dark thing in both themes. Built from `--ink` it inverted
+   * with the palette and became a pale halo around the button on dark, which
+   * reads as a glow rather than as something lifted off the page.
+   */
+  box-shadow: 0 6px 20px rgb(0 0 0 / 28%);
+}
+
+.fab:hover {
+  background: var(--accent-hover);
+}
+
+.fab:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.fabIcon {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+}
+
+/* The keyboard takes the bottom of the screen; the action steps out of its way. */
+:global(body[data-keyboard='open']) .fab {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fab {
+    transition: none;
+  }
+}
