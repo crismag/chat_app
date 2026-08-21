@@ -1612,8 +1612,8 @@
   display: grid;
   place-items: center;
   /* The visual mark is small; the target is not. */
-  inline-size: 2.5rem;
-  block-size: 2.5rem;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
   margin-inline-start: -0.4rem;
   border: none;
   border-radius: var(--radius-md);
@@ -3054,7 +3054,7 @@
 .mobileBar {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-2);
   inline-size: 100%;
   min-inline-size: 0;
 }
@@ -3065,8 +3065,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  inline-size: 2.5rem;
-  block-size: 2.5rem;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
   padding: 0;
   border: 0;
   border-radius: var(--radius-md);
@@ -3075,11 +3075,6 @@
   cursor: pointer;
 }
 
-.mobileBarButton::after {
-  content: '';
-  position: absolute;
-  inset: -2px;
-}
 
 .mobileBarButton:focus-visible {
   outline: 2px solid var(--accent);

@@ -150,8 +150,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  inline-size: 2.5rem;
-  block-size: 2.5rem;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
   padding: 0;
   border: 0;
   border-radius: var(--radius-md);
@@ -160,11 +160,6 @@
   cursor: pointer;
 }
 
-.barAction::after {
-  content: '';
-  position: absolute;
-  inset: -2px;
-}
 
 .barAction:focus-visible {
   outline: 2px solid var(--accent);

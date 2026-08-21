@@ -451,7 +451,13 @@
   .header[data-mobile-bar='true'] .mobileBar {
     display: flex;
     align-items: center;
-    gap: var(--space-1);
+    /*
+     * 8px, not 4. At 4px the expanded hit areas of two neighbouring controls
+     * came within a hair of each other, so a press near the boundary could
+     * land on the wrong one — and a target that steals its neighbour's presses
+     * is worse than one that is merely small.
+     */
+    gap: var(--space-2);
     /*
      * One row, and it does not wrap. A title long enough to crowd the actions
      * truncates; the actions never move to a second line and never shrink
@@ -459,9 +465,9 @@
      */
     flex-wrap: nowrap;
     min-block-size: 3.5rem;
-    padding-inline: var(--space-2);
-    padding-inline-start: max(var(--space-2), var(--safe-left));
-    padding-inline-end: max(var(--space-2), var(--safe-right));
+    padding-inline: var(--edge);
+    padding-inline-start: max(var(--edge), var(--safe-left));
+    padding-inline-end: max(var(--edge), var(--safe-right));
   }
 }
 
@@ -493,12 +499,14 @@
 }
 
 /*
- * Compact to look at, a thumb to press.
+ * 44px of button, not 40px of button reaching for 44.
  *
- * The visible button is 40px so a row of three does not read as a toolbar of
- * slabs, and the hit area is expanded to 44 by a pseudo-element. They are
- * spaced so those expanded areas do not overlap — an invisible target that
- * steals its neighbour's presses is worse than a small one.
+ * The expansion worked, but it put the reach 2px outside the visible control —
+ * so the outermost button's hit area came within 10px of the screen edge while
+ * the bar's own gutter said 12, and two neighbours ended up 6px apart. Making
+ * the button the size of its target instead means the gutter and the gap mean
+ * exactly what they say, which is easier to reason about than an invisible
+ * 2px everywhere.
  */
 .barBack,
 .barAction {
@@ -506,8 +514,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  inline-size: 2.5rem;
-  block-size: 2.5rem;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
   padding: 0;
   border: 0;
   border-radius: var(--radius-md);
@@ -516,13 +524,6 @@
   cursor: pointer;
 }
 
-.barBack::after,
-.barAction::after {
-  content: '';
-  position: absolute;
-  /* 40px visible, 44px pressable: 2px of reach on every side. */
-  inset: -2px;
-}
 
 .barBack:hover,
 .barAction:hover {

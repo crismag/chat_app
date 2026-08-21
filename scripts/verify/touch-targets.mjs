@@ -95,8 +95,32 @@ const MEASURE = `
    */
   const hitArea = (el) => {
     const after = getComputedStyle(el, '::after');
+    const positioned = after.content !== 'none' && after.position === 'absolute';
+    /*
+     * A compact control with an expanded reach: an ::after with a negative
+     * inset, which is how a 40px button is made a 44px target without
+     * looking like a slab. The pseudo-element is not in the layout tree, so
+     * its box has to be reconstructed from the insets rather than measured —
+     * without this the harness reported every such button as undersized, which
+     * is a false alarm that trains people to ignore it.
+     */
+    const inset = (side) => {
+      const value = parseFloat(after[side]);
+      return Number.isFinite(value) ? value : 0;
+    };
+    if (positioned && [after.top, after.left].some((v) => parseFloat(v) < 0)) {
+      const box = el.getBoundingClientRect();
+      return {
+        left: box.left + inset('left'),
+        right: box.right - inset('right'),
+        top: box.top + inset('top'),
+        bottom: box.bottom - inset('bottom'),
+        width: box.width - inset('left') - inset('right'),
+        height: box.height - inset('top') - inset('bottom'),
+      };
+    }
     const stretched =
-      after.content !== 'none' && after.position === 'absolute' &&
+      positioned &&
       ['0px', 'auto'].includes(after.top) && ['0px', 'auto'].includes(after.left);
     if (!stretched) return el.getBoundingClientRect();
     for (let node = el.parentElement; node; node = node.parentElement) {
@@ -166,10 +190,22 @@ async function look(driver, viewport, path, shot) {
    * is the width that was asked for. It is also how a person gets there.
    */
   if (path !== '/') {
-    await driver.executeScript(
+    const went = await driver.executeScript(
       `const link = [...document.querySelectorAll('a')].find((a) => a.getAttribute('href') === ${JSON.stringify(path)});
-       if (link) link.click();`,
+       if (!link) return 'no link';
+       link.click();
+       return 'clicked';`,
     );
+    await wait(2500);
+    /*
+     * Checked, because it silently failed: both rows of the report were
+     * measuring the editor while one of them was labelled /reflections, so the
+     * editor's defects were counted twice and the collection's not at all.
+     */
+    const landed = await driver.executeScript('return location.pathname');
+    if (landed !== path) {
+      throw new Error(`Navigation to ${path} did not happen (${went}); still on ${landed}`);
+    }
   }
   await wait(2500);
 
