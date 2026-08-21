@@ -4,6 +4,7 @@ import { BackIcon, ChatIcon, CommunityIcon, LibraryIcon, PlusIcon } from '../ui/
 import { ProfileMenu } from '../ui/ProfileMenu.tsx'
 import { useSoftKeyboard } from '../ui/useSoftKeyboard.ts'
 import { MobileBarProvider, useMobileBarConfig } from '../mobile/MobileBar.tsx'
+import { NARROW_QUERY, useMediaQuery } from '../ui/useMediaQuery.ts'
 import styles from './AppShell.module.css'
 
 /*
@@ -45,7 +46,19 @@ export function AppShell() {
 
 function Shell() {
   const { user, ready, logout, forgetThisBrowser } = useAuth()
-  const bar = useMobileBarConfig()
+  /*
+   * The phone's bar is rendered only on a phone, rather than rendered always
+   * and hidden with CSS.
+   *
+   * Hiding it was enough to look right and not enough to be right: the bar and
+   * the desktop header both hold the editor's title field, so at desktop
+   * widths the document contained two inputs both labelled "Reflection title",
+   * one of them permanently invisible. A screen reader finds both. The test
+   * suite found both too, about one run in three.
+   */
+  const narrow = useMediaQuery(NARROW_QUERY)
+  const described = useMobileBarConfig()
+  const bar = narrow ? described : null
   /*
    * One place watches for the software keyboard and marks the body; the
    * layout reads that attribute. Three components each deciding for

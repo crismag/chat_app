@@ -1681,7 +1681,14 @@ export function ChatPage() {
                   ? detail.scriptureReference.trim()
                   : 'Add Bible passage'}
               </button>
-              {titleInput}
+              {/*
+                Rendered here only on a desktop. On a phone this same field is
+                in the app bar, and hiding this copy with CSS rather than not
+                rendering it left two inputs both labelled "Reflection title"
+                in the document — which is two things for a screen reader to
+                find and one of them permanently invisible.
+              */}
+              {isNarrow ? null : titleInput}
             </div>
 
             {/*
