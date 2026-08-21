@@ -38,6 +38,9 @@ import {
 } from '@chat/shared'
 import { ApiError } from '../shared/api/client.ts'
 import { shareWithPlatform } from '../shared/native/share.ts'
+import { useMobileBar } from '../shared/mobile/MobileBar.tsx'
+import { Link } from 'react-router'
+import { useAuth } from '../auth/useAuth.ts'
 import { ReflectionCardSkeleton } from '../shared/ui/ReflectionCard.tsx'
 import { PublicationCard } from './PublicationCard.tsx'
 import {
@@ -191,6 +194,18 @@ export function CommunityPage() {
   const [tag, setTag] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [failure, setFailure] = useState<Failure | null>(null)
+  const { user } = useAuth()
+  /*
+   * Community is for people with an account, and a guest has a session but not
+   * an account. That is a rule of the product and is not changed here — what
+   * was wrong was what the screen said about it.
+   *
+   * The community endpoints answer 401 to a guest, and 401 was described as
+   * "You are no longer signed in", offering "Sign in again". Both false: the
+   * guest is signed in, the header shows their avatar while it says so, and
+   * signing in again as the same guest would fail in exactly the same way.
+   */
+  const guest = user?.accountType === 'ANONYMOUS'
   const [notice, setNotice] = useState<string | null>(null)
   const [now] = useState(() => Date.now())
 
@@ -256,6 +271,17 @@ export function CommunityPage() {
     [destination],
   )
 
+  /*
+   * The bar names the destination being read — Shared, Public, or the
+   * community by name. "Community" is on the tab bar at the bottom of the
+   * screen already; repeating it here would spend the one heading a phone has
+   * on the word somebody just pressed to get here.
+   */
+  useMobileBar(
+    () => ({ title: current?.heading ?? 'Community' }),
+    [current?.heading],
+  )
+
   return (
     <section className={styles.page}>
       <header className={styles.header}>
@@ -301,8 +327,13 @@ export function CommunityPage() {
           {notice}
         </p>
 
-        {destination === 'communities' ? null : (
+        {destination === 'communities' || guest ? null : (
           <>
+            {/*
+              Not offered to a guest. There is nothing here for them to search,
+              and a search box above a panel explaining that they cannot read
+              this yet is a control that can only disappoint.
+            */}
             <label className="sr-only" htmlFor="community-search">
               Search Scripture, reflections, authors or tags
             </label>
@@ -310,7 +341,13 @@ export function CommunityPage() {
               id="community-search"
               className={`input ${styles.search}`}
               type="search"
-              placeholder="Search Scripture, reflections, authors or tags"
+              /*
+               * The full sentence is the label, which is what a screen reader
+               * reads. The placeholder is what has to fit on a phone, and
+               * "Search Scripture, reflections, authors or ta…" told nobody
+               * anything the short version does not.
+               */
+              placeholder="Search shared reflections"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
@@ -341,7 +378,18 @@ export function CommunityPage() {
       </div>
 
       <div id="community-panel" role="tabpanel" aria-labelledby={`tab-${destination}`}>
-        {failure ? (
+        {guest ? (
+          <section className={styles.failure}>
+            <p>
+              Community is for people with an account. Your reflections are
+              already saved here — creating an account keeps them, and lets you
+              read and join communities.
+            </p>
+            <Link className="btn btn-primary" to="/login?create=1">
+              Create an account
+            </Link>
+          </section>
+        ) : failure ? (
           <section className={styles.failure} role="alert">
             <p>{failure.message}</p>
             <button

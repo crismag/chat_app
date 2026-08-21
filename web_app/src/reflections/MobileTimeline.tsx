@@ -28,7 +28,12 @@ export type TimelineItem = {
   scriptureReference: string | null
   updatedAt: string
   visibility: Visibility
-  format: ChatFormat | undefined
+  /*
+   * Optional, matching the summary the list actually has. A Condensed
+   * reflection is told apart by this, and a summary that has not said yet is
+   * not the same as one that said "full".
+   */
+  format?: ChatFormat | undefined
 }
 
 export function MobileCard({
