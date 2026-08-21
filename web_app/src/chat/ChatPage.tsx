@@ -43,9 +43,10 @@ import {
 } from '../shared/ui/icons.tsx'
 import { shareWithPlatform } from '../shared/native/share.ts'
 import { ChatArtifact } from './ChatArtifact.tsx'
-import { MoreMenu } from './MoreMenu.tsx'
+import { MoreMenu, type MoreMenuItem } from './MoreMenu.tsx'
 import { Recoverable } from '../shared/ui/Recoverable.tsx'
 import { NARROW_QUERY, useMediaQuery } from '../shared/ui/useMediaQuery.ts'
+import { useMobileBar } from '../shared/mobile/MobileBar.tsx'
 import { ChatHelper } from './ChatHelper.tsx'
 import {
   DeleteSheet,
@@ -1519,6 +1520,118 @@ export function ChatPage() {
     />
   )
 
+  /*
+   * One title field, rendered in one of two places.
+   *
+   * On a phone it belongs in the app bar — that is what makes the bar the
+   * compact editor header rather than a second thing above the editor's own
+   * header. On a desktop it stays in the artifact head. Defined once and
+   * placed once, because two inputs carrying the same label is two things for
+   * a screen reader to announce and one of them is always the wrong one.
+   */
+  /* One list of secondary actions, offered from the phone's bar and the desktop head. */
+  const moreItems: MoreMenuItem[] = [
+          {
+            label: 'Suggest a title',
+            reason: suggestTitleReason ?? (suggesting ? 'Thinking…' : null),
+            onSelect: () => void suggestTitle(),
+          },
+          {
+            label: 'Suggest from conversation',
+            reason: hasChatMessages
+              ? busyAction !== null
+                ? 'Waiting for the last request to come back.'
+                : null
+              : 'There is no conversation to read yet.',
+            onSelect: () => void runAi(AI_ACTIONS.EXTRACT_CHAT),
+          },
+          {
+            label: 'Create visual',
+            reason: detail ? null : 'Write something first.',
+            onSelect: () => {
+              void leaveSafely().then((ok) => {
+                if (ok) navigate(`/create?c=${activeId ?? ''}`)
+              })
+            },
+          },
+          {
+            label: 'Delete this reflection',
+            danger: true,
+            icon: <TrashIcon className={styles.tinyIcon} />,
+            reason: detail ? null : 'There is nothing here to delete yet.',
+            onSelect: () => setDeleteOpen(true),
+          },
+        ]
+
+  const titleInput = (
+          <input
+            ref={titleRef}
+            className={styles.titleInput}
+            value={
+              titleDraft ??
+              (detail ? displayTitleValue(detail.title, detail.scriptureReference) : '')
+            }
+            placeholder={detail ? 'Name this reflection' : 'New reflection'}
+            aria-label="Reflection title"
+            onChange={(event) => setTitleDraft(event.target.value)}
+            onBlur={() => {
+              if (titleDraft === null) return
+              const value = titleDraft.trim()
+              if (!value || value === detail?.title) {
+                setTitleDraft(null)
+                return
+              }
+              void (async () => {
+                if (!detail) {
+                  await ensureConversation({ title: value })
+                  setTitleDraft(null)
+                  return
+                }
+                const ok = await patchConversation({ title: value })
+                if (ok) setTitleDraft(null)
+              })()
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.currentTarget.blur()
+              if (event.key === 'Escape') setTitleDraft(null)
+            }}
+          />  )
+
+  /*
+   * The phone's bar is this editor's header. Handed to the shell rather than
+   * rendered here, so there is exactly one bar on the screen — the shell's own
+   * wordmark header steps aside for it.
+   */
+  useMobileBar(
+    () => ({ title: 'Reflection', replace: editorBar }),
+    [detail?.id, titleDraft, detail?.title, saveStatus, saveLabel, moreItems],
+  )
+
+  const editorBar = (
+    <div className={styles.mobileBar}>
+      <button
+        type="button"
+        className={styles.mobileBarButton}
+        onClick={() => setListOpen(true)}
+        aria-label="Open the reflections list"
+      >
+        <BookIcon className={styles.smallIcon} />
+      </button>
+      {titleInput}
+      {/*
+        Quiet, and only once there is something to report. A blank page
+        saying "Saved" is a reassurance about nothing.
+      */}
+      {detail ? (
+        <span className={styles.mobileSave} data-status={saveStatus} role="status">
+          {saveLabel}
+        </span>
+      ) : null}
+      <MoreMenu label="More actions for this reflection" items={moreItems} />
+    </div>
+  )
+
+
   return (
     <section
       className={styles.workspace}
@@ -1568,38 +1681,7 @@ export function ChatPage() {
                   ? detail.scriptureReference.trim()
                   : 'Add Bible passage'}
               </button>
-              <input
-                ref={titleRef}
-                className={styles.titleInput}
-                value={
-                  titleDraft ??
-                  (detail ? displayTitleValue(detail.title, detail.scriptureReference) : '')
-                }
-                placeholder={detail ? 'Name this reflection' : 'New reflection'}
-                aria-label="Reflection title"
-                onChange={(event) => setTitleDraft(event.target.value)}
-                onBlur={() => {
-                  if (titleDraft === null) return
-                  const value = titleDraft.trim()
-                  if (!value || value === detail?.title) {
-                    setTitleDraft(null)
-                    return
-                  }
-                  void (async () => {
-                    if (!detail) {
-                      await ensureConversation({ title: value })
-                      setTitleDraft(null)
-                      return
-                    }
-                    const ok = await patchConversation({ title: value })
-                    if (ok) setTitleDraft(null)
-                  })()
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') event.currentTarget.blur()
-                  if (event.key === 'Escape') setTitleDraft(null)
-                }}
-              />
+              {titleInput}
             </div>
 
             {/*
@@ -1689,38 +1771,7 @@ export function ChatPage() {
             {/* Everything else that can be done to a reflection, behind one press. */}
             <MoreMenu
               label="More actions for this reflection"
-              items={[
-                {
-                  label: 'Suggest a title',
-                  reason: suggestTitleReason ?? (suggesting ? 'Thinking…' : null),
-                  onSelect: () => void suggestTitle(),
-                },
-                {
-                  label: 'Suggest from conversation',
-                  reason: hasChatMessages
-                    ? busyAction !== null
-                      ? 'Waiting for the last request to come back.'
-                      : null
-                    : 'There is no conversation to read yet.',
-                  onSelect: () => void runAi(AI_ACTIONS.EXTRACT_CHAT),
-                },
-                {
-                  label: 'Create visual',
-                  reason: detail ? null : 'Write something first.',
-                  onSelect: () => {
-                    void leaveSafely().then((ok) => {
-                      if (ok) navigate(`/create?c=${activeId ?? ''}`)
-                    })
-                  },
-                },
-                {
-                  label: 'Delete this reflection',
-                  danger: true,
-                  icon: <TrashIcon className={styles.tinyIcon} />,
-                  reason: detail ? null : 'There is nothing here to delete yet.',
-                  onSelect: () => setDeleteOpen(true),
-                },
-              ]}
+              items={moreItems}
             />
 
             {isNarrow ? (
@@ -1787,6 +1838,55 @@ export function ChatPage() {
               if (event.key === 'Escape') setTagsDraft(null)
             }}
           />
+
+          {/*
+            The three things from the head a phone still needs, on one line.
+            The passage says what this is written against, the state says who
+            can see it, and Share is the action — quiet until there is
+            something worth sharing, which is the same rule the desktop head
+            uses rather than a second one invented for phones.
+          */}
+          {isNarrow ? (
+            <div className={styles.mobileStatus}>
+              <button
+                type="button"
+                className={styles.passageButton}
+                aria-haspopup="dialog"
+                onClick={() => setPassageOpen(true)}
+              >
+                <BookIcon className={styles.tinyIcon} />
+                {detail?.scriptureReference?.trim()
+                  ? detail.scriptureReference.trim()
+                  : 'Add Bible passage'}
+              </button>
+
+              {detail ? (
+                <span className={styles.privacy}>
+                  {detail.visibility === 'shared' ? (
+                    <>
+                      <GlobeIcon className={styles.tinyIcon} />
+                      Shared
+                    </>
+                  ) : (
+                    <>
+                      <LockIcon className={styles.tinyIcon} />
+                      Private
+                    </>
+                  )}
+                </span>
+              ) : null}
+
+              <button
+                type="button"
+                className={`btn btn-sm ${written > 0 ? 'btn-primary' : 'btn-secondary'} ${styles.mobileShare}`}
+                disabled={!detail}
+                onClick={() => setShareOpen(true)}
+              >
+                <ShareIcon className={styles.tinyIcon} />
+                Share
+              </button>
+            </div>
+          ) : null}
 
           <p className={styles.progress}>
             <span className={styles.progressText}>

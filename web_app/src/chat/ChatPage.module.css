@@ -3039,3 +3039,219 @@
     flex: 1 1 auto;
   }
 }
+
+/* --- the phone's editor bar ------------------------------------------------ */
+
+/*
+ * The editor's header, in the shell's one bar.
+ *
+ * What this replaces was four stacked rows above the first field: a passage
+ * chooser on its own line, a row of Share and Chat and ⋯, a row of format and
+ * tags, and a row of progress — roughly 280px of a 844px phone spent before
+ * anybody could write a word. Each of those still exists; they are in the bar,
+ * in the status line under it, or behind the ⋯ that was already there.
+ */
+.mobileBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.mobileBarButton {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.mobileBarButton::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+}
+
+.mobileBarButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The title is the widest thing in the bar and the first to give up room. */
+.mobileBar .titleInput {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  block-size: 2.75rem;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-serif);
+  font-size: max(16px, var(--text-md));
+  font-weight: 600;
+}
+
+/*
+ * Save state, said quietly and in words.
+ *
+ * It shrinks to nothing rather than pushing the title out: on the narrowest
+ * screens the ⋯ and the title matter more than a word that repeats itself
+ * every few seconds. It never wraps and never moves the bar to a second row.
+ */
+.mobileSave {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mobileSave[data-status='failed'] {
+  color: var(--heart);
+  font-weight: 600;
+}
+
+@media (max-width: 899px) {
+  /*
+   * The head's contents now live in the bar and the status line, so the head
+   * itself would be a second copy of both.
+   */
+  .artifactHead {
+    display: none;
+  }
+}
+
+/*
+ * The passage, the state and Share, on one wrapping line.
+ *
+ * Wrapping is allowed here — unlike the app bar — because these are three
+ * independent things rather than one row of controls, and a long reference
+ * pushing Share to a second line is better than a reference truncated to
+ * "Luke 22…", which is the one part somebody needs to read.
+ */
+.mobileStatus {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block-end: var(--space-3);
+  min-inline-size: 0;
+}
+
+.mobileStatus > * {
+  min-inline-size: 0;
+}
+
+.mobileShare {
+  margin-inline-start: auto;
+}
+
+/* --- the phone: one editor, not a card inside a page ---------------------- */
+
+@media (max-width: 899px) {
+  /*
+   * The editor stops being a card.
+   *
+   * On a phone the page *is* the editor, so the border around it was an
+   * outline drawn 16px inside another outline, and every section then drew a
+   * third inside that, and every textarea a fourth. Four nested rounded
+   * rectangles to hold one paragraph of writing. The colour rules down the
+   * side of each section carry the structure; the boxes were only repeating
+   * what the rules already said.
+   */
+  .artifact {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    padding-inline: 0;
+  }
+
+  /*
+   * The section keeps its coloured rule and loses its box. The rule is what
+   * says which of the four this is; the rounded panel around it was only
+   * repeating that, one layer further out.
+   */
+  .field {
+    border-radius: 0;
+    background: transparent;
+    /*
+     * Right padding stays. Removing it pushed the Assist button flush to the
+     * screen edge and clipped the word — the panel was gone but the space it
+     * used to provide was still doing a job.
+     */
+    padding-inline: var(--space-3) var(--space-2);
+  }
+
+  /*
+   * The writing area keeps a surface, because a field with no edge gives
+   * nothing to aim at and no sense of how much room there is. It is the only
+   * box left in the stack.
+   */
+  .fieldInput {
+    background: var(--surface);
+  }
+
+  /*
+   * Type, tags, completion and length on one line together.
+   *
+   * Each had a row of its own — three rows of status above a page for
+   * writing. They are one fact between them: what kind of reflection this is
+   * and how far along it is.
+   */
+  .artifactMeta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-block-end: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  /*
+   * The status lines sit close enough to read as one block rather than as
+   * three separate announcements stacked above the writing.
+   */
+  .mobileStatus {
+    margin-block-end: var(--space-2);
+  }
+
+  .artifactMeta > * {
+    min-inline-size: 0;
+  }
+
+  .progress {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-block: 0 var(--space-4);
+    font-size: var(--text-sm);
+  }
+
+  /*
+   * The bar of progress goes. The words beside it said the same thing, and
+   * on a narrow screen it was the widest element in a row that needed to
+   * shrink.
+   */
+  .progressTrack {
+    display: none;
+  }
+
+  /* The ⋯ in the bar matches the other bar buttons rather than being a slab. */
+  .mobileBar .iconButton {
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+    border: 0;
+    background: transparent;
+  }
+}
