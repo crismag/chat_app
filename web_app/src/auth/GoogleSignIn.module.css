@@ -1,0 +1,33 @@
+.root {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: center;
+}
+
+/*
+ * Google's own button, in a box of ours. Its dimensions are Google's to
+ * choose — the brand requires it — so this reserves the room rather than
+ * restyling the control, which keeps the layout from jumping when the script
+ * finishes loading.
+ */
+.button {
+  min-block-size: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.note {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.problem {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--heart);
+  text-align: center;
+}

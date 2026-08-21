@@ -157,3 +157,27 @@
     margin-inline: 0;
   }
 }
+
+/*
+ * "or", with a rule either side.
+ *
+ * Two ways in, and this says they are alternatives rather than steps — a
+ * Google button sitting directly above a form reads as something to do first.
+ */
+.divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1 1 auto;
+  block-size: 1px;
+  background: var(--line);
+}

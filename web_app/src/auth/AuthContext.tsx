@@ -35,6 +35,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       /* How much of their guest work moved into this account, if any. */
       return { merged: account.merged ?? 0 }
     },
+    async continueWithGoogle(credential, keepSignedIn) {
+      const account = await api<AuthUser & { merged?: number }>('/auth/google', {
+        method: 'POST',
+        body: JSON.stringify({ credential, keepSignedIn }),
+      })
+      setUser(account)
+      /* How much of their guest work moved into this account, if any. */
+      return { merged: account.merged ?? 0 }
+    },
     async register(email, password): Promise<RegisterOutcome> {
       try {
         setUser(
