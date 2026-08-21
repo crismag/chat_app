@@ -3271,6 +3271,33 @@
   cursor: pointer;
 }
 
+/*
+ * Compact to look at, a thumb to press.
+ *
+ * "Full ▾" is 32px of text sitting in a line of prose, and widening it with
+ * padding would push the line towards wrapping again — the exact thing this
+ * consolidation was for. The reach is expanded instead, which is allowed
+ * precisely because its neighbours here are punctuation and text rather than
+ * other controls, so nothing can be stolen from.
+ */
+/*
+ * Expanded to the right only.
+ *
+ * Symmetric expansion reached back into the 8px gap between this and the
+ * passage chip beside it, leaving two controls 2px apart — trading an
+ * undersized target for a crowded one. To the right is punctuation and text,
+ * which nothing can be stolen from.
+ */
+.statusFormat::after {
+  content: '';
+  position: absolute;
+  inset: 0 -12px 0 0;
+}
+
+.statusFormat {
+  position: relative;
+}
+
 .statusFormat:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;

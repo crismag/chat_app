@@ -108,7 +108,15 @@ const MEASURE = `
       const value = parseFloat(after[side]);
       return Number.isFinite(value) ? value : 0;
     };
-    if (positioned && [after.top, after.left].some((v) => parseFloat(v) < 0)) {
+    /*
+     * Any negative inset expands, not only top or left — a control whose reach
+     * is widened to one side (away from a neighbour it would otherwise crowd)
+     * was reported as undersized while being exactly the right size.
+     */
+    if (
+      positioned &&
+      [after.top, after.right, after.bottom, after.left].some((v) => parseFloat(v) < 0)
+    ) {
       const box = el.getBoundingClientRect();
       return {
         left: box.left + inset('left'),
@@ -129,17 +137,81 @@ const MEASURE = `
     return el.getBoundingClientRect();
   };
 
+  /*
+   * The page-content boundary, or the applicable safe-area inset.
+   *
+   * The rule this replaces was "nothing within 16px of the viewport edge",
+   * which is wrong about the shape a phone actually uses: a bottom navigation
+   * and an app bar span the viewport on purpose, and a checker that calls that
+   * a defect gets worked around by padding that should not exist. Adding outer
+   * space to satisfy a checker is the checker making the design worse.
+   *
+   * So a full-width structural component — one that spans the viewport and is
+   * pinned to an edge — is exempt as a component, and its cells are measured
+   * against its own content box instead. Everything else is measured against
+   * the page's 16px gutter.
+   */
+  const structural = (el) => {
+    for (let node = el.parentElement; node; node = node.parentElement) {
+      const style = getComputedStyle(node);
+      const box = node.getBoundingClientRect();
+      const pinned = style.position === 'fixed' || style.position === 'sticky';
+      const spans = Math.round(box.width) >= innerWidth - 1;
+      if (spans && (pinned || ['HEADER', 'NAV', 'FOOTER'].includes(node.tagName))) {
+        return { node, box, style };
+      }
+    }
+    return null;
+  };
+
   const small = [];
   const edges = [];
   for (const el of controls) {
     const box = hitArea(el);
-    if (box.width < MIN || box.height < MIN) {
+    /* Half a pixel of slack: a 43.99px box is 44px of target, not a defect. */
+    if (box.width < MIN - 0.5 || box.height < MIN - 0.5) {
       small.push({ name: name(el), w: Math.round(box.width), h: Math.round(box.height) });
     }
-    if (!segmented(el) && (box.left < EDGE || box.right > innerWidth - EDGE)) {
-      edges.push({ name: name(el), left: Math.round(box.left), right: Math.round(innerWidth - box.right) });
+
+    const host = structural(el);
+    if (host) {
+      /*
+       * Inside a structural component: the boundary is that component's own
+       * padding, which is where its designer put its gutter — and which the
+       * safe-area inset is already folded into.
+       */
+      const padLeft = parseFloat(host.style.paddingLeft) || 0;
+      const padRight = parseFloat(host.style.paddingRight) || 0;
+      const inner = { left: host.box.left + padLeft, right: host.box.right - padRight };
+      /*
+       * Cells that share the full width between them — a bottom bar's tabs —
+       * are meant to reach the component's edges, so only a control that
+       * breaks OUT of the padding box is reported.
+       */
+      if (box.left < inner.left - 0.5 || box.right > inner.right + 0.5) {
+        edges.push({
+          name: name(el),
+          left: Math.round(box.left - inner.left),
+          right: Math.round(inner.right - box.right),
+          where: 'outside its bar’s gutter',
+        });
+      }
+      continue;
     }
-    seen.push({ name: name(el), box, segmented: segmented(el) });
+
+    if (box.left < EDGE - 0.5 || box.right > innerWidth - EDGE + 0.5) {
+      edges.push({
+        name: name(el),
+        left: Math.round(box.left),
+        right: Math.round(innerWidth - box.right),
+        where: 'inside the 16px page gutter',
+      });
+    }
+  }
+
+  /* Adjacency is measured on the same expanded boxes the sizes were. */
+  for (const el of controls) {
+    seen.push({ name: name(el), box: hitArea(el), segmented: segmented(el) });
   }
 
   const crowded = [];
