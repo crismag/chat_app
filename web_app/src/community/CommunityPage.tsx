@@ -38,6 +38,13 @@ import {
 } from '@chat/shared'
 import { ApiError } from '../shared/api/client.ts'
 import { shareWithPlatform } from '../shared/native/share.ts'
+import { useMobileBar } from '../shared/mobile/MobileBar.tsx'
+import { PageMenu } from '../shared/mobile/PageMenu.tsx'
+import { useAccountRequired } from '../shared/mobile/AccountRequired.tsx'
+import { NARROW_QUERY, useMediaQuery } from '../shared/ui/useMediaQuery.ts'
+import { MoreIcon } from '../shared/ui/icons.tsx'
+import { Link } from 'react-router'
+import { useAuth } from '../auth/useAuth.ts'
 import { ReflectionCardSkeleton } from '../shared/ui/ReflectionCard.tsx'
 import { PublicationCard } from './PublicationCard.tsx'
 import {
@@ -100,13 +107,32 @@ const DESTINATIONS: {
  * all four into the one message that helps with none of them.
  */
 type Failure = {
-  kind: 'unavailable' | 'unauthorised' | 'community-gone' | 'removed' | 'offline'
+  kind:
+    | 'unavailable'
+    | 'unauthorised'
+    | 'account-required'
+    | 'community-gone'
+    | 'removed'
+    | 'offline'
   message: string
   action: string
 }
 
 function describe(caught: unknown): Failure {
   if (caught instanceof ApiError) {
+    /*
+     * A guest reaching something that needs an account. Distinct from 401 on
+     * purpose: they *are* signed in, so offering a sign-in is offering them
+     * what they already have. The server writes the sentence, because the
+     * server is what knows the rule.
+     */
+    if (caught.status === 403) {
+      return {
+        kind: 'account-required',
+        message: caught.message,
+        action: 'Create an account',
+      }
+    }
     if (caught.status === 401) {
       return {
         kind: 'unauthorised',
@@ -182,7 +208,35 @@ function Skeletons() {
 /* ------------------------------------------------------------------- page */
 
 export function CommunityPage() {
-  const [destination, setDestination] = useState<Destination>('shared')
+  const { user } = useAuth()
+  /*
+   * A guest has a session and no account. They may read what is public; they
+   * may not publish, join, or take part. That is the whole distinction, and it
+   * is applied per action rather than at the door — what was here before shut
+   * the entire screen and told them, beside their own avatar, that they were
+   * signed out.
+   */
+  const guest = user?.accountType === 'ANONYMOUS'
+  /*
+   * A visitor is anybody who belongs to no community: a guest, or somebody
+   * with no session at all who has arrived on a link. Both are shown Public.
+   *
+   * "Shared" means the communities you belong to, so landing either of them
+   * there is landing them on a destination that is empty by definition — and
+   * for the session-less it was worse than empty, because asking for it is
+   * what produced "You are no longer signed in" on a first visit.
+   */
+  const visitor = !user || guest
+  /*
+   * Encourage, Save and Report need an account. They stay on the card — the
+   * product is not smaller for a visitor — but pressing one now explains
+   * rather than waiting for the server to refuse it and rendering that
+   * refusal as though the session had gone wrong.
+   */
+  const account = useAccountRequired()
+  const [destination, setDestination] = useState<Destination>(
+    user && user.accountType !== 'ANONYMOUS' ? 'shared' : 'public',
+  )
   const [items, setItems] = useState<Publication[]>([])
   const [hashtags, setHashtags] = useState<Hashtag[]>([])
   const [reportReasons, setReportReasons] = useState<ReportReason[]>([])
@@ -191,6 +245,8 @@ export function CommunityPage() {
   const [tag, setTag] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [failure, setFailure] = useState<Failure | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const narrow = useMediaQuery(NARROW_QUERY)
   const [notice, setNotice] = useState<string | null>(null)
   const [now] = useState(() => Date.now())
 
@@ -199,7 +255,14 @@ export function CommunityPage() {
     setFailure(null)
     try {
       if (destination === 'communities') {
-        setCommunities(await fetchCommunities())
+        /*
+         * A visitor has no communities of their own, and asking for them is
+         * what produced "You are no longer signed in" on a first visit —
+         * `/communities` needs an account, while the directory does not. So
+         * they are given the directory and an empty list of their own, which
+         * is the truth rather than a failure.
+         */
+        setCommunities(visitor ? { communities: [], invitations: [] } : await fetchCommunities())
       } else {
         const feed = await fetchFeed({
           scope: destination,
@@ -215,7 +278,7 @@ export function CommunityPage() {
     } finally {
       setLoading(false)
     }
-  }, [destination, query, tag])
+  }, [destination, query, tag, visitor])
 
   useEffect(() => {
     /* Search updates while typing, but not on every keystroke's round trip. */
@@ -256,8 +319,42 @@ export function CommunityPage() {
     [destination],
   )
 
+  /*
+   * The bar names the destination being read — Shared, Public, or the
+   * community by name. "Community" is on the tab bar at the bottom of the
+   * screen already; repeating it here would spend the one heading a phone has
+   * on the word somebody just pressed to get here.
+   */
+  useMobileBar(
+    () => ({
+      title: current?.heading ?? 'Community',
+      actions: (
+        <button
+          type="button"
+          className={styles.barAction}
+          aria-label="Menu"
+          onClick={() => setMenuOpen(true)}
+        >
+          <MoreIcon />
+        </button>
+      ),
+    }),
+    [current?.heading],
+  )
+
   return (
     <section className={styles.page}>
+      <PageMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
+
+      {/*
+        Not rendered on a phone, rather than rendered and hidden. The bar
+        already carries this heading, and a second copy behind `display: none`
+        is still a second `h1` for anything that reads the document rather
+        than looking at it.
+      */}
+      {account.sheet}
+
+      {narrow ? null : (
       <header className={styles.header}>
         <div>
           <p className="eyebrow">Community</p>
@@ -265,6 +362,7 @@ export function CommunityPage() {
           <p className={styles.description}>{current?.description}</p>
         </div>
       </header>
+      )}
 
       {/*
         Destinations, as tabs. Three, all of them live — the interface must not
@@ -272,7 +370,7 @@ export function CommunityPage() {
       */}
       <div className={styles.controls}>
         <div className={styles.tabs} role="tablist" aria-label="Community destinations">
-          {DESTINATIONS.map((entry) => (
+          {DESTINATIONS.filter((entry) => !(visitor && entry.id === 'shared')).map((entry) => (
             <button
               key={entry.id}
               type="button"
@@ -303,6 +401,11 @@ export function CommunityPage() {
 
         {destination === 'communities' ? null : (
           <>
+            {/*
+              Not offered to a guest. There is nothing here for them to search,
+              and a search box above a panel explaining that they cannot read
+              this yet is a control that can only disappoint.
+            */}
             <label className="sr-only" htmlFor="community-search">
               Search Scripture, reflections, authors or tags
             </label>
@@ -310,7 +413,13 @@ export function CommunityPage() {
               id="community-search"
               className={`input ${styles.search}`}
               type="search"
-              placeholder="Search Scripture, reflections, authors or tags"
+              /*
+               * The full sentence is the label, which is what a screen reader
+               * reads. The placeholder is what has to fit on a phone, and
+               * "Search Scripture, reflections, authors or ta…" told nobody
+               * anything the short version does not.
+               */
+              placeholder="Search shared reflections"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
@@ -344,20 +453,26 @@ export function CommunityPage() {
         {failure ? (
           <section className={styles.failure} role="alert">
             <p>{failure.message}</p>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => {
-                if (failure.kind === 'unauthorised') {
-                  window.location.assign('/login')
-                  return
-                }
-                setTag(null)
-                void load()
-              }}
-            >
-              {failure.action}
-            </button>
+            {failure.kind === 'account-required' ? (
+              <Link className="btn btn-primary" to="/login?create=1">
+                {failure.action}
+              </Link>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  if (failure.kind === 'unauthorised') {
+                    window.location.assign('/login')
+                    return
+                  }
+                  setTag(null)
+                  void load()
+                }}
+              >
+                {failure.action}
+              </button>
+            )}
           </section>
         ) : loading ? (
           <Skeletons />
@@ -401,6 +516,7 @@ export function CommunityPage() {
                 now={now}
                 reportReasons={reportReasons}
                 onEncourage={(next) =>
+                  account.guard(() =>
                   void act(async () => {
                     const result = await setEncouraged(publication.id, next)
                     replace(publication.id, (item) => ({
@@ -408,14 +524,18 @@ export function CommunityPage() {
                       encouraged: result.encouraged,
                     }))
                     return result.message
-                  })
+                  }))()
                 }
                 onSave={(next) =>
+                  account.guard(() =>
                   void act(async () => {
                     const result = await setSaved(publication.id, next)
                     replace(publication.id, (item) => ({ ...item, saved: result.saved }))
                     return result.message
-                  })
+                  }))()
+                }
+                onAccountRequired={
+                  account.needsAccount ? account.guard(() => {}) : null
                 }
                 onReport={async (reason, note) => {
                   /* The dialog shows its own confirmation, so no notice here. */

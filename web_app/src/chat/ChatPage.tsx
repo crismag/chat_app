@@ -18,6 +18,7 @@ import {
   CHAT_SECTION_TYPES,
   TITLE_SOURCES,
   CHAT_FORMATS,
+  LENGTH_STATUS,
   parseHashtags,
   validateChat,
   type AiAction,
@@ -43,8 +44,12 @@ import {
 } from '../shared/ui/icons.tsx'
 import { shareWithPlatform } from '../shared/native/share.ts'
 import { ChatArtifact } from './ChatArtifact.tsx'
-import { MoreMenu } from './MoreMenu.tsx'
+import { MoreMenu, type MoreMenuItem } from './MoreMenu.tsx'
+import { Recoverable } from '../shared/ui/Recoverable.tsx'
 import { NARROW_QUERY, useMediaQuery } from '../shared/ui/useMediaQuery.ts'
+import { useMobileBar } from '../shared/mobile/MobileBar.tsx'
+import { PageMenu } from '../shared/mobile/PageMenu.tsx'
+import { MoreIcon } from '../shared/ui/icons.tsx'
 import { ChatHelper } from './ChatHelper.tsx'
 import {
   DeleteSheet,
@@ -252,6 +257,7 @@ export function ChatPage() {
   const viewGeneration = useRef(0)
 
   const isNarrow = useMediaQuery(NARROW_QUERY)
+  const [menuOpen, setMenuOpen] = useState(false)
   /*
    * Below this the three panes cannot all have room, and the artifact is the
    * one that must not be squeezed — it is the thing being made. The history
@@ -471,6 +477,33 @@ export function ChatPage() {
       { replace: true },
     )
     void startNew()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
+  /*
+   * Open with the share sheet already up, when something sent us here to
+   * share.
+   *
+   * This is how a card in the collection offers Share without owning any of
+   * the logic: it opens the reflection and asks for the flow, and the flow is
+   * the one and only share sheet, with its destinations, its permission rules
+   * and its limits. Duplicating any of that on a card would be a second
+   * implementation of the rules that decide who may see somebody's writing.
+   *
+   * The parameter is consumed on arrival, like `new`, so a refresh does not
+   * reopen a sheet the reader has closed.
+   */
+  useEffect(() => {
+    if (searchParams.get('share') !== '1') return
+    setSearchParams(
+      (current) => {
+        const params = new URLSearchParams(current)
+        params.delete('share')
+        return params
+      },
+      { replace: true },
+    )
+    setShareOpen(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
@@ -1518,6 +1551,176 @@ export function ChatPage() {
     />
   )
 
+  /*
+   * One title field, rendered in one of two places.
+   *
+   * On a phone it belongs in the app bar — that is what makes the bar the
+   * compact editor header rather than a second thing above the editor's own
+   * header. On a desktop it stays in the artifact head. Defined once and
+   * placed once, because two inputs carrying the same label is two things for
+   * a screen reader to announce and one of them is always the wrong one.
+   */
+  /* One list of secondary actions, offered from the phone's bar and the desktop head. */
+  const moreItems: MoreMenuItem[] = [
+          {
+            label: 'Suggest a title',
+            reason: suggestTitleReason ?? (suggesting ? 'Thinking…' : null),
+            onSelect: () => void suggestTitle(),
+          },
+          {
+            label: 'Suggest from conversation',
+            reason: hasChatMessages
+              ? busyAction !== null
+                ? 'Waiting for the last request to come back.'
+                : null
+              : 'There is no conversation to read yet.',
+            onSelect: () => void runAi(AI_ACTIONS.EXTRACT_CHAT),
+          },
+          {
+            label: 'Create visual',
+            reason: detail ? null : 'Write something first.',
+            onSelect: () => {
+              void leaveSafely().then((ok) => {
+                if (ok) navigate(`/create?c=${activeId ?? ''}`)
+              })
+            },
+          },
+          {
+            label: 'Delete this reflection',
+            danger: true,
+            icon: <TrashIcon className={styles.tinyIcon} />,
+            reason: detail ? null : 'There is nothing here to delete yet.',
+            onSelect: () => setDeleteOpen(true),
+          },
+        ]
+
+  const titleInput = (
+          <input
+            ref={titleRef}
+            className={styles.titleInput}
+            value={
+              titleDraft ??
+              (detail ? displayTitleValue(detail.title, detail.scriptureReference) : '')
+            }
+            placeholder={detail ? 'Name this reflection' : 'New reflection'}
+            aria-label="Reflection title"
+            onChange={(event) => setTitleDraft(event.target.value)}
+            onBlur={() => {
+              if (titleDraft === null) return
+              const value = titleDraft.trim()
+              if (!value || value === detail?.title) {
+                setTitleDraft(null)
+                return
+              }
+              void (async () => {
+                if (!detail) {
+                  await ensureConversation({ title: value })
+                  setTitleDraft(null)
+                  return
+                }
+                const ok = await patchConversation({ title: value })
+                if (ok) setTitleDraft(null)
+              })()
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.currentTarget.blur()
+              if (event.key === 'Escape') setTitleDraft(null)
+            }}
+          />  )
+
+  /*
+   * The phone's bar is this editor's header. Handed to the shell rather than
+   * rendered here, so there is exactly one bar on the screen — the shell's own
+   * wordmark header steps aside for it.
+   */
+  /*
+   * `moreItems` is deliberately not a dependency here.
+   *
+   * It is rebuilt on every render, so including it made this effect run on
+   * every render; the effect writes the shared bar configuration, that rewrite
+   * re-rendered everything reading it — this page included — and the next
+   * render built another new array. React stopped it with "Maximum update
+   * depth exceeded", which is the loop saying so out loud.
+   *
+   * The menu is rendered in the page body instead of inside the bar, so the
+   * bar no longer needs to know about the items at all, and this depends only
+   * on the things actually shown in it.
+   */
+  useMobileBar(
+    () => ({ title: 'Reflection', replace: editorBar }),
+    [detail?.id, titleDraft, detail?.title, saveStatus, saveLabel],
+  )
+
+  const editorBar = (
+    <div className={styles.mobileBar}>
+      {/*
+        The screen's heading, for anything reading the document rather than
+        looking at it. The visible name of the reflection is the field beside
+        this, and a text input is not a heading — so without this the editor
+        was the one screen with no `h1` at all.
+      */}
+      <h1 className="sr-only">Reflection editor</h1>
+      <button
+        type="button"
+        className={styles.mobileBarButton}
+        onClick={() => setListOpen(true)}
+        aria-label="Open the reflections list"
+      >
+        <BookIcon className={styles.smallIcon} />
+      </button>
+      {titleInput}
+      {/*
+        Quiet, and only once there is something to report. A blank page
+        saying "Saved" is a reassurance about nothing.
+      */}
+      {detail ? (
+        <span className={styles.mobileSave} data-status={saveStatus} role="status">
+          {saveLabel}
+        </span>
+      ) : null}
+      {/*
+        The same ⋮ in the same corner as every other screen, opening the same
+        sheet: this reflection's actions, then the account. Delete is here —
+        on the reflection being edited, behind its existing confirmation —
+        rather than on a card in a list.
+      */}
+      <button
+        type="button"
+        className={styles.mobileBarButton}
+        aria-label="Menu"
+        onClick={() => setMenuOpen(true)}
+      >
+        <MoreIcon className={styles.smallIcon} />
+      </button>
+    </div>
+  )
+
+
+  const editorMenu = (
+    (
+      <PageMenu
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        items={[
+          {
+            label: detail?.visibility === 'shared' ? 'Shared' : 'Private',
+            hint:
+              detail?.visibility === 'shared'
+                ? 'Others can see this reflection'
+                : 'Only you can see this reflection',
+            onSelect: () => setShareOpen(true),
+          },
+          ...moreItems.map((item) => ({
+            label: item.label,
+            onSelect: item.onSelect,
+            reason: item.reason ?? null,
+            danger: item.danger,
+          })),
+        ]}
+      />
+    )
+  )
+
   return (
     <section
       className={styles.workspace}
@@ -1530,6 +1733,8 @@ export function ChatPage() {
         The C.H.A.T. is what is being made here, so it holds the middle and is
         shown whole; the conversation is the tool beside it.
       */}
+      {editorMenu}
+
       <div className={styles.artifact}>
         <div className={styles.artifactHead}>
           <div className={styles.artifactHeadMain}>
@@ -1567,38 +1772,14 @@ export function ChatPage() {
                   ? detail.scriptureReference.trim()
                   : 'Add Bible passage'}
               </button>
-              <input
-                ref={titleRef}
-                className={styles.titleInput}
-                value={
-                  titleDraft ??
-                  (detail ? displayTitleValue(detail.title, detail.scriptureReference) : '')
-                }
-                placeholder={detail ? 'Name this reflection' : 'New reflection'}
-                aria-label="Reflection title"
-                onChange={(event) => setTitleDraft(event.target.value)}
-                onBlur={() => {
-                  if (titleDraft === null) return
-                  const value = titleDraft.trim()
-                  if (!value || value === detail?.title) {
-                    setTitleDraft(null)
-                    return
-                  }
-                  void (async () => {
-                    if (!detail) {
-                      await ensureConversation({ title: value })
-                      setTitleDraft(null)
-                      return
-                    }
-                    const ok = await patchConversation({ title: value })
-                    if (ok) setTitleDraft(null)
-                  })()
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') event.currentTarget.blur()
-                  if (event.key === 'Escape') setTitleDraft(null)
-                }}
-              />
+              {/*
+                Rendered here only on a desktop. On a phone this same field is
+                in the app bar, and hiding this copy with CSS rather than not
+                rendering it left two inputs both labelled "Reflection title"
+                in the document — which is two things for a screen reader to
+                find and one of them permanently invisible.
+              */}
+              {isNarrow ? null : titleInput}
             </div>
 
             {/*
@@ -1670,9 +1851,14 @@ export function ChatPage() {
               </span>
             ) : null}
 
+            {/*
+              Share is the loudest control only once there is something to
+              share. On an empty reflection it is the quietest thing that still
+              looks like a button — what matters then is writing.
+            */}
             <button
               type="button"
-              className="btn btn-primary btn-sm"
+              className={`btn btn-sm ${written > 0 ? 'btn-primary' : 'btn-secondary'}`}
               disabled={!detail}
               onClick={() => setShareOpen(true)}
             >
@@ -1683,38 +1869,7 @@ export function ChatPage() {
             {/* Everything else that can be done to a reflection, behind one press. */}
             <MoreMenu
               label="More actions for this reflection"
-              items={[
-                {
-                  label: 'Suggest a title',
-                  reason: suggestTitleReason ?? (suggesting ? 'Thinking…' : null),
-                  onSelect: () => void suggestTitle(),
-                },
-                {
-                  label: 'Suggest from conversation',
-                  reason: hasChatMessages
-                    ? busyAction !== null
-                      ? 'Waiting for the last request to come back.'
-                      : null
-                    : 'There is no conversation to read yet.',
-                  onSelect: () => void runAi(AI_ACTIONS.EXTRACT_CHAT),
-                },
-                {
-                  label: 'Create visual',
-                  reason: detail ? null : 'Write something first.',
-                  onSelect: () => {
-                    void leaveSafely().then((ok) => {
-                      if (ok) navigate(`/create?c=${activeId ?? ''}`)
-                    })
-                  },
-                },
-                {
-                  label: 'Delete this reflection',
-                  danger: true,
-                  icon: <TrashIcon className={styles.tinyIcon} />,
-                  reason: detail ? null : 'There is nothing here to delete yet.',
-                  onSelect: () => setDeleteOpen(true),
-                },
-              ]}
+              items={moreItems}
             />
 
             {isNarrow ? (
@@ -1782,6 +1937,126 @@ export function ChatPage() {
             }}
           />
 
+          {/*
+            The three things from the head a phone still needs, on one line.
+            The passage says what this is written against, the state says who
+            can see it, and Share is the action — quiet until there is
+            something worth sharing, which is the same rule the desktop head
+            uses rather than a second one invented for phones.
+          */}
+          {/*
+            One line of status, not three.
+            What was here was the format on its own row, then the passage and
+            Share on another, then completion and length on a third — three
+            separate announcements stacked above a page for writing, each
+            saying one small thing. They are one fact between them: what kind
+            of reflection this is, how far along it is, and what it is written
+            against.
+
+            It wraps at 320px rather than truncating, because a Scripture
+            reference cut to "Luke 22…" is the one part somebody needs whole.
+            It does not become a toolbar again: the parts are text and two
+            controls, not a row of buttons.
+          */}
+          {isNarrow ? (
+            <div className={styles.mobileStatus}>
+              <button
+                type="button"
+                className={styles.passageButton}
+                aria-haspopup="dialog"
+                onClick={() => setPassageOpen(true)}
+              >
+                <BookIcon className={styles.tinyIcon} />
+                {/*
+                  "Add passage" rather than "Add Bible passage" here only.
+                  This is the one label long enough to push Share onto a second
+                  line at 390px, and the book beside it already says which kind
+                  of passage. Once a reference is chosen the label is short
+                  anyway, so the long form was costing a row precisely when
+                  there was nothing to show for it.
+                */}
+                {detail?.scriptureReference?.trim()
+                  ? detail.scriptureReference.trim()
+                  : 'Add passage'}
+              </button>
+
+              <p className={styles.statusLine}>
+                <button
+                  type="button"
+                  className={styles.statusFormat}
+                  onClick={() => {
+                    if (!detail) {
+                      void ensureConversation().then((id) => {
+                        if (id) setFormatOpen(true)
+                      })
+                      return
+                    }
+                    setFormatOpen(true)
+                  }}
+                >
+                  {format === CHAT_FORMATS.CONDENSED ? 'Short' : 'Full'}
+                  <span aria-hidden="true">▾</span>
+                  <span className="sr-only"> C.H.A.T. — change the format</span>
+                </button>
+                <span aria-hidden="true">·</span>
+                {/*
+                  "2/4" rather than "2 of 4". The same fact in half the width,
+                  matching the length counter beside it — and the words are
+                  still there for anybody listening rather than looking.
+                */}
+                <span>
+                  {written}/{fields.length}
+                  <span className="sr-only"> sections written</span>
+                </span>
+                {/*
+                  Length, once it means something.
+                  "0/2000" on an empty page is a measurement of nothing, and
+                  it was the widest part of the line — enough to push Share
+                  onto a second row at 390px, which is the whole thing this
+                  consolidation was for. It appears as soon as there is
+                  anything to count, and colours when it is over.
+                */}
+                {/*
+                  Length, only once it is worth reading.
+                  Within budget the count is noise — 290/2000 says "carry on",
+                  which is what the absence of a warning already said — and it
+                  was wide enough to push the row onto a third line. It appears
+                  when the length starts to matter, and colours when it is over.
+                */}
+                {liveValidation &&
+                liveValidation.combined.status !== LENGTH_STATUS.RECOMMENDED ? (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span data-status={liveValidation.combined.status}>
+                      {liveValidation.combined.length}/{liveValidation.combined.recommended}
+                      <span className="sr-only"> characters used</span>
+                    </span>
+                  </>
+                ) : null}
+              </p>
+
+              {/*
+                Who can see this is not status while somebody is writing — it
+                is a fact about sharing, and it is stated in the share sheet at
+                the moment it matters. On this line it was a short chip that
+                took a whole row to itself, so it has moved to the menu.
+              */}
+              <button
+                type="button"
+                className={`btn btn-sm ${written > 0 ? 'btn-primary' : 'btn-secondary'} ${styles.mobileShare}`}
+                disabled={!detail}
+                onClick={() => setShareOpen(true)}
+              >
+                {/*
+                  The word alone. The icon was 22px of a line that has to hold
+                  three other things, and "Share" is not a word that needs a
+                  picture to be understood.
+                */}
+                Share
+              </button>
+            </div>
+          ) : null}
+
           <p className={styles.progress}>
             <span className={styles.progressText}>
               {written} of {fields.length} written
@@ -1801,10 +2076,19 @@ export function ChatPage() {
           </p>
         </div>
 
+        {/*
+          A failure that can be acted on and put away, rather than a permanent
+          red band saying "Load failed". Dismissible because everything that
+          reaches here is a load or a send that can simply be tried again —
+          nothing anybody typed is at stake, and it says so.
+        */}
         {error ? (
-          <p className={styles.error} role="alert">
-            {error}
-          </p>
+          <Recoverable
+            message={error}
+            detail="Nothing you have written has been lost."
+            onRetry={() => refreshList()}
+            onDismiss={() => setError(null)}
+          />
         ) : null}
 
         <div className={styles.artifactBody}>

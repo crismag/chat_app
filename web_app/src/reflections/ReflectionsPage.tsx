@@ -37,6 +37,15 @@ import {
   StateBadge,
   formatDate,
 } from '../shared/ui/ReflectionCard.tsx'
+import { NARROW_QUERY, useMediaQuery } from '../shared/ui/useMediaQuery.ts'
+import { useMobileBar } from '../shared/mobile/MobileBar.tsx'
+import { Sheet } from '../shared/mobile/Sheet.tsx'
+import { PageMenu } from '../shared/mobile/PageMenu.tsx'
+import { FilterIcon, MoreIcon } from '../shared/ui/icons.tsx'
+import { previewFor } from './preview.ts'
+import { groupByDay } from './grouping.ts'
+import { MobileCard, MobileTimeline } from './MobileTimeline.tsx'
+import { BarAction, MobileSearchBar, NewReflectionFab, SearchAction } from './mobile.tsx'
 import styles from './ReflectionsPage.module.css'
 
 /* ------------------------------------------------------------------- types */
@@ -56,6 +65,12 @@ type ReflectionDetail = ReflectionSummary & {
  */
 type Enrichment = {
   excerpt: string
+  /**
+   * The card's line, chosen from what the author wrote rather than from what
+   * they pasted. Computed here because this is where the detail is; see
+   * `preview.ts` for why the order is Heart, Application, Testimony, Content.
+   */
+  preview: string
   written: ChatSectionType[]
   /** Every written section, for when the reader asks to see them in full. */
   sections: { type: ChatSectionType; letter: string; label: string; content: string }[]
@@ -597,6 +612,16 @@ export function ReflectionsPage() {
   const [query, setQuery] = useState(search)
   const [datePreset, setDatePreset] = useState<DatePreset>(from || to ? 'custom' : 'any')
 
+  const narrow = useMediaQuery(NARROW_QUERY)
+  /*
+   * An address that already carries a query opens with search active and the
+   * field filled in — a shared or restored link reproduces what it described,
+   * rather than showing a filtered list with no visible reason for it.
+   */
+  const [searchOpen, setSearchOpen] = useState(() => search.length > 0)
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [viewOpen, setViewOpen] = useState(false)
+
   /**
    * Write one part of the address, and go back to page one unless the page is
    * what changed — a filter narrowing to three results has no page four.
@@ -784,6 +809,19 @@ export function ReflectionsPage() {
         if (result.status !== 'fulfilled' || !item) return
         additions[`${item.id}:${item.updatedAt}`] = {
           excerpt: excerptFrom(result.value),
+          preview: previewFor(
+            /*
+             * A Short reflection keeps its writing in `condensed`, not in
+             * `sections` — so a Short card previewed nothing at all until the
+             * right map was handed over.
+             */
+            result.value.format === CHAT_FORMATS.CONDENSED
+              ? ((result.value as { condensed?: Record<string, { content?: string }> }).condensed ??
+                {})
+              : result.value.sections,
+            result.value.format,
+            result.value.scriptureReference,
+          ),
           written: writtenSections(result.value),
           sections: fullSections(result.value),
         }
@@ -827,6 +865,80 @@ export function ReflectionsPage() {
     setParams(new URLSearchParams(), { replace: true })
   }
 
+  /*
+   * Closing search puts the list back and gives focus to the control that
+   * opened it. Both halves matter: leaving the query applied behind a closed
+   * field is a filtered list with no visible cause, and leaving focus on a
+   * button that no longer exists strands a keyboard at the top of the page.
+   */
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false)
+    setReturningFromSearch(true)
+    setQuery('')
+    setParam({ q: null })
+  }, [setParam])
+
+  /*
+   * Give focus back once the trigger exists again.
+   *
+   * Doing it inside `closeSearch` did not work and the check said so: the
+   * button is only rendered after the bar has been re-described without the
+   * search field in it, so at the moment of closing there is nothing to focus
+   * and the page was left with focus on `<body>`. Waiting for the render that
+   * puts it back is the whole fix.
+   */
+  const [returningFromSearch, setReturningFromSearch] = useState(false)
+
+  useMobileBar(
+    () => ({
+      title: 'Reflections',
+      replace: searchOpen ? (
+        <MobileSearchBar
+          value={query}
+          onChange={setQuery}
+          onClear={() => {
+            setQuery('')
+            setParam({ q: null })
+          }}
+          onClose={closeSearch}
+        />
+      ) : undefined,
+      actions: (
+        <>
+          <SearchAction
+            takeFocus={returningFromSearch}
+            onClick={() => {
+              setReturningFromSearch(false)
+              setSearchOpen(true)
+            }}
+          />
+          <BarAction
+            label={
+              activeFilters > 0
+                ? `Filters, ${activeFilters} applied`
+                : 'Filters and sort'
+            }
+            count={activeFilters}
+            onClick={() => setFiltersOpen(true)}
+          >
+            <FilterIcon />
+          </BarAction>
+          {/*
+            "Menu", as on every other screen. It opened as "View settings"
+            when it held only the density preference; it now holds the account
+            as well, in the same corner and the same sheet as the other three
+            screens, and naming it differently made the one control people
+            need to find twice look like two controls.
+          */}
+          <BarAction label="Menu" onClick={() => setViewOpen(true)}>
+            <MoreIcon />
+          </BarAction>
+        </>
+      ),
+    }),
+    [searchOpen, query, activeFilters, closeSearch, setParam, returningFromSearch],
+  )
+
 
   /*
    * Auto is width-driven for columns — that part is CSS — and content-driven
@@ -853,6 +965,28 @@ export function ReflectionsPage() {
       earlier: rest.filter((item) => now - new Date(item.updatedAt).getTime() > 30 * DAY),
     }
   }, [pageItems, enriched, narrowing, now])
+
+  /*
+   * The phone's grouping: In Progress first when there is one, then real
+   * calendar days.
+   *
+   * `continuing` is already exclusive — the memo above holds those items back
+   * from `rest` — so nothing can appear twice, and this relies on that rather
+   * than filtering again and hoping the two agree.
+   */
+  const mobileGroups = useMemo(() => {
+    const rest = pageItems.filter(
+      (item) => !continuing.some((held) => held.id === item.id),
+    )
+    const groups: { label: string; items: ReflectionSummary[] }[] = []
+    if (continuing.length > 0) groups.push({ label: 'In progress', items: continuing })
+    if (narrowing) {
+      if (rest.length > 0) groups.push({ label: 'Results', items: rest })
+      return groups
+    }
+    groups.push(...groupByDay(rest, (item) => item.updatedAt, new Date(now)))
+    return groups
+  }, [pageItems, continuing, narrowing, now])
 
   const grouped = useMemo(() => {
     const order: string[] = []
@@ -889,6 +1023,7 @@ export function ReflectionsPage() {
 
   return (
     <div className={styles.page} data-reflections-root="">
+      {narrow ? null : (
       <header className={styles.header}>
         <div>
           <p className="eyebrow">Your private writing</p>
@@ -901,8 +1036,9 @@ export function ReflectionsPage() {
           duplication that makes a library look like an admin screen.
         */}
       </header>
+      )}
 
-      {nothingAtAll ? null : (
+      {nothingAtAll || narrow ? null : (
         <div className={styles.controls}>
           <div className={styles.searchRow}>
             <label className="sr-only" htmlFor="reflections-search">
@@ -914,7 +1050,7 @@ export function ReflectionsPage() {
               className={`input ${styles.search}`}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search reflections, Scripture or words you wrote"
+              placeholder="Search reflections…"
             />
           </div>
           <div className={styles.controlRow}>
@@ -1037,6 +1173,30 @@ export function ReflectionsPage() {
             Clear search and filters
           </button>
         </p>
+      ) : narrow ? (
+        <MobileTimeline
+          groups={mobileGroups.map((group) => ({
+            label: group.label,
+            items: group.items.map((item) => {
+              const enrichment = enrichmentFor(item)
+              return (
+                <MobileCard
+                  key={item.id}
+                  item={item}
+                  now={now}
+                  written={enrichment?.written}
+                  preview={enrichment?.preview ?? ''}
+                />
+              )
+            }),
+          }))}
+        >
+          <Pager
+            page={currentPage}
+            pageCount={pageCount}
+            onPage={(next) => setParam({ page: String(next) })}
+          />
+        </MobileTimeline>
       ) : asList ? (
         <div className={styles.sections}>
           {grouped.map((group) => (
@@ -1093,6 +1253,125 @@ export function ReflectionsPage() {
           <Pager page={currentPage} pageCount={pageCount} onPage={(next) => setParam({ page: String(next) })} />
         </div>
       )}
+
+      {/* --- the phone's chrome --------------------------------------------- */}
+
+      {narrow && !nothingAtAll ? <NewReflectionFab /> : null}
+
+      <Sheet
+        open={narrow && filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        title="Filters and sort"
+        description={
+          activeFilters > 0
+            ? `${activeFilters} filter${activeFilters === 1 ? '' : 's'} applied`
+            : undefined
+        }
+        footer={
+          <>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => {
+                setDatePreset('any')
+                setParam({ status: null, visibility: null, from: null, to: null })
+              }}
+            >
+              Reset
+            </button>
+            <button type="button" className="btn btn-primary" onClick={() => setFiltersOpen(false)}>
+              Show results
+            </button>
+          </>
+        }
+      >
+        <SheetChoice
+          legend="Status"
+          options={STATUSES}
+          value={status}
+          onChange={(next) => setParam({ status: next === 'all' ? null : next })}
+        />
+        <SheetChoice
+          legend="Visibility"
+          options={VISIBILITIES}
+          value={visibility}
+          onChange={(next) => setParam({ visibility: next === 'all' ? null : next })}
+        />
+        <SheetChoice
+          legend="Updated"
+          options={DATE_PRESETS.filter((preset) => preset.id !== 'custom')}
+          value={datePreset}
+          onChange={(next) => chooseDatePreset(next as DatePreset)}
+        />
+        {/* Sort lives here rather than in the bar: it is the same question. */}
+        <SheetChoice
+          legend="Sort by"
+          options={[
+            { id: 'recent', label: 'Recently updated' },
+            { id: 'title', label: 'Title' },
+          ]}
+          value={sort}
+          onChange={(next) => setParam({ sort: next === 'recent' ? null : next })}
+        />
+      </Sheet>
+
+      <PageMenu open={narrow && viewOpen} onClose={() => setViewOpen(false)}>
+        {/*
+          Density stays available as a preference, moved out of the toolbar
+          rather than deleted. Layout and page size are not offered here: a
+          phone shows one canonical card, and changing the stored desktop
+          preference from a screen that ignores it would be a setting that
+          appears to do nothing.
+        */}
+        <SheetChoice
+          legend="How much to show"
+          options={DENSITIES}
+          value={density}
+          onChange={(next) => chooseDensity(next as Density)}
+        />
+      </PageMenu>
     </div>
+  )
+}
+
+/**
+ * One question and its answers, as a column of real targets.
+ *
+ * Radios rather than a `select`, because a native select on a phone opens a
+ * system picker on top of the sheet the person is already in — a second modal
+ * over the first, to answer a question the sheet had room for.
+ */
+function SheetChoice({
+  legend,
+  options,
+  value,
+  onChange,
+}: {
+  legend: string
+  options: readonly { id: string; label: string; hint?: string }[]
+  value: string
+  onChange: (next: string) => void
+}) {
+  return (
+    <fieldset className={styles.sheetGroup}>
+      <legend className={styles.sheetLegend}>{legend}</legend>
+      <div className={styles.sheetOptions}>
+        {options.map((option) => (
+          <label key={option.id} className={styles.sheetOption}>
+            <input
+              type="radio"
+              name={legend}
+              value={option.id}
+              checked={value === option.id}
+              onChange={() => onChange(option.id)}
+            />
+            <span>
+              {option.label}
+              {option.hint ? <small>{option.hint}</small> : null}
+            </span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
   )
 }

@@ -100,7 +100,17 @@ export type CommunityUser = {
  * publishing *reads* a reflection and never writes one.
  */
 export type CommunityRouteOptions = {
+  /** A registered account. Everything that writes requires one. */
   currentUser: (c: Context) => Promise<CommunityUser | null>;
+  /**
+   * Anybody with a session, guest included.
+   *
+   * Reading what is already public is not an account-only privilege: a guest
+   * who can be handed a link to a public reflection can obviously read it, and
+   * refusing to render it in the application while the link works is a
+   * distinction without a difference. Writing is the line, not reading.
+   */
+  currentReader: (c: Context) => Promise<CommunityUser | null>;
   /** `null` when the backing cannot carry membership; every route 503s. */
   store: CommunityStore | null;
   /** The author's reflection, read-only, only if they own it. */
@@ -120,6 +130,17 @@ export type CommunityRouteOptions = {
   /** Injected in tests so a ceiling can be reached without making 40 requests. */
   limits?: OutwardLimits;
 };
+
+/*
+ * What a guest is told when they reach something an account is needed for.
+ *
+ * Not "sign in": they are signed in, as a guest, and the header shows their own
+ * avatar while saying it. The sentence has to name the actual requirement and
+ * the actual remedy, and it has to be true of somebody who already has a
+ * session and some writing of their own saved under it.
+ */
+const GUEST_CANNOT =
+  'This needs an account. Your reflections are saved already — creating an account keeps them and lets you take part here.';
 
 const UNAVAILABLE =
   'Community needs persistent storage, which this server was started without.';
@@ -195,7 +216,7 @@ function originOf(c: Context): string {
 
 export function createCommunityRoutes(options: CommunityRouteOptions) {
   const app = new Hono();
-  const { currentUser, store, reflection, userIdByEmail, ensureIdentity } = options;
+  const { currentUser, currentReader, store, reflection, userIdByEmail, ensureIdentity } = options;
 
   /*
    * The outward surfaces are metered and switchable; private writing is
@@ -239,9 +260,54 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     if (!store) return { user: null, store: null, response: c.json({ error: UNAVAILABLE }, 503) };
     const user = await currentUser(c);
     if (!user) {
-      return { user: null, store: null, response: c.json({ error: 'Unauthenticated.' }, 401) };
+      /*
+       * A guest reaching a route that writes is refused for a different reason
+       * than a stranger, and is told which — "sign in" is useless advice to
+       * somebody already signed in as a guest, and it was what they were given.
+       */
+      const reader = await currentReader(c);
+      return {
+        user: null,
+        store: null,
+        response: reader
+          ? c.json({ error: GUEST_CANNOT, code: 'ACCOUNT_REQUIRED' }, 403)
+          : c.json({ error: 'Unauthenticated.' }, 401),
+      };
     }
     return { user, store, response: null };
+  };
+
+  /**
+   * For reading what is public. Nobody at all passes.
+   *
+   * Public means public. A first-time visitor arriving on a link to a public
+   * reflection has no session yet, and answering them 401 puts a login wall in
+   * front of something anybody may read — while the same words are readable to
+   * anyone the link was forwarded to. Minting them a guest account instead
+   * would be silent account creation, which this product does not do: an
+   * identity is made when somebody keeps something, not when they read.
+   *
+   * So a reader with no session is given a viewer id that matches nothing.
+   * Every clause of `VISIBLE_TO` that could widen what they see is a
+   * comparison against that id — authorship, hides, mutes, membership — and
+   * none of them can match, so what is left is exactly the public rows. The
+   * absence of a session is expressed as a viewer who owns nothing and belongs
+   * nowhere, rather than as a special case threaded through the queries.
+   */
+  const NOBODY = '';
+
+  const readerGuard = async (c: Context) => {
+    if (!store) {
+      return {
+        viewerId: NOBODY,
+        registered: false,
+        store: null,
+        response: c.json({ error: UNAVAILABLE }, 503),
+      };
+    }
+    const reader = await currentReader(c);
+    const registered = reader !== null && (await currentUser(c)) !== null;
+    return { viewerId: reader?.id ?? NOBODY, registered, store, response: null };
   };
 
   /* ---------------------------------------------------------- communities */
@@ -343,11 +409,17 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
    * newcomer can see it exists and ask, and sees no reflections until asked.
    */
   app.get('/communities/discover', async (c) => {
-    const { user, store: db, response } = await guard(c);
-    if (!user || !db) return response;
+    /*
+     * `discoverable` already restricts to `discoverability = 'public'` and to
+     * communities that are not closed, so this is the publicly visible
+     * directory by construction. A guest sees the same rows a registered
+     * stranger sees, with their own membership state — which is always none.
+     */
+    const { viewerId, store: db, response } = await readerGuard(c);
+    if (!db) return response;
     const query = c.req.query('q') ?? '';
     return c.json({
-      communities: db.discoverable(user.id, query).map((community) => ({
+      communities: db.discoverable(viewerId, query).map((community) => ({
         id: community.id,
         name: community.name,
         description: community.description,
@@ -796,20 +868,31 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
   });
 
   app.get('/publications', async (c) => {
-    const { user, store: db, response } = await guard(c);
-    if (!user || !db) return response;
+    const { viewerId, registered, store: db, response } = await readerGuard(c);
+    if (!db) return response;
 
     const scopeParam = c.req.query('scope') ?? 'shared';
-    const scope =
+    const asked =
       scopeParam === 'public' ? 'public' : scopeParam === 'mine' ? 'mine' : 'shared';
-    const communityId = c.req.query('community') ?? undefined;
+    /*
+     * A guest reads the public feed and only the public feed.
+     *
+     * Forced here rather than refused, because `public` is the only scope that
+     * means anything to somebody with no memberships — `shared` is "the
+     * communities you belong to" and `mine` is "what you published", and both
+     * are empty for a guest by definition. Narrowing is safe in a way widening
+     * would not be: `SCOPE_PUBLIC` is `audience = 'public'`, which no
+     * membership can extend.
+     */
+    const scope = registered ? asked : 'public';
+    const communityId = registered ? (c.req.query('community') ?? undefined) : undefined;
 
     /*
      * A community filter is checked before the feed runs, so an id someone
      * guessed cannot be used to probe for a community's existence through an
      * empty-versus-forbidden difference in the answer.
      */
-    if (communityId && !activeMembership(db, communityId, user.id)) {
+    if (communityId && !activeMembership(db, communityId, viewerId)) {
       return c.json({ error: 'No community found.' }, 404);
     }
 
@@ -823,7 +906,7 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     const [parsed] = rawTag ? parseHashtags([rawTag]) : [];
 
     const origin = originOf(c);
-    const items = db.feed(user.id, {
+    const items = db.feed(viewerId, {
       scope,
       query: (c.req.query('q') ?? '').trim() || undefined,
       tag: parsed?.tag,
@@ -833,7 +916,7 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     return c.json({
       scope,
       items: items.map((view) => serve(view, origin)),
-      hashtags: db.hashtagsFor(user.id, scope),
+      hashtags: db.hashtagsFor(viewerId, scope),
       reportReasons: PUBLICATION_REPORT_REASONS,
     });
   });
@@ -1093,10 +1176,18 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
    * an active membership right now. A URL is not a capability here.
    */
   app.get('/publications/:id', async (c) => {
-    const { user, store: db, response } = await guard(c);
-    if (!user || !db) return response;
+    /*
+     * Open to a guest, and no extra filtering is needed to make that safe:
+     * `VISIBLE_TO` admits a publication only if the reader wrote it, or it is
+     * public, or it is a community share explicitly made public at publish
+     * time, or they are an active member. A guest is a member of nothing, so
+     * member-only content is refused by the same predicate that has always
+     * refused it — this widens who may ask, not what the answer can be.
+     */
+    const { viewerId, store: db, response } = await readerGuard(c);
+    if (!db) return response;
 
-    const view = db.publication(user.id, c.req.param('id'));
+    const view = db.publication(viewerId, c.req.param('id'));
     if (!view) return c.json({ error: 'This publication is not available.' }, 404);
     return c.json(serve(view, originOf(c)));
   });

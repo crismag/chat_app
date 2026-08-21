@@ -13,6 +13,13 @@
   container-name: reflections;
 
   display: grid;
+  /*
+   * The same "may be narrower than its content" the shell needs, for the same
+   * reason: an implicit grid column sizes to max-content, so the widest thing
+   * on the page — here the search field's own preferred width — decided how
+   * wide the page was, and everything else was dragged along with it.
+   */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-5);
   align-content: start;
   width: 100%;
@@ -82,8 +89,22 @@
   min-height: 2.125rem;
 }
 
+/*
+ * The row may be narrower than the field inside it.
+ *
+ * `.search` carries `max-width: 34rem`, which reads as a ceiling — but an
+ * input's *preferred* width is its own, and inside a grid track that sizes to
+ * content that preference became the width of the page. Nothing here is
+ * allowed to be a floor.
+ */
 .searchRow {
   display: block;
+  min-inline-size: 0;
+}
+
+.searchRow .search {
+  inline-size: 100%;
+  min-inline-size: 0;
 }
 
 .search {
@@ -96,6 +117,16 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+  min-inline-size: 0;
+}
+
+/*
+ * A flex child will not go below its content width unless it is told it may,
+ * and a row of controls that cannot shrink is a row that widens the page
+ * instead of wrapping.
+ */
+.controlRow > * {
+  min-inline-size: 0;
 }
 
 .chips {
@@ -133,10 +164,24 @@
   color: var(--on-accent);
 }
 
+/*
+ * The controls wrap. All of them, at every level.
+ *
+ * This row did not, so four controls sat on one line whatever the screen was
+ * and the line simply got longer than the phone. `flex-wrap` has to be said on
+ * every flex container in a toolbar — one that forgets is the one that decides
+ * how wide the page is.
+ */
 .rightControls {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  min-inline-size: 0;
+}
+
+.rightControls > * {
+  min-inline-size: 0;
 }
 
 .select {
@@ -600,5 +645,243 @@
     inset-inline: var(--space-3);
     inset-block-start: auto;
     inline-size: auto;
+  }
+}
+
+/* --- the phone ------------------------------------------------------------ */
+
+/*
+ * A library, not a page about a library.
+ *
+ * What was here on a phone was a stack of introduction before any reflection:
+ * an eyebrow, a heading, a sentence explaining what the page is, a search box
+ * with an instruction inside it, a row of four controls, and then a "Recent"
+ * heading — most of a screen spent describing a list that was already visible
+ * underneath. And it overflowed, because the control row could not wrap and
+ * nothing was allowed to shrink.
+ *
+ * The introduction stays on desktop, where there is room for it and where a
+ * wide empty column would otherwise look unfinished.
+ */
+@media (max-width: 640px) {
+  .page {
+    /* Never wider than the phone, whatever a child asks for. */
+    max-width: 100%;
+    gap: var(--space-3);
+  }
+
+  /*
+   * The page says what it is once, in the navigation and in the heading. The
+   * eyebrow and the explanatory sentence are the first things to go.
+   */
+  .header :global(.eyebrow),
+  .description {
+    display: none;
+  }
+
+  .title {
+    font-size: var(--text-xl);
+  }
+
+  /*
+   * The controls stop being sticky. A sticky bar under a sticky app header on
+   * a 640px-tall screen is two fixed things competing for a third of it.
+   */
+  .controls {
+    position: static;
+    gap: var(--space-2);
+    padding-block: var(--space-2);
+  }
+
+  .search {
+    max-width: 100%;
+  }
+
+  /*
+   * The row wraps and every child is allowed to shrink — a flex child holding
+   * text refuses to go below its content width unless it is told it may, and
+   * that refusal is what pushed the page wider than the screen.
+   */
+  .controlRow,
+  .dateRow {
+    gap: var(--space-2);
+  }
+
+  .controlRow > *,
+  .dateRow > * {
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  /* Cards take the width, and long words break rather than push. */
+  .list {
+    gap: var(--space-3);
+  }
+
+  .list :global(article) {
+    max-inline-size: 100%;
+  }
+}
+
+/*
+ * Anything somebody typed can be arbitrarily long, and none of it may widen
+ * the page. This is not a mobile rule — it is true of a 40-character Scripture
+ * reference on any screen — so it sits outside the media query.
+ */
+.page :where(h2, h3, p, span, li) {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+/*
+ * The controls, at the size of a thumb.
+ *
+ * These were all built to sit in a desktop toolbar — a 34px select, a 30px
+ * segment, 13px labels — and they were never resized for a phone, where they
+ * are the only way to sort, filter or change the view. The global mobile rules
+ * in `ui.css` did not reach them: those match `input, textarea, select`, an
+ * element selector, and every one of these carries a class, which wins.
+ *
+ * 16px on the selects is not a taste decision. iOS zooms the whole page when a
+ * field smaller than that takes focus, and then leaves it zoomed — the page is
+ * suddenly too wide and has to be pinched back. The size is the fix.
+ */
+@media (max-width: 640px) {
+  .select,
+  .dateInput,
+  .chip,
+  .filtersButton {
+    min-block-size: var(--tap);
+    font-size: max(16px, var(--text-base));
+  }
+
+  .select,
+  .dateInput {
+    padding: 0.35rem 0.6rem;
+  }
+
+  .filtersButton,
+  .chip {
+    padding-inline: 0.9rem;
+  }
+
+  /*
+   * The segmented control keeps its shared edges — two large cells meeting is
+   * easier to hit than two small ones with a gap — but the cells themselves
+   * have to be big enough to mean it.
+   */
+  .segment {
+    min-block-size: var(--tap);
+    padding-inline: 1rem;
+    font-size: max(16px, var(--text-base));
+  }
+}
+
+/* --- sheet contents -------------------------------------------------------- */
+
+.sheetGroup {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
+}
+
+.sheetLegend {
+  padding: 0 0 var(--space-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sheetOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/*
+ * A chip, not a row.
+ *
+ * Four questions as four columns of radio rows made the sheet twice the height
+ * of the screen, so choosing a sort order meant scrolling past everything
+ * else. Three or four short answers fit on a line, and a line of chips shows
+ * the whole question at once — which is the point of asking it in a sheet
+ * rather than in a menu.
+ *
+ * The radio is still a radio: it is only visually replaced, so arrow keys walk
+ * the group and a screen reader hears a radio group, as it should.
+ */
+.sheetOption {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 2.75rem;
+  padding-inline: var(--space-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-sans);
+  font-size: max(16px, var(--text-base));
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.sheetOption:hover {
+  background: var(--surface-2);
+}
+
+.sheetOption:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.sheetOption:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/*
+ * Hidden from the eye, kept for everything else. `appearance: none` with no
+ * size still receives focus and still announces, unlike `display: none`.
+ */
+.sheetOption input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+  margin: 0;
+}
+
+.sheetOption span {
+  display: grid;
+  min-inline-size: 0;
+  text-align: start;
+}
+
+.sheetOption small {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+
+/*
+ * Room under the last card for the floating action, on top of the room the
+ * shell already reserves for the bottom bar.
+ *
+ * Measured rather than guessed, because the first guess was wrong and the
+ * screenshot showed it: the action sat squarely over the third card's privacy
+ * badge and its overflow button, which is the exact failure of "no action
+ * hidden behind fixed navigation". The action's top edge is its own height
+ * plus its offset above the bar, so that is what has to be cleared, plus a
+ * gap so the last card is clear rather than merely touching.
+ */
+@media (max-width: 899px) {
+  .page {
+    padding-block-end: calc(3rem + var(--space-4) + var(--space-5));
   }
 }

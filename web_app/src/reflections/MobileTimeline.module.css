@@ -1,0 +1,256 @@
+.timeline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5);
+}
+
+.group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+/*
+ * The group heading is the application speaking, so it is sans and quiet: a
+ * date is a signpost between reflections, not a thing to read.
+ */
+.groupLabel {
+  margin: 0;
+  padding-inline: var(--space-1);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * One card, one border, one radius. No inner box repeats the outline — nesting
+ * rounded containers is how a warm page starts looking like a settings screen.
+ */
+.card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-1);
+  padding: var(--space-4);
+  padding-block-start: calc(var(--space-4) + 4px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  /* No fixed height: a two-line title has to fit rather than be cropped. */
+}
+
+.card:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+/* --- the four letters, as a rule across the top --------------------------- */
+
+.strip {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  block-size: 4px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  overflow: hidden;
+}
+
+.strip > span {
+  background: var(--line);
+}
+
+.strip > span[data-written='true'][data-section='content'] {
+  background: var(--content);
+}
+.strip > span[data-written='true'][data-section='heart'] {
+  background: var(--heart);
+}
+.strip > span[data-written='true'][data-section='application'] {
+  background: var(--application);
+}
+.strip > span[data-written='true'][data-section='testimony'] {
+  background: var(--testimony);
+}
+
+/* --- what the author wrote ------------------------------------------------ */
+
+.title {
+  margin: 0;
+  min-inline-size: 0;
+  /* Serif: this is theirs. */
+  font-family: var(--font-serif);
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/*
+ * The whole card is the target. Stretching the link is what lets the card be
+ * pressed anywhere without an anchor wrapping the buttons inside it.
+ */
+.title a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+}
+
+.meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0;
+  min-inline-size: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+}
+
+.reference {
+  min-inline-size: 0;
+  color: var(--accent-ink);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.date {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+/*
+ * Bounded by lines, never by pixels. A height in pixels crops differently at
+ * every text size; two lines is two lines however large they are.
+ */
+.preview {
+  margin: var(--space-1) 0 0;
+  min-inline-size: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
+  color: var(--ink-soft);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block-start: var(--space-2);
+  padding-block-start: var(--space-2);
+  border-block-start: 1px solid var(--line);
+  min-inline-size: 0;
+}
+
+.foot > * {
+  min-inline-size: 0;
+}
+
+/*
+ * Pushed to the end, and above the stretched link so it can be pressed.
+ *
+ * Deliberately `position` without `z-index`: a z-index here creates a stacking
+ * context, and the action sheet this button opens is rendered *inside* it —
+ * so the sheet's scrim was confined to the card, and the floating action and
+ * the bottom bar painted straight over the top of the open sheet. Two
+ * positioned elements with automatic z-index fall back to document order,
+ * which already puts this after the link's pseudo-element.
+ */
+.actions {
+  position: relative;
+  margin-inline-start: auto;
+}
+
+/*
+ * Compact to look at, a thumb to press: 32px visible, 44px pressable. The
+ * expansion is even on all sides so it cannot reach into a neighbouring
+ * target — the badge beside it keeps its own space.
+ */
+.overflow {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2rem;
+  block-size: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.overflow::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+
+.overflow:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.overflow:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+
+/*
+ * The metadata row, quieted.
+ *
+ * At full size the four letters, the count and the privacy pill together
+ * carried more weight than the title above them — the eye landed on a row of
+ * chips rather than on what the reflection was called. Everything here keeps
+ * its meaning and loses its volume: the row is a caption, not a toolbar.
+ *
+ * Scoped inside `.foot` so the desktop card, which has room for all of it at
+ * full size, is untouched.
+ */
+.foot span[data-section] {
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+  font-size: 0.625rem;
+}
+
+.foot :global(.badge) {
+  padding: 0.1rem 0.45rem;
+  font-size: 0.625rem;
+  /* The word carries it; the diamond beside it was noise at this size. */
+  gap: 0.25rem;
+}
+
+.foot :global(.badge) [aria-hidden='true'] {
+  display: none;
+}

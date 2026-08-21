@@ -81,6 +81,31 @@
   --radius-xl: 1.5rem;
   --radius-pill: 999px;
 
+  /*
+   * The smallest thing a thumb can hit reliably.
+   *
+   * 44px is the floor every platform's guidance agrees on, and 48px is what
+   * the actions people reach for most should get. They are tokens rather than
+   * numbers typed into twenty rules, because "make the buttons bigger" applied
+   * inconsistently is how a interface ends up with three sizes of the same
+   * control.
+   */
+  --tap: 44px;
+  --tap-comfortable: 48px;
+
+  /*
+   * The strip a phone will not let anybody touch: the notch, the home
+   * indicator, the rounded corners. Zero on everything else, so these can be
+   * added wherever something sits against an edge without a media query.
+   */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+
+  /* The clearance a control keeps from the side of the screen. */
+  --edge: var(--space-4);
+
   /* --- Motion ----------------------------------------------------------- */
 
   --ease: cubic-bezier(0.2, 0, 0.1, 1);
@@ -167,10 +192,23 @@
     --ink: #f0e9dd;
     --ink-soft: #ddd3c4;
     --muted: #a89b8a;
-    --faint: #7d7264;
+    /*
+     * Placeholders and disabled text: secondary, still legible. 3.60:1 was
+     * borderline against the sunk surfaces a placeholder usually sits on.
+     */
+    --faint: #95897a;
 
-    --line: #352f26;
-    --line-strong: #4a4235;
+    /*
+     * Borders you can actually see.
+     *
+     * These were #352f26 and #4a4235 — 1.28:1 and 1.71:1 against the surface,
+     * which is not a faint border, it is an invisible one: in the dark theme
+     * there was no way to tell where an input began. WCAG asks 3:1 of a
+     * non-text control boundary, and these measure 3.23:1 and 3.57:1 while
+     * staying in the same warm family the palette is built from.
+     */
+    --line: #746b5c;
+    --line-strong: #7b7263;
 
     --accent: #8fc0a4;
     --accent-hover: #a7d2b7;

@@ -142,3 +142,102 @@
   background: var(--danger-soft);
   color: var(--danger);
 }
+
+/* --- the phone ------------------------------------------------------------- */
+
+/*
+ * 44px, in pixels, deliberately.
+ *
+ * A touch target is a physical size — the width of a thumb — and does not
+ * grow because somebody has chosen larger text. Sized in rem these buttons
+ * doubled at 200% text, three of them took 264px of a 390px bar, and the
+ * title was squeezed to "Re" across two lines. Type scales; thumbs do not.
+ */
+.barAction {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 44px;
+  block-size: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+
+.barAction:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* --- the passage ----------------------------------------------------------- */
+
+/*
+ * The passage reads as a quotation rather than as a card.
+ *
+ * A bordered box here would make the page a stack of containers — the thing
+ * this viewer is specifically not. A rule down the side and a different
+ * measure is enough to say "this is not the author's writing", which is the
+ * only distinction that matters on the page.
+ */
+.passage {
+  margin-block: var(--space-4);
+  padding-inline-start: var(--space-4);
+  border-inline-start: 3px solid var(--line-strong);
+}
+
+.passageMeta {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.passageBody {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-md);
+  font-style: italic;
+  line-height: var(--leading-body);
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.passageCopyright {
+  margin: var(--space-2) 0 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  color: var(--faint);
+}
+
+@media (max-width: 899px) {
+  /*
+   * The app bar carries the way back and the actions now, so the crumb and
+   * the full-width Edit button below it were both saying a second time what
+   * the top of the screen already said.
+   */
+  .breadcrumb,
+  .actions {
+    display: none;
+  }
+
+  /*
+   * Closer to the bar. The space above the title was sized for a page that
+   * began with a crumb; without it the title was floating.
+   */
+  .page {
+    padding-block-start: var(--space-4);
+  }
+
+  .page {
+    padding-block-end: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
+  }
+}

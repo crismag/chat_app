@@ -1,0 +1,92 @@
+.account {
+  /*
+   * Set below whatever the screen added, with a rule between. The account is
+   * always the last thing in the sheet, so its position never depends on how
+   * many settings the screen happened to contribute.
+   */
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--line);
+}
+
+.identity {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 var(--space-2);
+  padding-inline: var(--space-3);
+  min-inline-size: 0;
+}
+
+.name {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.state {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.rows {
+  display: grid;
+  gap: 2px;
+}
+
+/* 48px, and the whole row is the target. */
+.row {
+  display: grid;
+  gap: 2px;
+  align-content: center;
+  justify-items: start;
+  min-block-size: 3rem;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: max(16px, var(--text-base));
+  text-align: start;
+  cursor: pointer;
+}
+
+.row small {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.row:hover {
+  background: var(--surface-2);
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/*
+ * Destructive, and separated by space rather than only by colour — colour
+ * alone is not a warning to everybody who can see the screen.
+ */
+.danger {
+  margin-block-start: var(--space-3);
+  color: var(--heart);
+}
+
+.danger::before {
+  content: '';
+  display: block;
+  margin-block-end: var(--space-2);
+}
+
+.row:disabled {
+  color: var(--faint);
+  cursor: not-allowed;
+}
+
+.row:disabled:hover {
+  background: transparent;
+}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import {
   CREATE_FORMATS,
   CREATE_LAYOUTS,
@@ -38,6 +38,10 @@ import {
 } from './host-adapter.ts'
 import { collectOverflowingText, fitChatStudioDocument } from './overflow.ts'
 import { applyChatStudioStyle } from './styles.ts'
+import { NARROW_QUERY, useMediaQuery } from '../shared/ui/useMediaQuery.ts'
+import { useMobileBar } from '../shared/mobile/MobileBar.tsx'
+import { Sheet } from '../shared/mobile/Sheet.tsx'
+import { BackIcon, MoreIcon } from '../shared/ui/icons.tsx'
 import styles from './CreatePage.module.css'
 import {
   createChatGeneratedAssetCallback,
@@ -108,6 +112,26 @@ export function CreatePage() {
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [generatedAssetsEnabled, setGeneratedAssetsEnabled] = useState(false)
+  const navigate = useNavigate()
+  const narrow = useMediaQuery(NARROW_QUERY)
+  /*
+   * The setup questions are asked once, in a sheet, and then get out of the
+   * way. They open by themselves while there is nothing to look at, because
+   * that is the only moment they are the point; once a composition exists the
+   * canvas is the point and these are revisited deliberately.
+   */
+  const [setupOpen, setSetupOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  /*
+   * Saving has its own state, rather than being read off the page's general
+   * error.
+   *
+   * Deriving it from `error` meant every failure on the screen — a reflection
+   * that would not load, a passage lookup, text overflowing its box — was
+   * reported in the bar as "Save failed", which is a specific and alarming
+   * claim about somebody's work that was usually untrue.
+   */
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle')
   const fields = useMemo(() => source ? availableReflectionFields(source) : [], [source])
   const overflowCount = document ? collectOverflowingText(document).length : 0
   const generatedAssetCallback = useMemo(
@@ -168,6 +192,19 @@ export function CreatePage() {
     return () => { active = false }
   }, [conversationId])
 
+  /*
+   * The setup sheet opens itself while there is nothing to look at, and only
+   * then. Once a document exists the canvas is the point, and these questions
+   * are revisited on purpose rather than met on arrival.
+   */
+  useEffect(() => {
+    if (!narrow) return
+    if (loading) return
+    if (document) return
+    if (conversations.length === 0) return
+    setSetupOpen(true)
+  }, [narrow, loading, document, conversations.length])
+
   async function persist(nextDocument: StudioDocument, exportMetadata?: ExportMetadata) {
     const canonical = JSON.parse(serializeStudioDocument(nextDocument)) as unknown
     await api(`/studio-creations/${encodeURIComponent(conversationId)}`, {
@@ -183,12 +220,15 @@ export function CreatePage() {
   async function save(nextDocument: StudioDocument) {
     setError(null)
     setMessage('Saving…')
+    setSaveStatus('saving')
     try {
       await persist(nextDocument)
       setMessage('Saved. This composition will reopen with the reflection.')
+      setSaveStatus('saved')
     } catch (caught) {
       setMessage(null)
       setError(caught instanceof Error ? caught.message : 'Unable to save the composition')
+      setSaveStatus('failed')
     }
   }
 
@@ -296,8 +336,74 @@ export function CreatePage() {
     setError(issue.message)
   }
 
-  return (
-    <section className={styles.page}>
+  /*
+   * A quiet word about saving, rather than a paragraph.
+   *
+   * The page already tracks a sentence for each outcome; the bar needs the
+   * state behind it, which is what somebody glances at while working.
+   */
+  const saveState =
+    saveStatus === 'saving'
+      ? 'Saving…'
+      : saveStatus === 'saved'
+        ? 'Saved'
+        : saveStatus === 'failed'
+          ? 'Save failed'
+          : ''
+
+  useMobileBar(
+    () => ({
+      title: source?.title ?? 'Create visual',
+      immersive: true,
+      replace: (
+        <div className={styles.editorBar}>
+          <button
+            type="button"
+            className={styles.barButton}
+            aria-label="Back to the reflection"
+            onClick={() => {
+              /*
+               * Back to the reflection this belongs to, not into whatever the
+               * history happens to hold. Saving is the Studio's own callback
+               * and has already run for every edit, so nothing is dropped by
+               * leaving.
+               */
+              void navigate(conversationId ? `/reflections/${conversationId}` : '/reflections')
+            }}
+          >
+            <BackIcon className={styles.barIcon} />
+          </button>
+          <h1 className={styles.barTitle}>{source?.title ?? 'Create visual'}</h1>
+          {saveState ? (
+            <span className={styles.barSave} data-state={saveStatus} role="status">
+              {saveState}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            className={styles.barButton}
+            aria-label="Editor menu"
+            onClick={() => setMenuOpen(true)}
+          >
+            <MoreIcon className={styles.barIcon} />
+          </button>
+        </div>
+      ),
+    }),
+    [source?.title, conversationId, saveState, saveStatus, navigate],
+  )
+
+  /*
+   * The setup questions, in one place.
+   *
+   * On a desktop they sit above the editor, where there is room for them. On a
+   * phone they are the contents of a sheet — asked when there is nothing to
+   * look at, and revisited from the menu — because a form that permanently
+   * occupies the first screen of an image editor is a form standing where the
+   * image should be.
+   */
+  const setupControls = (
+    <>
       <header className={styles.header}>
         <div>
           <p className="eyebrow">Create Studio</p>
@@ -364,6 +470,46 @@ export function CreatePage() {
           <button type="button" className="btn btn-secondary" onClick={() => composeFromSource()}>Rebuild from reflection</button>
         </div>
       ) : null}
+    </>
+  )
+
+  return (
+    <section className={styles.page} data-narrow={narrow ? 'true' : 'false'}>
+      {narrow ? null : setupControls}
+
+      {/*
+        On a phone the setup lives in a sheet, and the menu is how it is
+        reopened once a composition exists.
+      */}
+      {narrow ? (
+        <>
+          <Sheet
+            open={setupOpen}
+            onClose={() => setSetupOpen(false)}
+            title="Set up this visual"
+            description="Rebuilding may replace layout changes you have made."
+          >
+            {setupControls}
+          </Sheet>
+
+          <Sheet open={menuOpen} onClose={() => setMenuOpen(false)} title="Menu">
+            <div className={styles.menuRows}>
+              <button
+                type="button"
+                className={styles.menuRow}
+                onClick={() => {
+                  setMenuOpen(false)
+                  setSetupOpen(true)
+                }}
+              >
+                Format, layout and style
+                <small>Reflection, format, layout, style — and rebuild</small>
+              </button>
+            </div>
+          </Sheet>
+        </>
+      ) : null}
+
       {overflowCount > 0 ? (
         <div className={styles.overflow} role="status">
           <p>{overflowCount} text {overflowCount === 1 ? 'block still overflows' : 'blocks still overflow'} the readable area. Words are never dropped.</p>

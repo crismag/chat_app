@@ -2,6 +2,20 @@
   min-height: 100svh;
   display: grid;
   grid-template-rows: auto 1fr auto;
+  /*
+   * The column is stated, and it is allowed to be narrower than its content.
+   *
+   * An implicit grid column sizes to max-content, so anything inside that
+   * refused to shrink — a long word, a row that would not wrap, a fixed width
+   * — made this grid wider than the screen, and the header, the page and the
+   * bottom navigation all grew with it. That is how the whole application
+   * came to be 408px wide on a 320px phone: not one overflowing element, but
+   * a container that agreed to whatever was asked of it.
+   *
+   * `minmax(0, 1fr)` is the "may be smaller than its content" part; without
+   * the 0 the minimum is auto, which is where this started.
+   */
+  grid-template-columns: minmax(0, 1fr);
 }
 
 /* Present only to a keyboard, and only once it is wanted. */
@@ -296,5 +310,339 @@
     padding: 0 var(--space-2);
     font-size: 0;
     gap: 0;
+  }
+}
+
+/* --- the phone ------------------------------------------------------------ */
+
+/*
+ * A composition for a narrow screen, not the desktop one folded up.
+ *
+ * Everything below is about a thumb: the header controls grow to a real target
+ * and step away from the sides of the screen, the bottom navigation clears the
+ * home indicator, and the page keeps room underneath so the last field is not
+ * hidden behind the bar that never scrolls away.
+ */
+@media (max-width: 640px) {
+  /*
+   * The notch, and the rounded corners beside it. Applied here rather than on
+   * the page, because this is the element actually against the top edge.
+   */
+  .header {
+    padding-top: var(--safe-top);
+    padding-inline: max(var(--safe-left), 0px) max(var(--safe-right), 0px);
+  }
+
+  .headerInner {
+    padding-inline: var(--edge);
+    gap: var(--space-2);
+  }
+
+  /*
+   * The wordmark shrinks to the letters. The tagline underneath is the first
+   * thing to go: it is an explanation, and there is a whole page of the
+   * application under it doing the explaining.
+   */
+  .brand {
+    min-height: var(--tap);
+    align-content: center;
+  }
+
+  /* The class the tagline actually uses. */
+  .tagline {
+    display: none;
+  }
+
+  /* Both header controls become real targets rather than 36px squares. */
+  .deviceNote,
+  .newAction {
+    min-height: var(--tap);
+    /* Wide as well as tall: 43×44 is still a miss at 320px. */
+    min-inline-size: var(--tap);
+    padding-inline: var(--space-3);
+  }
+
+  /*
+   * Bottom navigation: comfortably tall, clear of the home indicator, and
+   * clear of the browser's own toolbar. The active destination is marked by
+   * weight and a bar as well as colour — colour alone is not a state.
+   */
+  .mobileNav {
+    padding-bottom: max(var(--safe-bottom), var(--space-2));
+    padding-inline: max(var(--safe-left), 0px) max(var(--safe-right), 0px);
+  }
+
+  .mobileLink {
+    min-height: var(--tap-comfortable);
+    align-content: center;
+    padding-block: var(--space-2);
+    font-size: var(--text-sm);
+  }
+
+  /* `.active` is what the router marks; it is not an aria attribute here. */
+  .mobileLink.active {
+    color: var(--accent);
+    font-weight: 650;
+  }
+
+  /*
+   * Room under the last thing on the page for the bar that floats over it.
+   * Without this the final C.H.A.T. field and its controls sit behind the
+   * navigation, which is exactly where somebody is trying to type.
+   */
+  .main {
+    padding-inline: var(--edge);
+    padding-bottom: calc(var(--tap-comfortable) + var(--safe-bottom) + var(--space-5));
+  }
+
+  /*
+   * The keyboard is open: the navigation goes, because it is three
+   * destinations nobody wants while they are writing a sentence, and it is
+   * sitting exactly where the keyboard wants to be.
+   */
+  :global(body[data-keyboard='open']) .mobileNav {
+    display: none;
+  }
+
+  :global(body[data-keyboard='open']) .main {
+    padding-bottom: var(--space-5);
+  }
+}
+
+/* The skip link is a control too, wherever it lands. */
+.skip {
+  min-height: var(--tap);
+  display: inline-flex;
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  /* Clear of the corner, like everything else that lands against an edge. */
+  .skip {
+    left: var(--edge);
+    top: calc(var(--safe-top) + var(--space-2));
+  }
+}
+
+/* --- the phone's app bar --------------------------------------------------- */
+
+/*
+ * One bar, and only one.
+ *
+ * The screen showing describes what belongs up here and the shell renders it.
+ * What this rule guarantees is that the wordmark header and the screen's bar
+ * are never both on a phone at once — which is the failure this replaces: a
+ * brand bar saying what the product is called, and under it a page heading
+ * saying what the page is, together taking a fifth of the screen before any
+ * content.
+ *
+ * Above the phone breakpoint the desktop header is the only one rendered, so
+ * the desktop layout is untouched.
+ */
+.mobileBar {
+  display: none;
+}
+
+@media (max-width: 899px) {
+  .header[data-mobile-bar='true'] .headerInner {
+    display: none;
+  }
+
+  .header[data-mobile-bar='true'] .mobileBar {
+    display: flex;
+    align-items: center;
+    /*
+     * 8px, not 4. At 4px the expanded hit areas of two neighbouring controls
+     * came within a hair of each other, so a press near the boundary could
+     * land on the wrong one — and a target that steals its neighbour's presses
+     * is worse than one that is merely small.
+     */
+    gap: var(--space-2);
+    /*
+     * One row, and it does not wrap. A title long enough to crowd the actions
+     * truncates; the actions never move to a second line and never shrink
+     * below a thumb.
+     */
+    flex-wrap: nowrap;
+    min-block-size: 3.5rem;
+    padding-inline: var(--edge);
+    padding-inline-start: max(var(--edge), var(--safe-left));
+    padding-inline-end: max(var(--edge), var(--safe-right));
+  }
+}
+
+.barTitle {
+  flex: 1 1 auto;
+  /* May be narrower than its text; that is what makes the ellipsis possible. */
+  min-inline-size: 0;
+  margin: 0;
+  padding-inline: var(--space-2);
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  color: var(--ink);
+  /*
+   * Wraps to a second line rather than being cut off.
+   *
+   * `nowrap` with an ellipsis is right for a long title on an ordinary
+   * screen and wrong at 200% text, where even a short one no longer fits and
+   * "Reflections" became "Reflec…". At ordinary sizes these titles are one
+   * line anyway, so allowing two costs nothing and stops the one case that
+   * clipped. The bar grows; the actions still never wrap.
+   */
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+/*
+ * 8px between the bar's buttons.
+ *
+ * The outer row was widened to 8px earlier and this inner group was not, so
+ * the three actions still sat 4px apart — close enough that a press near a
+ * boundary can land on the wrong one.
+ */
+.barActions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.barBack {
+  flex: 0 0 auto;
+}
+
+/*
+ * 44px of button, not 40px of button reaching for 44.
+ *
+ * The expansion worked, but it put the reach 2px outside the visible control —
+ * so the outermost button's hit area came within 10px of the screen edge while
+ * the bar's own gutter said 12, and two neighbours ended up 6px apart. Making
+ * the button the size of its target instead means the gutter and the gap mean
+ * exactly what they say, which is easier to reason about than an invisible
+ * 2px everywhere.
+ */
+/*
+ * 44px, in pixels, deliberately.
+ *
+ * A touch target is a physical size — the width of a thumb — and does not
+ * grow because somebody has chosen larger text. Sized in rem these buttons
+ * doubled at 200% text, three of them took 264px of a 390px bar, and the
+ * title was squeezed to "Re" across two lines. Type scales; thumbs do not.
+ */
+.barBack,
+.barAction {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 44px;
+  block-size: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+
+.barBack:hover,
+.barAction:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.barBack:focus-visible,
+.barAction:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.barIcon {
+  inline-size: 1.375rem;
+  block-size: 1.375rem;
+}
+
+/* A count on the filter button, so a narrowed list is never a mystery. */
+.barBadge {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  min-inline-size: 1.125rem;
+  padding-inline: 0.25rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--surface);
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.125rem;
+  text-align: center;
+}
+
+/*
+ * Room to reflow when the text is large.
+ *
+ * At 200% browser text these three were the only things on the four screens
+ * that could not give way: a row of three navigation labels that had to stay
+ * on one line, a field heading whose parts refused to shrink, and a card's
+ * action row with nowhere to wrap to. Each pushed the page wider than the
+ * phone, which is the one failure that makes everything else unusable.
+ */
+.mobileLink {
+  min-inline-size: 0;
+}
+
+.mobileLink span {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+  text-align: center;
+  line-height: var(--leading-tight);
+}
+
+
+/* --- an immersive screen --------------------------------------------------- */
+
+/*
+ * An editor gets the whole phone.
+ *
+ * Create Studio is not a page of this site; it is a tool that happens to live
+ * at one of its addresses. A masthead above it and three destinations below it
+ * are 120px of somewhere-else, permanently on screen, while somebody is trying
+ * to nudge a caption. The shell keeps both for every other route — this is a
+ * state, not a removal.
+ *
+ * The shell also stops being a scrolling document: the editor sizes itself to
+ * the viewport and its own panels scroll, so the page behind must not scroll
+ * too or the canvas slides out from under the controls that act on it.
+ */
+@media (max-width: 899px) {
+  .shell[data-immersive='true'] {
+    block-size: 100dvh;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .mobileNav[data-immersive='true'] {
+    display: none;
+  }
+
+  /*
+   * The padding that reserves room for the bottom bar has to go too. The bar
+   * is hidden here, so the space it was holding was simply dead — 64px of
+   * nothing under the editor's own dock.
+   */
+  .shell[data-immersive='true'] .main,
+  .shell[data-immersive='true'] .main.main {
+    min-block-size: 0;
+    padding: 0;
+    padding-bottom: 0;
+    overflow: hidden;
   }
 }

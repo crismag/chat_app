@@ -572,6 +572,17 @@ export function createApp(
     '/api',
     createCommunityRoutes({
       currentUser: (c) => registeredUser(c),
+      /*
+       * Anybody with a session, guest included. A guest has no email, so they
+       * are given one that is plainly not an address — the community store
+       * keys on `id`, and `email` exists here only so the shape is one type.
+       * Nothing sends to it and nothing displays it.
+       */
+      currentReader: async (c) => {
+        const user = await currentUser(c);
+        if (!user) return null;
+        return { id: user.id, email: user.email ?? '', createdAt: user.createdAt };
+      },
       store: communityStore,
       reflection: (userId, conversationId) => {
         const conversation = store.conversations.get(conversationId);

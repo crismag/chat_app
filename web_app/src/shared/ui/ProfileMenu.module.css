@@ -162,3 +162,21 @@
   border: 1px solid currentColor;
   background: transparent;
 }
+
+
+/*
+ * The account control is a control.
+ *
+ * It renders as a 36px avatar, which is a picture rather than a target — and
+ * it only appears once somebody has an account, which is why an empty page
+ * measured clean for weeks. The circle stays 36px; what it sits in does not.
+ */
+@media (max-width: 640px) {
+  .trigger {
+    min-inline-size: var(--tap);
+    min-block-size: var(--tap);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}

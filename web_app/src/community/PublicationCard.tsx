@@ -120,6 +120,7 @@ export function PublicationCard({
   onEncourage,
   onSave,
   onReport,
+  onAccountRequired,
   onHideForMe,
   onMuteAuthor,
   onHide,
@@ -132,6 +133,13 @@ export function PublicationCard({
   onEncourage: (next: boolean) => void
   onSave: (next: boolean) => void
   onReport: (reason: string, note: string) => Promise<void>
+  /**
+   * Explain instead of opening the form, when reporting needs an account.
+   *
+   * The card does not decide this — the page knows who is reading, and the
+   * server is what actually enforces it. Absent means "go ahead".
+   */
+  onAccountRequired?: (() => void) | null
   /** Out of this reader's sight. Not a report, and nobody is told. */
   onHideForMe: () => void
   onMuteAuthor: () => void
@@ -343,6 +351,16 @@ export function PublicationCard({
                         role="menuitem"
                         onClick={() => {
                           setMenuOpen(false)
+                          /*
+                            Reporting needs an account, and saying so here is
+                            cheaper than opening a form, letting somebody
+                            choose a reason and write a sentence, and refusing
+                            it at the end.
+                          */
+                          if (onAccountRequired) {
+                            onAccountRequired()
+                            return
+                          }
                           setReporting(true)
                         }}
                       >
