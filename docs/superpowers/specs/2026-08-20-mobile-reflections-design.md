@@ -91,6 +91,22 @@ reflection with at least one section written and fewer than four
 existing cap of two items stays; a third unfinished reflection simply
 falls into its date group, which remains exclusive and correct.
 
+### Day boundaries and label formatting
+
+**`Today` and `Yesterday` are the viewer's local calendar days, not UTC
+offsets.** A reflection belongs to `Today` when its `updatedAt` falls on
+the same local calendar date as now — computed from local year, month and
+day, never by subtracting 24-hour spans from a UTC instant. A reflection
+written at 23:30 local time is still `Today` at 23:59 and becomes
+`Yesterday` after local midnight, whatever the UTC date is.
+
+**Date labels are formatted through the existing locale behaviour.** The
+codebase already formats dates with `Intl.DateTimeFormat` using the
+viewer's locale (`ReflectionCard.tsx`); group labels use the same
+mechanism. No hardcoded English month names, no hand-built date strings,
+and the relative labels `In Progress`, `Today` and `Yesterday` remain
+translatable strings rather than formatting logic.
+
 When a search or filter is narrowing the list, grouping collapses to a
 single `Results` group, as it does today.
 
@@ -123,12 +139,48 @@ preview by `line-clamp` on the preview element alone.
 - Status strip: C.H.A.T. progress left, privacy badge, then overflow
 - Card padding 16px; gap between cards 8px; between groups 24px
 
+### Primary interaction
+
+**Tapping the card opens the dedicated reflection viewer**
+(`/reflections/:id`). Reading is the default; **Edit remains a separate
+action**, reached from the viewer or from the action sheet.
+
+- The primary navigation is a **semantic link**, not a click handler on a
+  container — so it keyboard-focuses, announces as a link, and supports
+  open-in-new-tab and long-press by default.
+- **Interactive elements must not be nested.** The overflow control is a
+  button and the title is a link; neither may contain the other. The
+  card's clickable area is realised by a stretched link (an absolutely
+  positioned pseudo-element over the card) with the overflow raised above
+  it, rather than by wrapping the card in an anchor.
+- **Tapping the overflow must not activate card navigation.** The
+  overflow sits above the stretched link in stacking order and stops
+  propagation, so a press on it opens the sheet and nothing else.
+
 ### Per-card overflow
 
 The `⋯` control sits at the end of the status strip with a **reserved
 44×44px hit area** and an accessible name naming the reflection. It opens
-the **reflection action sheet** — never a popover — carrying Open, Edit,
-Share and Delete at 48px rows.
+the **reflection action sheet** — never a popover.
+
+#### Action sheet requirements
+
+- **Only authorized actions are shown.** The sheet is built from what the
+  viewer may actually do with that reflection, not from a fixed list with
+  disabled rows.
+- **Anonymous-user sharing restrictions are preserved exactly.** Sharing
+  appears only where the existing permission rules already allow it; this
+  screen introduces no new sharing capability.
+- **Delete requires confirmation and is visually separated** from the
+  non-destructive actions — set apart in its own group and styled as
+  destructive.
+- **Failed actions are recoverable**: a failure keeps the person where
+  they are, explains what happened, and offers a retry rather than
+  closing silently or leaving the list in a false state.
+- **Closing restores focus to the originating overflow control** — the
+  specific card's `⋯`, not the top of the page.
+- Rows are 48px; the sheet traps focus, closes on Escape and on scrim
+  press.
 
 ---
 
@@ -163,20 +215,50 @@ If every candidate is empty, show the existing empty-preview sentence.
 
 A single 56px bar. **No second search row is ever introduced.**
 
-**Default state:** title `Reflections`, then a **Filter** trigger, then an
-overflow `⋮`.
+### Default state
 
-**Search** expands in place, replacing the bar's contents with the field.
-Required behaviour:
+The default bar contains exactly four things, in this order:
 
+```
+┌──────────────────────────────────────┐
+│ Reflections        ⌕   ⛛²   ⋮        │  56px, one row
+└──────────────────────────────────────┘
+   title          search filter  page
+                        (count)  overflow
+```
+
+1. **`Reflections` title**
+2. **Search trigger**
+3. **Filter trigger**, with an optional active-count badge
+4. **Page overflow trigger**
+
+At narrow widths the three triggers are **accessible icon buttons** —
+icon-only presentation, each with a real accessible name, never an
+unlabelled glyph.
+
+**The app bar is one row and must not wrap.** If the title cannot fit
+beside the triggers it truncates with an ellipsis; the triggers never
+move to a second line and never shrink below 44×44px.
+
+### Search — expansion and URL behaviour
+
+Search expands in place, replacing the bar's contents with the field.
+Behaviour is deterministic in every direction:
+
+- **A URL carrying the search parameter opens Search already active**,
+  with the field populated from that parameter and the list filtered
+- **Clear** removes the query *and* the URL parameter, but **leaves
+  Search open** with focus still in the field
+- **Back closes Search**, removes the query parameter, and restores the
+  unfiltered list
+- **Browser Back stays predictable.** Opening and closing Search must not
+  push a history entry per keystroke or per toggle, and Back must never
+  become trapped alternating Search open and closed. Query updates
+  replace the current history entry rather than pushing new ones; only a
+  genuine navigation pushes.
+- **Focus enters the field on open and returns to the Search trigger on
+  close**
 - The field has a visible **clear** button while it holds text
-- **Back closes search and restores the normal app bar**, and does not
-  leave the screen
-- The query is preserved appropriately: closing search clears the applied
-  query and restores the unfiltered list; the URL parameter stays the
-  source of truth so a shared or restored URL still reproduces the view
-- Focus moves into the field on open and returns to the search trigger on
-  close
 - Software-keyboard behaviour is tested: the fixed bottom navigation
   hides while the keyboard is open (the existing `useSoftKeyboard`
   mechanism), and the field is never covered
@@ -212,10 +294,20 @@ preferences, not features to delete: existing stored preferences and the
 desktop controls are untouched, and secondary view selection remains
 available in a view/settings sheet reached from the page overflow.
 
-**Pagination:** fixed page size of **20** on mobile. Existing pagination
-behaviour is preserved exactly, `?page=` keeps working, and the pager
-stays at the end of the timeline. **No infinite scrolling in this
-milestone.**
+**Pagination:** **mobile uses a page size of 20 at runtime.**
+
+- The 20 is a **runtime presentation value, not a write**. It does not
+  overwrite the stored desktop page-size preference.
+- **Switching viewport modes does not mutate that preference.** Narrowing
+  a window to mobile and back leaves whatever the person chose on desktop
+  exactly as it was.
+- **Invalid or out-of-range page numbers normalize safely.** A `?page=`
+  that is non-numeric, zero, negative, or beyond the last page resolves
+  to the nearest valid page rather than rendering an empty list or
+  throwing.
+- Existing pagination behaviour is otherwise preserved exactly, `?page=`
+  keeps working, and the pager stays at the end of the timeline.
+- **No infinite scrolling in this milestone.**
 
 ---
 
@@ -262,8 +354,17 @@ recorded in §13.
 
 **FAB specification:** extended, with a visible text label, 48px tall,
 16px from the right edge, 16px above the bottom navigation, respecting
-`env(safe-area-inset-bottom)`. It must not cover the last card's actions
-— the timeline reserves bottom padding for it.
+`env(safe-area-inset-bottom)`.
+
+**Clearance is a hard requirement.** Every card action, the final card,
+and the pager must be scrollable into a position clear of **both** the
+FAB and the bottom navigation. The timeline reserves bottom padding equal
+to the FAB's height plus the navigation's height plus the safe-area
+inset, so the end of the list can always be scrolled above them.
+
+**The FAB must never make an action unreachable.** If any control cannot
+be brought clear by scrolling, the reserved padding is wrong and must be
+corrected — the FAB does not get to win that conflict.
 
 ---
 
@@ -299,7 +400,17 @@ writing surrounded by quiet furniture.
 | Card title | serif 600 | `--text-md` |
 | Preview | serif 400, `--ink-soft` | `--text-base` |
 | Metadata, group label | sans 600, `--muted` | 13px, `0.04em`, uppercase |
-| Any control | sans | **≥16px** |
+
+**Control type sizes** are role-specific rather than one blanket minimum:
+
+- **Inputs: minimum 16px.** This one is not a preference — anything
+  smaller makes iOS zoom the page on focus and leave it zoomed.
+- **Primary button labels: generally 15–16px.**
+- **Compact control and navigation labels may be smaller** where they
+  remain readable — the bottom navigation's labels and the card's
+  metadata are legitimate at 13px.
+- **Every interactive hit target remains at least 44×44px**, whatever its
+  label size. Target size and type size are independent requirements.
 
 ### Surface and elevation
 
@@ -315,9 +426,21 @@ align down the whole timeline so the eye scans a column.
 
 ### Structural rules carried from the width fix
 
-Every grid container declares `grid-template-columns: minmax(0, 1fr)`.
-Every flex toolbar declares `flex-wrap`. Targets ≥44px, 48px for the FAB.
-16px edges, safe-area insets, `dvh`-class units, inputs ≥16px.
+Stated as the specific rules that prevent the overflow, rather than as
+blanket mandates — a universal "every grid is one `minmax` column" would
+forbid legitimate multi-column and auto-sized layouts, and a universal
+"every toolbar wraps" would break the app bar, which must not wrap.
+
+- **`minmax(0, 1fr)` for grid tracks that contain shrinkable user text**,
+  where a track would otherwise be sized by its content. This is what
+  fixed the 408px shell and the 560px page.
+- **`min-width: 0` on flex and grid children containing user text**, so a
+  long title or reference can shrink instead of widening its parent.
+- **Wrapping only where the design explicitly permits it.** The filter
+  sheet's control rows wrap; the card's status strip wraps.
+- **No wrapping in the mobile app bar.** It is one row in every state.
+- Targets ≥44×44px, 48px for the FAB; safe-area insets honoured;
+  `dvh`-class viewport units; inputs ≥16px.
 
 ---
 
@@ -358,18 +481,39 @@ close on Escape and on scrim press, and restore focus to their trigger;
 **Structure:**
 
 - No horizontal overflow at 320, 360, 390 and 430
-- No control under 44×44px; no control within 16px of an edge; no input
-  under 16px
-- The per-card overflow has a reserved 44×44px hit area and opens the
-  action sheet
+- No control under 44×44px; no input under 16px
+- **Interactive content respects the 16px page-content boundary or the
+  applicable safe-area inset. Full-width structural components may extend
+  to viewport edges.** The bottom navigation and the app bar are such
+  components: they span the viewport by design, and their *cells* are the
+  targets that must respect the boundary.
+- **Adjacent touch targets must not have overlapping hit areas and should
+  normally maintain at least 8px of visual or functional separation.**
+  Deliberately adjoining cells of one segmented component — the bottom
+  navigation, a segmented control — satisfy this functionally by sharing
+  a crisp edge between two large targets; overlapping hit areas never
+  satisfy it.
+- The per-card overflow has a reserved 44×44px hit area, opens the action
+  sheet, and does not activate card navigation
+- The card's primary navigation is a semantic link, with no interactive
+  element nested inside another
+- The app bar carries title, Search, Filter and overflow on **one row**
+  and does not wrap at any supported width
 - The Filter trigger is visible in the app bar and shows an active count
 - Search expands in place; no second row appears in any state
-- Back closes search and restores the app bar
+- A URL with the search parameter opens Search active and populated;
+  Clear leaves Search open; Back closes Search, drops the parameter and
+  restores the unfiltered list; Back never traps
+- `Today`/`Yesterday` follow the viewer's local calendar day, and labels
+  are locale-formatted
 - Every reflection appears exactly once; nothing in In Progress repeats
   under Today
 - Group order is In Progress → Today → Yesterday → earlier groups, each
   only when non-empty
-- Page size is 20; `?page=` behaviour is unchanged; no infinite scroll
+- Mobile renders 20 per page without mutating the stored desktop
+  preference; invalid `?page=` values normalize; no infinite scroll
+- Every card action, the final card and the pager can be scrolled clear
+  of both the FAB and the bottom navigation
 - The card preview never repeats the reference shown in its metadata row
 - `N of 4` (or `Condensed C.H.A.T.`) is visible on every card
 - Verified in both light and dark themes
@@ -377,6 +521,15 @@ close on Escape and on scrim press, and restore focus to their trigger;
 **Evidence:** `scripts/verify/narrowest.mjs` reports zero offenders at
 320/360/390/430; `scripts/verify/touch-targets.mjs` reports zero
 violations; before/after screenshots at 390×844 and 360×800.
+
+**The automated edge check must be updated to match.** The harness
+currently flags any control whose box falls within 16px of the viewport
+edge, exempting only full-width segmented rows. It must instead measure
+against the **page-content boundary**: a control inside page content is
+checked against the 16px inset, while a full-width structural component
+is exempt as a component and its cells are checked within it. The
+adjacency check keeps its existing exemption for deliberately adjoining
+segmented cells, and gains an assertion that no two hit areas overlap.
 
 ---
 
