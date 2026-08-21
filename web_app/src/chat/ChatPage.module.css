@@ -3103,15 +3103,15 @@
 }
 
 /*
- * Save state, said quietly and in words.
+ * Save state, said quietly and in words — whole words.
  *
- * It shrinks to nothing rather than pushing the title out: on the narrowest
- * screens the ⋯ and the title matter more than a word that repeats itself
- * every few seconds. It never wraps and never moves the bar to a second row.
+ * Letting it shrink produced "S…", which is not a state anybody can read and
+ * is worse than not showing it at all. The title gives way instead: a title is
+ * still recognisable from its first half, and the field can be scrolled to see
+ * the rest, while "Saved" cut to one letter tells nobody anything.
  */
 .mobileSave {
-  flex: 0 1 auto;
-  min-inline-size: 0;
+  flex: 0 0 auto;
   font-family: var(--font-sans);
   font-size: var(--text-xs);
   color: var(--muted);
@@ -3163,8 +3163,17 @@
  * narrow one: it claims all the leftover space, so the moment the row is
  * within a button's width of full, Share drops to a line of its own.
  */
+/*
+ * A little air before the action.
+ *
+ * Not `margin-inline-start: auto`: that claims all the leftover space, so the
+ * moment the row is within a button's width of full it forces Share onto a
+ * line of its own — which is what it did the first time. A fixed step is
+ * enough to stop the pill sitting against the progress count.
+ */
 .mobileShare {
   flex: 0 0 auto;
+  margin-inline-start: var(--space-2);
 }
 
 /* --- the phone: one editor, not a card inside a page ---------------------- */

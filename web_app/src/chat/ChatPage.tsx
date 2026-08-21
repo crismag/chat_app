@@ -18,6 +18,7 @@ import {
   CHAT_SECTION_TYPES,
   TITLE_SOURCES,
   CHAT_FORMATS,
+  LENGTH_STATUS,
   parseHashtags,
   validateChat,
   type AiAction,
@@ -1700,12 +1701,22 @@ export function ChatPage() {
       <PageMenu
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
-        items={moreItems.map((item) => ({
-          label: item.label,
-          onSelect: item.onSelect,
-          reason: item.reason ?? null,
-          danger: item.danger,
-        }))}
+        items={[
+          {
+            label: detail?.visibility === 'shared' ? 'Shared' : 'Private',
+            hint:
+              detail?.visibility === 'shared'
+                ? 'Others can see this reflection'
+                : 'Only you can see this reflection',
+            onSelect: () => setShareOpen(true),
+          },
+          ...moreItems.map((item) => ({
+            label: item.label,
+            onSelect: item.onSelect,
+            reason: item.reason ?? null,
+            danger: item.danger,
+          })),
+        ]}
       />
     )
   )
@@ -2005,7 +2016,15 @@ export function ChatPage() {
                   consolidation was for. It appears as soon as there is
                   anything to count, and colours when it is over.
                 */}
-                {liveValidation && liveValidation.combined.length > 0 ? (
+                {/*
+                  Length, only once it is worth reading.
+                  Within budget the count is noise — 290/2000 says "carry on",
+                  which is what the absence of a warning already said — and it
+                  was wide enough to push the row onto a third line. It appears
+                  when the length starts to matter, and colours when it is over.
+                */}
+                {liveValidation &&
+                liveValidation.combined.status !== LENGTH_STATUS.RECOMMENDED ? (
                   <>
                     <span aria-hidden="true">·</span>
                     <span data-status={liveValidation.combined.status}>
@@ -2016,22 +2035,12 @@ export function ChatPage() {
                 ) : null}
               </p>
 
-              {detail ? (
-                <span className={styles.privacy}>
-                  {detail.visibility === 'shared' ? (
-                    <>
-                      <GlobeIcon className={styles.tinyIcon} />
-                      Shared
-                    </>
-                  ) : (
-                    <>
-                      <LockIcon className={styles.tinyIcon} />
-                      Private
-                    </>
-                  )}
-                </span>
-              ) : null}
-
+              {/*
+                Who can see this is not status while somebody is writing — it
+                is a fact about sharing, and it is stated in the share sheet at
+                the moment it matters. On this line it was a short chip that
+                took a whole row to itself, so it has moved to the menu.
+              */}
               <button
                 type="button"
                 className={`btn btn-sm ${written > 0 ? 'btn-primary' : 'btn-secondary'} ${styles.mobileShare}`}
