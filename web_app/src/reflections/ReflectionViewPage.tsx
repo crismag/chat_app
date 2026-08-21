@@ -19,9 +19,13 @@ import {
   type ChatSectionType,
   type ConversationSummary,
 } from '@chat/shared'
+import type { BiblePassage } from '@chat/shared'
 import { CONDENSED_FIELDS } from '../chat/sections.ts'
 import { ApiError, api } from '../shared/api/client.ts'
-import { SECTIONS, formatDate } from '../shared/ui/ReflectionCard.tsx'
+import { SECTIONS, StateBadge, formatDate } from '../shared/ui/ReflectionCard.tsx'
+import { ActionMenu } from '../shared/ui/ActionMenu.tsx'
+import { MoreIcon } from '../shared/ui/icons.tsx'
+import { useMobileBar } from '../shared/mobile/MobileBar.tsx'
 import styles from './ReflectionViewPage.module.css'
 
 type Detail = ConversationSummary & {
@@ -34,6 +38,13 @@ export function ReflectionViewPage() {
   const navigate = useNavigate()
   const [detail, setDetail] = useState<Detail | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /*
+   * The passage, when there is one. Its absence is not an error and is never
+   * reported as one: plenty of reflections have a reference typed by hand that
+   * no provider will resolve, and a red band about it would be the loudest
+   * thing on a page meant for reading.
+   */
+  const [passage, setPassage] = useState<BiblePassage | null>(null)
   const now = Date.now()
 
   useEffect(() => {
@@ -59,6 +70,44 @@ export function ReflectionViewPage() {
       live = false
     }
   }, [id])
+
+  useEffect(() => {
+    let live = true
+    setPassage(null)
+    api<{ passage: BiblePassage }>(`/bible/reflections/${id}/passage`)
+      .then((value) => live && setPassage(value.passage))
+      .catch(() => {
+        /* No passage stored, or none resolvable. The page reads fine without. */
+      })
+    return () => {
+      live = false
+    }
+  }, [id])
+
+  /*
+   * The bar names the passage rather than the page. "Reflection" would be
+   * true of every one of them; the reference says which this is, and the
+   * title is already the first thing under the bar in full.
+   */
+  useMobileBar(
+    () => ({
+      title: detail?.scriptureReference || 'Reflection',
+      onBack: () => void navigate('/reflections'),
+      backLabel: 'Back to Reflections',
+      actions: detail ? (
+        <ActionMenu
+          label="Reflection actions"
+          triggerClassName={styles.barAction}
+          trigger={<MoreIcon />}
+          items={[
+            { label: 'Edit this reflection', onSelect: () => void navigate(`/?c=${detail.id}`) },
+            { label: 'Create image', onSelect: () => void navigate(`/create?c=${detail.id}`) },
+          ]}
+        />
+      ) : undefined,
+    }),
+    [detail?.id, detail?.scriptureReference, navigate],
+  )
 
   if (error) {
     return (
@@ -110,6 +159,8 @@ export function ReflectionViewPage() {
             <span className="sr-only">Last updated </span>
             {formatDate(detail.updatedAt, now)}
           </span>
+          {/* Whether this is shared is part of reading it, not a setting. */}
+          <StateBadge state={detail.visibility} />
         </p>
         {detail.tags.length > 0 ? (
           <ul className={styles.tags}>
@@ -134,6 +185,18 @@ export function ReflectionViewPage() {
           Edit this reflection
         </button>
       </div>
+
+      {passage ? (
+        <section className={styles.passage} aria-label={`${passage.reference}, ${passage.name}`}>
+          <p className={styles.passageMeta}>
+            {passage.reference} · {passage.abbreviation}
+          </p>
+          <p className={styles.passageBody}>{passage.content}</p>
+          {passage.copyright ? (
+            <p className={styles.passageCopyright}>{passage.copyright}</p>
+          ) : null}
+        </section>
+      ) : null}
 
       {written.length === 0 ? (
         <p className={styles.empty}>
