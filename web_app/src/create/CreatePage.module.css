@@ -198,6 +198,18 @@
   background: var(--surface-2);
 }
 
+@media (max-width: 899px) and (max-height: 540px) {
+  .page[data-narrow='true'] .overflow p {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+
+  .page[data-narrow='true'] .status,
+  .page[data-narrow='true'] .error {
+    display: none;
+  }
+}
+
 @media (max-width: 899px) {
   /*
    * The overflow note is a note.
@@ -214,6 +226,14 @@
     font-size: var(--text-sm);
   }
 
+  /*
+   * On a short screen the notices give up their height to the canvas.
+   *
+   * A phone on its side has 390px in total. The overflow note and the save
+   * line were taking 131px of it between them, which left the composition
+   * 25px — a strip. They are still here and still say what they say; they say
+   * it in one line.
+   */
   .page[data-narrow='true'] .overflow p {
     margin: 0;
     display: -webkit-box;
@@ -239,16 +259,31 @@
   }
 
   /*
-   * The Studio itself is the workspace. It is package-owned DOM, so what the
-   * host can do is give it the whole remaining screen and let it scroll
-   * inside its own bounds rather than through the document.
+   * The Studio is the workspace, and it now lays itself out.
+   *
+   * This used to give it the screen and let it scroll inside its own bounds,
+   * which was the best the host could do while the editor still stacked. The
+   * editor has a phone shape of its own now — canvas, dock, sheets — so a
+   * scrolling box and a foot of padding here were fighting it: in landscape
+   * they left the stage 31px of a 390px screen. All the host owes it is the
+   * room.
    */
+  /*
+   * The wrapper passes the height through.
+   *
+   * `.studio` sits between the page and the editor, and it was sized by its
+   * content rather than by the room — so the editor received 170px of a 390px
+   * landscape screen no matter what either of them did about it. Every box in
+   * the chain has to agree to fill, or the last one cannot.
+   */
+  .page[data-narrow='true'] .studio {
+    flex: 1 1 auto;
+    display: flex;
+    min-block-size: 0;
+  }
+
   .page[data-narrow='true'] :global(.create-studio) {
     flex: 1 1 auto;
     min-block-size: 0;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    padding-inline: var(--space-3);
-    padding-block-end: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
   }
 }
