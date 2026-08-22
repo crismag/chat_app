@@ -232,6 +232,8 @@ export type Account = {
    */
   displayName?: string | null;
   handle?: string | null;
+  /** Their picture, when they have set one. Null means "draw the generated face". */
+  avatarUrl?: string | null;
 };
 
 export function isGuest(account: Pick<Account, 'accountType'> | null): boolean {

@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+
 import styles from './Avatar.module.css'
 
 /*
@@ -69,7 +71,17 @@ export function Avatar({
 }) {
   const label = name.trim() || 'This person'
 
-  if (src) {
+  /*
+   * A picture that fails to load becomes the generated face rather than a
+   * broken image icon. Stored pictures outlive the pages that point at them —
+   * a removed avatar, an expired cache, a request that simply failed — and the
+   * one thing a person must never see where their face should be is a torn
+   * page. Keyed on `src` so replacing a picture clears a previous failure.
+   */
+  const [failed, setFailed] = useState(false)
+  useEffect(() => setFailed(false), [src])
+
+  if (src && !failed) {
     return (
       <img
         className={`${styles.avatar} ${styles[size]} ${className ?? ''}`}
@@ -83,6 +95,7 @@ export function Avatar({
         width={64}
         height={64}
         loading="lazy"
+        onError={() => setFailed(true)}
       />
     )
   }

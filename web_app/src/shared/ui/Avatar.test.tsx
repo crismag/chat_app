@@ -5,7 +5,7 @@
  * on every screen, or the application looks like it is showing three different
  * people as you move through it.
  */
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, test } from 'vitest'
 import { Avatar, initialsFor } from './Avatar.tsx'
 
@@ -64,4 +64,18 @@ test('a real picture is shown, and does not repeat the name to a screen reader',
   /* The name is almost always beside it; "photo of Ada, Ada" is worse than one Ada. */
   expect(image).toHaveAttribute('alt', '')
   expect(screen.queryByRole('img', { name: 'Ada Lovelace' })).toBeNull()
+})
+
+test('a picture that fails to load becomes the generated face, never a broken image', () => {
+  render(<Avatar name="Ada Lovelace" identity="ada" src="/api/profiles/ada/avatar?v=1" />)
+
+  const picture = document.querySelector('img')
+  expect(picture).not.toBeNull()
+
+  /* The stored picture is gone, or the request failed. The person is not. */
+  fireEvent.error(picture as HTMLImageElement)
+
+  expect(document.querySelector('img')).toBeNull()
+  expect(screen.getByRole('img', { name: 'Ada Lovelace' })).toBeVisible()
+  expect(screen.getByText('AL')).toBeVisible()
 })

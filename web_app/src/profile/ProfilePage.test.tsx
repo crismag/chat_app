@@ -11,6 +11,7 @@
 
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { AuthProvider } from '../auth/AuthContext.tsx'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, expect, test, vi } from 'vitest'
 import { ProfilePage } from './ProfilePage.tsx'
@@ -75,12 +76,18 @@ function mockFetch(overrides: Record<string, unknown> = {}) {
 }
 
 function renderProfile() {
+  /*
+   * The page reads the signed-in account so the header face can follow an
+   * edit, so it needs the provider the application gives it.
+   */
   return render(
-    <MemoryRouter initialEntries={['/profile/cris']}>
-      <Routes>
-        <Route path="/profile/:handle" element={<ProfilePage />} />
-      </Routes>
-    </MemoryRouter>,
+    <AuthProvider>
+      <MemoryRouter initialEntries={['/profile/cris']}>
+        <Routes>
+          <Route path="/profile/:handle" element={<ProfilePage />} />
+        </Routes>
+      </MemoryRouter>
+    </AuthProvider>,
   )
 }
 

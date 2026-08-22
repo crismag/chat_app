@@ -1,0 +1,123 @@
+.field {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.legend {
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  /* Wraps rather than squeezing the buttons into unreadable slivers. */
+  flex-wrap: wrap;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/*
+ * A label and a button styled identically, because to the person using them
+ * they are the same kind of thing. Both meet the 44px target.
+ */
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.action:hover {
+  background: var(--surface-2);
+}
+
+.action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.9375rem;
+}
+
+/* ------------------------------------------------------------- the cropper */
+
+.viewport {
+  position: relative;
+  width: min(288px, 100%);
+  aspect-ratio: 1;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--surface-sunk);
+  /* A drag here moves the picture; it must not also scroll the sheet. */
+  touch-action: none;
+  cursor: grab;
+}
+
+.viewport:active {
+  cursor: grabbing;
+}
+
+.picture {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/*
+ * The circle the picture will be shown in, drawn over the square frame so the
+ * person frames what they will actually see rather than what is stored.
+ */
+.mask {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0 0 9999px color-mix(in srgb, var(--surface) 72%, transparent) inset;
+  /*
+   * `closest-side` is load-bearing. A radial gradient defaults to
+   * farthest-corner, which in a square puts its 100% stop out at the corner —
+   * so the clear circle came out at about a third of the frame and the person
+   * framed a much smaller square than they were about to get.
+   */
+  -webkit-mask: radial-gradient(circle closest-side, transparent 99%, #000 100%);
+  mask: radial-gradient(circle closest-side, transparent 99%, #000 100%);
+}
+
+.zoom {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.zoom input {
+  width: 100%;
+  min-height: 44px;
+}
+
+.footer {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}

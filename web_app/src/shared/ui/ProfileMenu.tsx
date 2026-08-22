@@ -123,6 +123,7 @@ export function ProfileMenu({
               account id is the fallback for somebody with no profile yet.
             */
             identity={account.handle ?? account.id}
+            src={account.avatarUrl}
             size="small"
           />
         </span>

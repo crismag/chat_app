@@ -28,7 +28,12 @@ import {
   suggestDisplayName,
   suggestHandle,
 } from './limits.ts';
-import type { ProfileStore, StoredProfile } from './store.ts';
+import {
+  AVATAR_CONTENT_TYPES,
+  type AvatarContentType,
+  type ProfileStore,
+  type StoredProfile,
+} from './store.ts';
 
 /**
  * Why a profile may be reported.
@@ -98,6 +103,7 @@ export function ensureProfile(profiles: ProfileStore, user: ProfileUser): Stored
     favouriteVerses: [],
     createdAt: timestamp,
     updatedAt: timestamp,
+    avatarUpdatedAt: null,
   };
   profiles.save(profile);
   return profile;
@@ -117,9 +123,25 @@ function monthOf(timestamp: string): string | null {
   return `${String(when.getUTCFullYear())}-${String(when.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
+/**
+ * Where a browser may fetch this person's picture, or null when there is none.
+ *
+ * The stamp in the query string is the whole caching story. The bytes are
+ * served as immutable and cached for a year, which is only safe because
+ * replacing a picture changes this URL. A profile with no picture returns null
+ * rather than a URL that 404s, so the client draws its generated face instead
+ * of a broken image.
+ */
+function avatarUrl(profile: StoredProfile): string | null {
+  if (!profile.avatarUpdatedAt) return null;
+  const stamp = encodeURIComponent(profile.avatarUpdatedAt);
+  return `/api/profiles/${encodeURIComponent(profile.handle)}/avatar?v=${stamp}`;
+}
+
 function ownView(profile: StoredProfile, publicChatCount: number) {
   return {
     handle: profile.handle,
+    avatarUrl: avatarUrl(profile),
     memberSince: monthOf(profile.createdAt),
     displayName: profile.displayName,
     tagline: profile.tagline,
@@ -127,6 +149,33 @@ function ownView(profile: StoredProfile, publicChatCount: number) {
     publicChatCount,
     limits: PROFILE_LIMITS,
   };
+}
+
+/** 512 KB. A square crop of a photograph is comfortably inside this. */
+const MAX_AVATAR_BYTES = 512 * 1024;
+
+function isAvatarContentType(value: string | undefined): value is AvatarContentType {
+  return AVATAR_CONTENT_TYPES.includes(value as AvatarContentType);
+}
+
+/**
+ * What these bytes actually are, by their leading magic number.
+ *
+ * Only the three formats this accepts are recognised; anything else is null
+ * and therefore rejected. This is a check, not a general format detector.
+ */
+function sniffImageType(bytes: Uint8Array): AvatarContentType | null {
+  const starts = (...signature: number[]) =>
+    signature.length <= bytes.length && signature.every((byte, index) => bytes[index] === byte);
+
+  if (starts(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return 'image/png';
+  if (starts(0xff, 0xd8, 0xff)) return 'image/jpeg';
+  /* RIFF....WEBP — the four size bytes in between are not part of the check. */
+  if (starts(0x52, 0x49, 0x46, 0x46) && bytes.length > 11) {
+    const tag = String.fromCharCode(...bytes.slice(8, 12));
+    if (tag === 'WEBP') return 'image/webp';
+  }
+  return null;
 }
 
 export function createProfileRoutes({ currentUser, profiles }: ProfileRouteOptions) {
@@ -239,6 +288,83 @@ export function createProfileRoutes({ currentUser, profiles }: ProfileRouteOptio
   /** The profile named in the path, or a 404 that says nothing else. */
   const subjectOf = (c: Context) => profiles.byHandle(c.req.param('handle') ?? '');
 
+  /*
+   * ── The picture routes ───────────────────────────────────────────────────
+   *
+   * An avatar is bytes supplied by one person and rendered on pages belonging
+   * to other people, which is the shape of most stored-content problems. Three
+   * things are therefore checked here rather than trusted:
+   *
+   *  1. **The declared type is in the allowlist** — PNG, JPEG or WebP. No SVG,
+   *     because an SVG is a document that can carry script.
+   *  2. **The bytes agree with the declaration.** A header is a claim made by
+   *     the uploader; the magic number is the file. They must match, so a file
+   *     cannot be served back under a type it is not.
+   *  3. **The size is bounded before anything is stored.** The client sends a
+   *     small square crop; anything much larger is a mistake or an attempt to
+   *     use the profile table as free storage.
+   *
+   * The response is deliberately the profile view rather than a bare ok, so the
+   * page gets the new URL — stamp and all — from the same round trip.
+   */
+  app.put('/me/avatar', async (c) => {
+    const user = await requireUser(c);
+    if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
+
+    const declared = (c.req.header('content-type') ?? '').split(';')[0]?.trim().toLowerCase();
+    if (!isAvatarContentType(declared)) {
+      return c.json({ error: 'A picture must be a PNG, JPEG or WebP image.' }, 415);
+    }
+
+    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    if (bytes.byteLength === 0) {
+      return c.json({ error: 'That picture was empty.' }, 400);
+    }
+    if (bytes.byteLength > MAX_AVATAR_BYTES) {
+      return c.json({ error: 'That picture is too large. Please choose one under 512 KB.' }, 413);
+    }
+    if (sniffImageType(bytes) !== declared) {
+      return c.json({ error: 'That file does not look like the image type it claims to be.' }, 400);
+    }
+
+    const profile = ensureProfile(profiles, user);
+    profiles.setAvatar(user.id, bytes, declared, nowIso());
+    const updated = profiles.byUserId(user.id) ?? profile;
+    return c.json(ownView(updated, profiles.publicShareCount(user.id)));
+  });
+
+  app.delete('/me/avatar', async (c) => {
+    const user = await requireUser(c);
+    if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
+    const profile = ensureProfile(profiles, user);
+    profiles.clearAvatar(user.id);
+    const updated = profiles.byUserId(user.id) ?? profile;
+    return c.json(ownView(updated, profiles.publicShareCount(user.id)));
+  });
+
+  /*
+   * Serving is open, because a profile is public and its picture is part of
+   * how a person is recognised in shares and community lists. What is *not*
+   * here is any account fact: this route knows a handle and returns pixels.
+   *
+   * `immutable` is honest only because the URL carries the stamp; see
+   * `avatarUrl`. Without that this would be a year-long cache of a picture the
+   * owner has already replaced.
+   */
+  app.get('/:handle/avatar', async (c) => {
+    const subject = profiles.byHandle(c.req.param('handle'));
+    const picture = subject ? profiles.avatar(subject.userId) : null;
+    if (!picture) return c.json({ error: 'No picture.' }, 404);
+    return c.body(picture.bytes as unknown as ArrayBuffer, 200, {
+      'Content-Type': picture.contentType,
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      'Content-Length': String(picture.bytes.byteLength),
+      /* Bytes from one person rendered for another: never sniffed, never framed. */
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'; sandbox",
+    });
+  });
+
   app.get('/:handle', async (c) => {
     const user = await requireUser(c);
     if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
@@ -288,6 +414,7 @@ export function createProfileRoutes({ currentUser, profiles }: ProfileRouteOptio
        * exact date is a fact about a person that nothing here needs.
        */
       memberSince: monthOf(subject.createdAt),
+      avatarUrl: avatarUrl(subject),
       isOwner,
       blocked: false,
       shares,

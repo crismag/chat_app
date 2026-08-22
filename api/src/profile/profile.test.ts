@@ -45,6 +45,22 @@ function send(app: App, path: string, cookie: string, method = 'GET', body?: unk
   });
 }
 
+/*
+ * The smallest byte strings that are genuinely the formats they claim. These
+ * are magic numbers plus filler, not decodable images, which is exactly what
+ * the route checks — it validates the header, never the pixels.
+ */
+const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
+const JPEG_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
+
+function putAvatar(app: App, cookie: string, bytes: Uint8Array, contentType: string) {
+  return app.request('/api/profiles/me/avatar', {
+    method: 'PUT',
+    headers: { 'Content-Type': contentType, Cookie: cookie },
+    body: bytes,
+  });
+}
+
 /** A reflection with one written section, optionally published. */
 async function writeReflection(
   app: App,
@@ -277,6 +293,116 @@ for (const backing of backings) {
         favouriteVerses: string[];
       };
       expect(body.favouriteVerses).toEqual(['Romans 8:28', 'Psalm 46:10']);
+    });
+  });
+
+  describe(`profile picture (${backing.name})`, () => {
+    test('a picture becomes a stamped URL the profile hands out', async () => {
+      const app = createApp(backing.make());
+      const cookie = await register(app, 'ada@example.com');
+
+      const before = await send(app, '/api/profiles/me', cookie);
+      expect(((await before.json()) as { avatarUrl: string | null }).avatarUrl).toBeNull();
+
+      const uploaded = await putAvatar(app, cookie, PNG_BYTES, 'image/png');
+      expect(uploaded.status).toBe(200);
+      const { avatarUrl, handle } = (await uploaded.json()) as {
+        avatarUrl: string
+        handle: string
+      };
+      expect(avatarUrl).toContain(`/api/profiles/${handle}/avatar`);
+      expect(avatarUrl).toMatch(/\?v=/);
+
+      const served = await app.request(avatarUrl);
+      expect(served.status).toBe(200);
+      expect(served.headers.get('content-type')).toBe('image/png');
+      expect(served.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(new Uint8Array(await served.arrayBuffer())).toEqual(PNG_BYTES);
+    });
+
+    test('replacing a picture changes the URL, so a cached one cannot linger', async () => {
+      const app = createApp(backing.make());
+      const cookie = await register(app, 'ada@example.com');
+
+      const first = (await (await putAvatar(app, cookie, PNG_BYTES, 'image/png')).json()) as {
+        avatarUrl: string
+      };
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      const second = (await (await putAvatar(app, cookie, JPEG_BYTES, 'image/jpeg')).json()) as {
+        avatarUrl: string
+      };
+
+      expect(second.avatarUrl).not.toBe(first.avatarUrl);
+      const served = await app.request(second.avatarUrl);
+      expect(served.headers.get('content-type')).toBe('image/jpeg');
+    });
+
+    test('a stranger sees the picture, because a public profile has a face', async () => {
+      const app = createApp(backing.make());
+      const owner = await register(app, 'ada@example.com');
+      await putAvatar(app, owner, PNG_BYTES, 'image/png');
+      const { handle } = (await (await send(app, '/api/profiles/me', owner)).json()) as {
+        handle: string
+      };
+
+      const stranger = await register(app, 'bob@example.com');
+      const seen = await send(app, `/api/profiles/${handle}`, stranger);
+      const view = (await seen.json()) as { avatarUrl: string | null };
+      expect(view.avatarUrl).toContain('/avatar');
+      expect((await app.request(view.avatarUrl as string)).status).toBe(200);
+    });
+
+    test('removing a picture returns the person to a generated face', async () => {
+      const app = createApp(backing.make());
+      const cookie = await register(app, 'ada@example.com');
+      const { avatarUrl } = (await (await putAvatar(app, cookie, PNG_BYTES, 'image/png')).json()) as {
+        avatarUrl: string
+      };
+
+      const removed = await send(app, '/api/profiles/me/avatar', cookie, 'DELETE');
+      expect(removed.status).toBe(200);
+      expect(((await removed.json()) as { avatarUrl: string | null }).avatarUrl).toBeNull();
+      expect((await app.request(avatarUrl)).status).toBe(404);
+    });
+
+    test('an SVG is refused, because it is a document that can carry script', async () => {
+      const app = createApp(backing.make());
+      const cookie = await register(app, 'ada@example.com');
+      const svg = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"></svg>');
+
+      const refused = await putAvatar(app, cookie, svg, 'image/svg+xml');
+      expect(refused.status).toBe(415);
+    });
+
+    test('bytes that disagree with the declared type are refused', async () => {
+      const app = createApp(backing.make());
+      const cookie = await register(app, 'ada@example.com');
+      const script = new TextEncoder().encode('<script>alert(1)</script>');
+
+      /* Declared PNG so the allowlist passes; the magic number is what stops it. */
+      const refused = await putAvatar(app, cookie, script, 'image/png');
+      expect(refused.status).toBe(400);
+      expect((await send(app, '/api/profiles/me', cookie)).status).toBe(200);
+      const view = (await (await send(app, '/api/profiles/me', cookie)).json()) as {
+        avatarUrl: string | null
+      };
+      expect(view.avatarUrl).toBeNull();
+    });
+
+    test('an oversized picture is refused before it is stored', async () => {
+      const app = createApp(backing.make());
+      const cookie = await register(app, 'ada@example.com');
+      const huge = new Uint8Array(600 * 1024);
+      huge.set(PNG_BYTES);
+
+      const refused = await putAvatar(app, cookie, huge, 'image/png');
+      expect(refused.status).toBe(413);
+    });
+
+    test('a signed-out visitor cannot set a picture on anybody', async () => {
+      const app = createApp(backing.make());
+      const refused = await putAvatar(app, '', PNG_BYTES, 'image/png');
+      expect(refused.status).toBe(401);
     });
   });
 

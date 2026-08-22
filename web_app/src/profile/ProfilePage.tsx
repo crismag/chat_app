@@ -34,6 +34,8 @@ import { useNavigate, useParams } from 'react-router'
 import type { ChatFormat, ChatSectionType } from '@chat/shared'
 import { ApiError, api } from '../shared/api/client.ts'
 import { ReflectionCard } from '../shared/ui/ReflectionCard.tsx'
+import { useAuth } from '../auth/useAuth.ts'
+import { AvatarField } from './AvatarField.tsx'
 import { Avatar } from '../shared/ui/Avatar.tsx'
 import styles from './ProfilePage.module.css'
 
@@ -57,6 +59,7 @@ type ProfileView = {
   publicChatCount: number | null
   /** The month the profile was made, as 2026-08. Never a full date. */
   memberSince?: string | null
+  avatarUrl?: string | null
   isOwner: boolean
   blocked: boolean
   shares: Share[]
@@ -66,6 +69,7 @@ type ProfileView = {
 /** The owner's editable view, with the limits the server will enforce. */
 type OwnProfile = {
   handle: string
+  avatarUrl?: string | null
   displayName: string
   tagline: string
   favouriteVerses: string[]
@@ -92,10 +96,18 @@ type OwnProfile = {
 function ProfileEditor({
   own,
   onSaved,
+  onAvatarChanged,
   onCancel,
 }: {
   own: OwnProfile
   onSaved: (saved: OwnProfile) => void
+  /*
+   * A picture is saved the moment it is chosen, not when the form is
+   * submitted, so it has to be announced separately. Without this, adding a
+   * picture and then pressing Cancel leaves the page showing the old face for
+   * a picture the server has already accepted.
+   */
+  onAvatarChanged: (avatarUrl: string | null) => void
   onCancel: () => void
 }) {
   const [handle, setHandle] = useState(own.handle)
@@ -106,6 +118,7 @@ function ProfileEditor({
     while (next.length < own.limits.favouriteVerses) next.push('')
     return next.slice(0, own.limits.favouriteVerses)
   })
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(own.avatarUrl ?? null)
   const [error, setError] = useState<{ message: string; field?: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const ids = useId()
@@ -129,7 +142,7 @@ function ProfileEditor({
           favouriteVerses: verses.map((verse) => verse.trim()).filter(Boolean),
         }),
       })
-      onSaved(saved)
+      onSaved({ ...saved, avatarUrl })
     } catch (caught) {
       const field =
         caught instanceof ApiError
@@ -160,6 +173,23 @@ function ProfileEditor({
           {error.message}
         </p>
       ) : null}
+
+      {/*
+        The picture comes first because it is the part of a profile a person
+        recognises before they read anything. It saves on its own rather than
+        with the form: uploading bytes and patching text are different
+        operations, and pretending otherwise would mean a failed picture
+        discarding a name the person had already typed.
+      */}
+      <AvatarField
+        name={displayName || own.displayName}
+        identity={own.handle}
+        avatarUrl={avatarUrl}
+        onChanged={(next) => {
+          setAvatarUrl(next)
+          onAvatarChanged(next)
+        }}
+      />
 
       <div className="field">
         <label className="label" htmlFor={`${ids}-name`}>
@@ -365,6 +395,7 @@ type Panel = 'none' | 'edit' | 'report'
 
 export function ProfilePage() {
   const { handle } = useParams()
+  const { refresh } = useAuth()
   const navigate = useNavigate()
 
   const [profile, setProfile] = useState<ProfileView | null>(null)
@@ -513,7 +544,12 @@ export function ProfilePage() {
       */}
       <header className={styles.header}>
         <div className={styles.identity}>
-          <Avatar name={profile.displayName} identity={profile.handle} size="large" />
+          <Avatar
+            name={profile.displayName}
+            identity={profile.handle}
+            src={profile.avatarUrl}
+            size="large"
+          />
           <div className={styles.names}>
             <h1 className={styles.displayName}>{profile.displayName}</h1>
             <p className={styles.handle}>@{profile.handle}</p>
@@ -608,10 +644,18 @@ export function ProfilePage() {
         <ProfileEditor
           own={own}
           onCancel={() => setPanel('none')}
+          onAvatarChanged={(avatarUrl) => {
+            setProfile((current) => (current ? { ...current, avatarUrl } : current))
+            setOwn((current) => (current ? { ...current, avatarUrl } : current))
+            /* The account menu shows this face too. */
+            void refresh()
+          }}
           onSaved={(saved) => {
             setOwn(saved)
             setPanel('none')
             setNotice('Your profile has been saved.')
+            /* The header carries this person's face too; it should not lag behind. */
+            void refresh()
             /* The handle is the address, so a changed handle changes the URL. */
             if (saved.handle !== profile.handle) {
               void navigate(`/profile/${saved.handle}`, { replace: true })

@@ -357,6 +357,16 @@ export function createApp(
        */
       displayName: profile?.displayName ?? null,
       handle: profile?.handle ?? null,
+      /*
+       * The same URL the profile page uses, so the face in the account menu is
+       * the face on the profile. Built here rather than shared with the
+       * profile routes because it is one template; importing across features
+       * to save a line would tie this file to that one.
+       */
+      avatarUrl:
+        profile?.avatarUpdatedAt && profile.handle
+          ? `/api/profiles/${encodeURIComponent(profile.handle)}/avatar?v=${encodeURIComponent(profile.avatarUpdatedAt)}`
+          : null,
     };
   };
 
