@@ -1405,10 +1405,39 @@ export function createApp(
     if (!conversation || !owner) {
       return c.json({ error: 'Conversation not found.' }, 404);
     }
-    const shares = communityStore?.removeSharesOfConversation(conversation.id, owner.id) ?? 0;
-    store.sections.delete(conversation.id);
-    store.messages.delete(conversation.id);
-    store.conversations.delete(conversation.id);
+    /*
+     * Four deletes across two stores, as one write.
+     *
+     * Separately, a failure part-way through left a reflection whose sections
+     * were gone, or publications of a reflection that no longer exists. The
+     * person asked for this to be deleted; a partial answer is worse than
+     * either answer, and this is somebody's writing.
+     *
+     * The MemoryStore path has no database and no atomicity to offer, so it
+     * simply runs them -- it backs unit tests, not anybody's reflections.
+     */
+    const db = (store as { db?: { exec(sql: string): void } }).db;
+    let shares = 0;
+    const remove = () => {
+      shares = communityStore?.removeSharesOfConversation(conversation.id, owner.id) ?? 0;
+      store.sections.delete(conversation.id);
+      store.messages.delete(conversation.id);
+      store.conversations.delete(conversation.id);
+    };
+
+    if (db) {
+      db.exec('BEGIN');
+      try {
+        remove();
+        db.exec('COMMIT');
+      } catch (error) {
+        db.exec('ROLLBACK');
+        throw error;
+      }
+    } else {
+      remove();
+    }
+
     return c.json({ id: conversation.id, deleted: true, sharesRemoved: shares });
   });
 
