@@ -73,6 +73,8 @@ import { createProfileRoutes, ensureProfile } from './profile/routes.ts';
 import { createProfileStore } from './profile/store.ts';
 import { createCommunityRoutes } from './community/routes.ts';
 import { createCommunityStore } from './community/store.ts';
+import { createNotesRoutes } from './notes/routes.ts';
+import { createNotesStore } from './notes/store.ts';
 import { createStudioCreationStore } from './create/store.ts';
 import { readStudioCreation } from './create/validation.ts';
 import { createStudioImageRoutes } from './create/image-routes.ts';
@@ -601,6 +603,7 @@ export function createApp(
    * stores over one database would be two migrations racing on first use.
    */
   const communityStore = createCommunityStore(store);
+  const notesStore = createNotesStore(store);
 
   /*
    * Now that every store has made its tables, remove the foreign keys that
@@ -673,6 +676,19 @@ export function createApp(
       },
       userIdByEmail: async (email) => (await auth.findByEmail(email))?.id ?? null,
       ensureIdentity: (user) => ensureProfile(profiles, user),
+    }),
+  );
+
+  /*
+   * Private notes. Mounted the same way as profile and community: the module
+   * owns its table and its queries, and the owner is whoever currentAccount
+   * already is — session or recognised guest — never a client-supplied id.
+   */
+  app.route(
+    '/api/notes',
+    createNotesRoutes({
+      currentOwner: (c) => currentAccount(c),
+      store: notesStore,
     }),
   );
 

@@ -1,6 +1,7 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router'
 import { useAuth } from '../../auth/useAuth.ts'
 import { BackIcon, ChatIcon, CommunityIcon, LibraryIcon, PlusIcon } from '../ui/icons.tsx'
+import { NotesIcon } from '../../notes/icons.tsx'
 import { ProfileMenu } from '../ui/ProfileMenu.tsx'
 import { useSoftKeyboard } from '../ui/useSoftKeyboard.ts'
 import { MobileBarProvider, useMobileBarConfig } from '../mobile/MobileBar.tsx'
@@ -8,13 +9,14 @@ import { NARROW_QUERY, useMediaQuery } from '../ui/useMediaQuery.ts'
 import styles from './AppShell.module.css'
 
 /*
- * Three destinations. Create stays an action on a finished reflection, reached
+ * Four destinations. Create stays an action on a finished reflection, reached
  * from the card and the account menu. Community is in the shell because a
  * published entry now has its own address and can be opened from the feed.
  */
 const navItems = [
   { to: '/', label: 'Reflect', end: true, Icon: ChatIcon },
   { to: '/reflections', label: 'Reflections', end: false, Icon: LibraryIcon },
+  { to: '/notes', label: 'Notes', end: false, Icon: NotesIcon },
   { to: '/community', label: 'Community', end: false, Icon: CommunityIcon },
 ] as const
 

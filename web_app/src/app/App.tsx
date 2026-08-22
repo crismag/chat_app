@@ -7,6 +7,7 @@ import { AppShell } from '../shared/layout/AppShell.tsx'
 import { ChatPage } from '../chat/ChatPage.tsx'
 import { ReflectionsPage } from '../reflections/ReflectionsPage.tsx'
 import { ReflectionViewPage } from '../reflections/ReflectionViewPage.tsx'
+import { NotesPage } from '../notes/NotesPage.tsx'
 import { CommunityPage } from '../community/CommunityPage.tsx'
 import { PublicationPage } from '../community/PublicationPage.tsx'
 import { CreatePage } from '../create/CreatePage.tsx'
@@ -88,6 +89,7 @@ export function App() {
             should not 404 over a rename that is ours to absorb.
           */}
             <Route path="/library" element={<Navigate to="/reflections" replace />} />
+            <Route path="/notes" element={<NotesPage />} />
             <Route path="/community" element={<CommunityPage />} />
             {/*
             A publication has its own address, and possessing it grants nothing.
