@@ -64,6 +64,7 @@ A CodeReviewerAssist pass on 2026-08-22, plus three specialized lens reviews, ad
 - [~] **In progress** (approved 2026-08-22). Schema is done and tested against a real MariaDB; the cutover itself — backfill, read flag, write flip, retirement — is not.
 - [x] Schema decision recorded: live SQLite shape — `007` mirrors SQLite *semantics* while keeping MariaDB conventions (BIGINT + `public_uuid`, snake_case). The unused `chat_content`/`reflection_revisions` model is untouched and is not the target.
 - [x] Community columns missing from MariaDB `003` added — migration `007`: community settings, `share_visibility`, `publication_hides`, `author_mutes`, `share_events`, the one-live-share rule and the feed index; `api/src/mysql/community-schema.test.ts` proves the rules against a real MariaDB
+- [~] Backfill written and tested — `api/src/mysql/backfill-content.ts` copies live SQLite content into MariaDB keyed by `public_uuid`: re-runnable, replaces sections and messages rather than merging, skips (never reassigns) a reflection whose owner has no MariaDB account, and never writes to the source.
 - [ ] Routes flipped — **not started.** Needs a content store on MariaDB, a backfill keyed by `public_uuid`, and a read flag defaulting off. Steps 4–5 (flip writes, retire SQLite) also need a production soak, so they cannot be closed from a development machine.
 - [ ] SQLite live path retired
 - [ ] API loopback bind in production (S9 — also listed under P6)
