@@ -142,6 +142,22 @@ A separate domain with its own document root
 `https://chatapi.crishub.com/api`. The `/api` path is kept: the routes are
 defined as `/api/...` and nothing strips it.
 
+**How it is reached.** The Node process listens on `127.0.0.1:8000` and nothing
+on this plan could reach it: a `[P]` rewrite answers 503 because mod_proxy is
+not permitted, and the host's Node application manager can only be set up
+through its control panel. PHP can open a loopback socket, so
+`chatapi/index.php` carries the request in and the answer back out. It is
+installed into the API domain's own document root by `remote-install.sh`.
+
+It forwards and does not decide: no headers of its own, no view on who may
+call, nothing rewritten. The API behind it already does CORS, sessions and
+authentication, and a proxy with opinions about those would be a second place
+for them to disagree. The destination is fixed in the file, so no request can
+point it elsewhere.
+
+If the Node application manager is ever set up instead, delete `index.php` and
+let it own the domain — the two must not both answer.
+
 **Why a separate domain and not a path on the site.** mod_proxy is not
 permitted here, so `/api` cannot be handed to a local process — a `[P]` rewrite
 answers 503. A subdomain *of* reflections.crishub.com was tried and cannot

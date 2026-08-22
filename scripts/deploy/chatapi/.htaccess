@@ -1,0 +1,16 @@
+# chatapi.crishub.com
+#
+# Everything goes to the gateway, which carries it to the Node process on the
+# loopback. There is no static content here to serve and nothing to fall
+# through to.
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^ index.php [L,QSA]
+</IfModule>
+
+# The gateway is the only thing that should ever be fetched from here.
+<FilesMatch "\.(env|sqlite|ts|map|log)$">
+  Require all denied
+</FilesMatch>

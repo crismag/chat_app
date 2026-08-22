@@ -61,6 +61,10 @@ cp -r scripts/deploy "${STAGE}/app/scripts-deploy"
 
 # The web app, exactly as it will be served.
 cp -r web_app/dist/. "${STAGE}/public_html/"
+
+# The API's front door, for its own document root.
+mkdir -p "${STAGE}/chatapi"
+cp scripts/deploy/chatapi/index.php scripts/deploy/chatapi/.htaccess "${STAGE}/chatapi/"
 cp scripts/deploy/public_html.htaccess "${STAGE}/public_html/.htaccess"
 
 # The web workspace is in package.json's `workspaces`, so `npm ci` would want
@@ -76,6 +80,6 @@ echo "${STAMP}" > "${STAGE}/app/RELEASE"
 date -u +"%Y-%m-%dT%H:%M:%SZ" >> "${STAGE}/app/RELEASE"
 
 mkdir -p dist
-tar -czf "${OUT}" -C "${STAGE}" app public_html
+tar -czf "${OUT}" -C "${STAGE}" app public_html chatapi
 echo "==> ${OUT}"
 [ -n "${DIRTY}" ] && echo "    NOTE: built from a dirty tree" || true
