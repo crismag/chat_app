@@ -46,6 +46,25 @@ function mockFetch(overrides: Record<string, unknown> = {}) {
   return vi.fn((input: RequestInfo, init?: RequestInit) => {
     const url = String(input)
     const method = init?.method ?? 'GET'
+    if (url.includes('/auth/me')) {
+      if (overrides.accountType === 'REGISTERED') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: 'u-visitor',
+            accountType: 'REGISTERED',
+            email: 'ada@example.com',
+            guestName: null,
+            emailVerified: true,
+          }),
+        } as Response)
+      }
+      return Promise.resolve({
+        ok: false,
+        status: 401,
+        json: async () => ({ error: 'Unauthenticated.' }),
+      } as Response)
+    }
     if (url.includes('/profiles/me')) {
       return Promise.resolve({
         ok: true,
@@ -146,6 +165,7 @@ test("offers Report and Block on someone else's profile, and Edit on one's own",
   await screen.findByRole('button', { name: 'Report profile' })
   expect(screen.getByRole('button', { name: 'Block user' })).toBeVisible()
   expect(screen.queryByRole('button', { name: 'Edit profile' })).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Message' })).toBeNull()
   view.unmount()
   cleanup()
 
@@ -153,6 +173,12 @@ test("offers Report and Block on someone else's profile, and Edit on one's own",
   renderProfile()
   expect(await screen.findByRole('button', { name: 'Edit profile' })).toBeVisible()
   expect(screen.queryByRole('button', { name: 'Report profile' })).toBeNull()
+})
+
+test('a signed-in visitor can Message from a profile', async () => {
+  vi.stubGlobal('fetch', mockFetch({ accountType: 'REGISTERED' }))
+  renderProfile()
+  expect(await screen.findByRole('button', { name: 'Message' })).toBeVisible()
 })
 
 test('reporting states that nothing is removed, and confirms afterwards', async () => {

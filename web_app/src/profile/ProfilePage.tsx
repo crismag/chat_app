@@ -588,6 +588,27 @@ export function ProfilePage() {
             </button>
           ) : (
             <>
+              {user?.accountType === 'REGISTERED' ? (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setNotice('')
+                    void api<{ thread: { id: string } }>('/messaging/open', {
+                      method: 'POST',
+                      body: JSON.stringify({ handle: profile.handle }),
+                    })
+                      .then((opened) => navigate(`/messages/${opened.thread.id}`))
+                      .catch((caught: unknown) => {
+                        setError(
+                          caught instanceof ApiError ? caught.message : 'Could not start a message.',
+                        )
+                      })
+                  }}
+                >
+                  Message
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="btn btn-secondary"

@@ -75,6 +75,8 @@ import { createCommunityRoutes } from './community/routes.ts';
 import { createCommunityStore } from './community/store.ts';
 import { createNotesRoutes } from './notes/routes.ts';
 import { createNotesStore } from './notes/store.ts';
+import { createMessagingRoutes } from './messaging/routes.ts';
+import { createMessagingStore } from './messaging/store.ts';
 import { createStudioCreationStore } from './create/store.ts';
 import { readStudioCreation } from './create/validation.ts';
 import { createStudioImageRoutes } from './create/image-routes.ts';
@@ -715,6 +717,7 @@ export function createApp(
    */
   const communityStore = createCommunityStore(store);
   const notesStore = createNotesStore(store);
+  const messagingStore = createMessagingStore(store);
 
   /*
    * Now that every store has made its tables, remove the foreign keys that
@@ -810,6 +813,20 @@ export function createApp(
     createNotesRoutes({
       currentOwner: (c) => currentAccount(c),
       store: notesStore,
+    }),
+  );
+
+  /*
+   * Private messaging between registered accounts. Guests are refused here —
+   * a guest prompt would create an account that still could not use Messages.
+   * Block is the existing profile block, not a second table.
+   */
+  app.route(
+    '/api/messaging',
+    createMessagingRoutes({
+      currentUser: (c) => registeredUser(c),
+      store: messagingStore,
+      profiles,
     }),
   );
 
