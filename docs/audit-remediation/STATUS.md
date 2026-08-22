@@ -67,12 +67,12 @@ A CodeReviewerAssist pass on 2026-08-22, plus three specialized lens reviews, ad
 - [~] Backfill written and tested — `api/src/mysql/backfill-content.ts` copies live SQLite content into MariaDB keyed by `public_uuid`: re-runnable, replaces sections and messages rather than merging, skips (never reassigns) a reflection whose owner has no MariaDB account, and never writes to the source.
 - [ ] Routes flipped — **not started.** Needs a content store on MariaDB, a backfill keyed by `public_uuid`, and a read flag defaulting off. Steps 4–5 (flip writes, retire SQLite) also need a production soak, so they cannot be closed from a development machine.
 - [ ] SQLite live path retired
-- [ ] API loopback bind in production (S9 — also listed under P6)
+- [x] API loopback bind in production (S9) — done in P6
 - [ ] Restore drill documented for **both** SQLite content and MariaDB accounts (O3)
 
 ## P6
 
-- [ ] Not started (item-by-item approval)
+- [~] **In progress** (approved 2026-08-22). Items below are ticked as they land; the ones still open are open on purpose — see the report.
 - [ ] S6 CSRF/header
 - [ ] S8 verification / disposable wiring
 - [ ] AI route family merge
@@ -80,10 +80,10 @@ A CodeReviewerAssist pass on 2026-08-22, plus three specialized lens reviews, ad
 - [ ] Security headers
 - [ ] CI subset of `scripts/verify`
 - [ ] Public share single POST
-- [ ] S9 Loopback bind + XFF only from loopback
+- [x] S9 Loopback bind + XFF only from loopback — production binds `127.0.0.1`; `x-forwarded-for` is believed only from a loopback peer, and the two duplicate address readers in `bible/routes.ts` and `app.ts` now go through the one helper. `api/src/http/address.test.ts`
 - [ ] S10 Account export/delete (only if named)
-- [ ] O1 Readiness probe
-- [ ] O2 PHP gateway timeout
-- [ ] M1 Request IDs on generic HTTP
-- [ ] M2 `app.onError` JSON `{ error }`
-- [ ] S11 Studio image generate rate limit
+- [x] O1 Readiness probe — `GET /api/health/ready` pings content and, where accounts live across a network, MariaDB; `/api/health` is untouched liveness. `api/src/http/readiness.test.ts`
+- [x] O2 PHP gateway timeout — documented rather than changed. The gateway's 30s already sits above the API's 15s AI timeout; the trap is raising `AI_REQUEST_TIMEOUT_MS` past ~28s, which is now called out in both the gateway and `.env.example`.
+- [x] M1 Request IDs on generic HTTP — one middleware, echoed on every response, a client's own id honoured after being made safe to log; `api/src/http/request-id.test.ts`
+- [x] M2 `app.onError` JSON `{ error }` — uncaught throws answer JSON with the request id; the driver's message goes to the log and never to a browser
+- [x] S11 Studio image generate rate limit — 6/minute per account and 24/minute per address, 429 + `Retry-After`, using the existing sliding window; `image-routes.test.ts`

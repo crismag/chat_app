@@ -34,6 +34,22 @@ const studioImageProvider = process.env.STUDIO_IMAGE_PROVIDER === 'deterministic
   ? new DeterministicStudioImageProvider()
   : undefined;
 
+/*
+ * In production this listens on loopback only.
+ *
+ * The deployment already assumes it: `scripts/deploy/chatapi/index.php` opens
+ * a socket to 127.0.0.1:8000 because the host does not permit mod_proxy, and
+ * the deploy guide describes the port as unreachable. It was not — the process
+ * bound every interface, and only a firewall stood between the open internet
+ * and a port where guest creation, registration and forgot-password are
+ * metered by address alone. A caller who can reach it directly can also set
+ * `x-forwarded-for`, which is a fresh rate-limit bucket per request.
+ *
+ * Development binds everywhere on purpose, so a phone on the same network can
+ * reach a dev server, and Capacitor's live reload works.
+ */
+const hostname = process.env.NODE_ENV === 'production' ? '127.0.0.1' : undefined;
+
 serve({
   fetch: createApp(
     store,
@@ -42,6 +58,10 @@ serve({
     auth ?? new SqliteAuthStore(store, hashPassword, verifyPassword),
   ).fetch,
   port,
+  ...(hostname ? { hostname } : {}),
 }, () => {
-  console.log(`C.H.A.T. API listening on http://localhost:${port}`);
+  console.log(
+    `C.H.A.T. API listening on http://${hostname ?? 'localhost'}:${port}` +
+      (hostname ? ' (loopback only; reached through the gateway)' : ''),
+  );
 });

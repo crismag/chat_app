@@ -20,6 +20,18 @@
 declare(strict_types=1);
 
 const UPSTREAM = 'http://127.0.0.1:8000';
+
+/*
+ * The ceiling on any single request through this gateway.
+ *
+ * It has to stay above the API's own timeouts, not below them. The API gives
+ * up on a provider at AI_REQUEST_TIMEOUT_MS (15s by default) and answers with
+ * a timeout the interface can explain. If this cut in first, the browser would
+ * get a gateway failure instead — the same wait, and nothing to say about it.
+ *
+ * So: raising AI_REQUEST_TIMEOUT_MS above about 28s means raising this too, or
+ * the longer allowance does not exist. That is the trap this comment is for.
+ */
 const TIMEOUT_SECONDS = 30;
 
 /* Request headers worth carrying. Hop-by-hop and host headers are not. */

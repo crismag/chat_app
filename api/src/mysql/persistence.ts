@@ -283,6 +283,11 @@ export class MysqlPersistence {
     return row ? mapUser(row) : null;
   }
 
+  /** One cheap round trip, for the readiness probe. Reads nothing. */
+  async ping(): Promise<void> {
+    await this.pool.execute('SELECT 1');
+  }
+
   async getUserByPublicUuid(publicUuid: string): Promise<UserRecord | null> {
     const [rows] = await this.pool.execute<RowDataPacket[]>(
       'SELECT * FROM users WHERE public_uuid = ? AND deleted_at IS NULL',

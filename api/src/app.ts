@@ -81,6 +81,8 @@ import { createStudioImageRoutes } from './create/image-routes.ts';
 import { createStudioImageAssetStore } from './create/image-store.ts';
 import type { StudioImageProvider } from './create/image-provider.ts';
 import { SqliteStore } from './db.ts';
+import { onError } from './http/errors.ts';
+import { requestId } from './http/request-id.ts';
 import { hashSessionToken } from './mysql/tokens.ts';
 import { MemoryStore, type StoredConversation } from './store.ts';
 import { BOOKS } from './bible/books.ts';
@@ -255,6 +257,14 @@ export function createApp(
     };
   };
 
+  /*
+   * Before anything else, so a request that fails inside CORS or auth still
+   * has an identifier to be reported by.
+   */
+  app.use('/api/*', requestId());
+
+  app.onError(onError);
+
   app.use(
     '/api/*',
     cors({
@@ -421,6 +431,50 @@ export function createApp(
       timestamp: nowIso(),
     };
     return c.json(body);
+  });
+
+  /*
+   * Whether this process can actually serve, as opposed to whether it is
+   * running.
+   *
+   * `/api/health` answers the second question and keeps answering it: it is
+   * what a process manager restarts on, and a restart because a database is
+   * briefly busy makes an outage longer rather than shorter. So readiness is a
+   * separate path, and existing clients see no change.
+   *
+   * It touches both stores, because this deployment has two: content in
+   * SQLite, accounts in MariaDB when it is configured. A process that can
+   * reach one and not the other cannot sign anybody in *or* show them their
+   * writing, and reporting "ok" in that state is how a load balancer keeps
+   * sending people to a server that cannot help them.
+   */
+  app.get('/api/health/ready', async (c) => {
+    const checks: Record<string, 'ok' | 'unavailable'> = {};
+
+    try {
+      store.conversations.get('readiness-probe');
+      checks['content'] = 'ok';
+    } catch {
+      checks['content'] = 'unavailable';
+    }
+
+    /*
+     * Only when accounts actually live there. Reporting an unconfigured
+     * MariaDB as unavailable would make every SQLite-only deployment look
+     * broken.
+     */
+    if (auth.ready) {
+      checks['accounts'] = (await auth.ready().then(
+        () => 'ok' as const,
+        () => 'unavailable' as const,
+      ));
+    }
+
+    const ready = Object.values(checks).every((state) => state === 'ok');
+    return c.json(
+      { status: ready ? 'ready' : 'unavailable', service: 'chat-api', checks, timestamp: nowIso() },
+      ready ? 200 : 503,
+    );
   });
 
   /*
@@ -1658,7 +1712,7 @@ export function createApp(
           },
           {
             userId: user?.id ?? 'unknown',
-            address: c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown',
+            address: addressOf(c),
             requestId: randomUUID(),
           },
         );

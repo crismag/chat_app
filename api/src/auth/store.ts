@@ -65,6 +65,15 @@ export interface ProviderIdentity {
 }
 
 export interface AuthStore {
+  /**
+   * Whether the accounts store can actually be reached, for a readiness probe.
+   *
+   * Optional, and absent on the SQLite implementation on purpose: that one is
+   * a file this process already has open, and there is no round trip that
+   * could fail independently of the process being alive. Where accounts are
+   * across a network, there is.
+   */
+  ready?(): Promise<void>;
   findByEmail(email: string): Promise<AuthUser | null>;
   /** The application user a verified provider identity belongs to, if any. */
   findByIdentity(provider: string, subject: string): Promise<AuthUser | null>;
@@ -300,6 +309,11 @@ export class MysqlAuthStore implements AuthStore {
 
   constructor(db: MysqlPersistence) {
     this.db = db;
+  }
+
+  /* A round trip, not a cached handle: the point is whether it answers now. */
+  async ready(): Promise<void> {
+    await this.db.ping();
   }
 
   /** Emails are the login handle; they are folded before they are stored. */

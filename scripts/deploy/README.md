@@ -142,13 +142,12 @@ A separate domain with its own document root
 `https://chatapi.crishub.com/api`. The `/api` path is kept: the routes are
 defined as `/api/...` and nothing strips it.
 
-**How it is reached.** The Node process is expected on `127.0.0.1:8000`, and
-the PHP gateway assumes exactly that. It is worth knowing that this is a
-convention, not something the code enforces: `api/src/index.ts` calls
-`serve({ fetch, port })` with no `hostname`, so the process binds every
-interface and only the host's firewall keeps `:8000` private. Binding to
-loopback in production is a pending change. Nothing else on this plan could
-reach it: a `[P]` rewrite answers 503 because mod_proxy is
+**How it is reached.** The Node process listens on `127.0.0.1:8000`, and the
+code enforces it: `api/src/index.ts` binds loopback whenever `NODE_ENV` is
+`production`, so the port is not reachable from outside this machine even if a
+firewall rule is wrong. Development still binds every interface, so a phone on
+the same network can reach a dev server. Nothing else on this plan could reach
+it: a `[P]` rewrite answers 503 because mod_proxy is
 not permitted, and the host's Node application manager can only be set up
 through its control panel. PHP can open a loopback socket, so
 `chatapi/index.php` carries the request in and the answer back out. It is
