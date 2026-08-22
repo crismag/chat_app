@@ -26,6 +26,7 @@ import {
   type ChatSection,
   type ChatSectionType,
   type ConversationSummary,
+  previewFor,
 } from '@chat/shared'
 import { api } from '../shared/api/client.ts'
 import {
@@ -42,7 +43,6 @@ import { useMobileBar } from '../shared/mobile/MobileBar.tsx'
 import { Sheet } from '../shared/mobile/Sheet.tsx'
 import { PageMenu } from '../shared/mobile/PageMenu.tsx'
 import { FilterIcon, MoreIcon } from '../shared/ui/icons.tsx'
-import { previewFor } from './preview.ts'
 import { groupByDay } from './grouping.ts'
 import { MobileCard, MobileTimeline } from './MobileTimeline.tsx'
 import { BarAction, MobileSearchBar, NewReflectionFab, SearchAction } from './mobile.tsx'
@@ -50,7 +50,21 @@ import styles from './ReflectionsPage.module.css'
 
 /* ------------------------------------------------------------------- types */
 
-type ReflectionSummary = ConversationSummary & { format?: ChatFormat }
+type ReflectionSummary = ConversationSummary & {
+  format?: ChatFormat
+  /*
+   * What the card shows, sent with the list.
+   *
+   * These used to be fetched per card, one request each, after the page had
+   * already rendered — so a page of twenty made twenty more round trips and
+   * said "Nothing written yet" until they came back. The server has the
+   * sections in hand while it filters and sorts; it sends them now. Optional
+   * only because a card can be rendered before a response has arrived.
+   */
+  excerpt?: string
+  preview?: string
+  written?: ChatSectionType[]
+}
 
 type ReflectionDetail = ReflectionSummary & {
   messages: { id: string; role: string; content: string }[]
@@ -788,10 +802,18 @@ export function ReflectionsPage() {
   useEffect(() => {
     let live = true
     /*
-     * Exactly the page, which is also a fix: this used to enrich the first 24
-     * of the whole list, so the 25th reflection onwards showed "Nothing
-     * written yet." however much was written in it.
+     * Only the full-C.H.A.T. density still asks.
+     *
+     * Excerpt, preview and the written markers arrive with the list, so the
+     * ordinary densities need nothing further and make no requests at all.
+     * Full density renders every section's text on every card, which is more
+     * than a list payload should carry for the pages that never show it — so
+     * that one, and only that one, fetches.
      */
+    if (density !== 'full') {
+      setSettled(true)
+      return
+    }
     const wanted = pageItems.filter((item) => !enriched[`${item.id}:${item.updatedAt}`])
     if (wanted.length === 0) {
       setSettled(true)
@@ -834,10 +856,19 @@ export function ReflectionsPage() {
       live = false
       clearTimeout(grace)
     }
-  }, [pageItems, enriched])
+  }, [pageItems, enriched, density])
 
+  /*
+   * The card's content, from the list payload, with the full sections layered
+   * on when full density has fetched them.
+   */
   const enrichmentFor = useCallback(
-    (item: ReflectionSummary) => enriched[`${item.id}:${item.updatedAt}`],
+    (item: ReflectionSummary): Enrichment => ({
+      excerpt: item.excerpt ?? '',
+      preview: item.preview ?? '',
+      written: item.written ?? [],
+      sections: enriched[`${item.id}:${item.updatedAt}`]?.sections ?? [],
+    }),
     [enriched],
   )
 

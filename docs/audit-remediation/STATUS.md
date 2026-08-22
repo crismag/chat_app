@@ -45,8 +45,8 @@ A CodeReviewerAssist pass on 2026-08-22, plus three specialized lens reviews, ad
 
 ## P3
 
-- [ ] Reflections list includes excerpt/preview/written
-- [ ] ReflectionsPage no longer N+1 fetches details
+- [x] Reflections list includes excerpt/preview/written — `cardOf` in the list route; `api/src/reflections/list-cards.test.ts`
+- [x] ReflectionsPage no longer N+1 fetches details — the card reads the payload; only `full` density still fetches, and a test asserts a page makes no per-card request
 - [x] `GET /api/reflections` queries by `userId` (no full-table scan) — `ConversationTable.byUser`, served by the existing `idx_conversations_user`; `api/src/reflections/list-scope.test.ts`
 - [ ] Community hydrate batched
 - [ ] ChatPage loads communities when Share opens, not on every mount

@@ -40,6 +40,7 @@ import {
   CHAT_FORMATS,
   CHAT_SECTION_TYPES,
   CONDENSED_SECTION_TYPES,
+  previewFor,
   FORMAT_LIMITS,
   validateChat,
   type AuthorOrigin,
@@ -1772,6 +1773,52 @@ export function createApp(
   });
 
   /* Reflections — the user's own work, searched and filtered. */
+  /**
+   * What a card needs, computed where the sections already are.
+   *
+   * The collection used to render a list and then ask for every reflection on
+   * it, one request per card, to find out what was written in them — twenty
+   * round trips to draw one page, and a card that said "Nothing written yet"
+   * until its own request came back. This route has already loaded the
+   * sections to filter and sort by them; it may as well answer the question.
+   *
+   * `previewFor` is the shared one, so the line on a card is chosen by the
+   * same rule on both sides rather than by two implementations that drift.
+   */
+  const cardOf = (conversation: StoredConversation) => {
+    const stored = store.sections.get(conversation.id);
+    const condensed = conversation.format === CHAT_FORMATS.CONDENSED;
+    const contents = condensed
+      ? (condensedFromStore(stored) as Record<string, { content: string }>)
+      : (sectionsFromStore(stored) as Record<string, { content: string }>);
+
+    const order = condensed
+      ? (Object.values(CONDENSED_SECTION_TYPES) as string[])
+      : (Object.values(CHAT_SECTION_TYPES) as string[]);
+
+    const written = order.filter((type) => (contents[type]?.content ?? '').trim().length > 0);
+
+    /*
+     * The excerpt falls back to the person's own messages, because a
+     * reflection can be a conversation that has not been shaped into sections
+     * yet, and a blank card is not what that is.
+     */
+    const fromSections = written
+      .map((type) => (contents[type]?.content ?? '').trim())
+      .find((content) => content.length > 0);
+    const fromMessages = (store.messages.get(conversation.id) ?? [])
+      .filter((message) => message.role === 'user')
+      .map((message) => message.content.trim())
+      .find((content) => content.length > 0);
+
+    return {
+      ...summaryOf(conversation),
+      excerpt: fromSections ?? fromMessages ?? '',
+      preview: previewFor(contents, conversation.format as ChatFormat, conversation.scriptureReference),
+      written,
+    };
+  };
+
   const reflections = async (c: Context) => {
     const owner = await currentAccount(c);
     const parsed = readReflectionFilters({
@@ -1849,7 +1896,7 @@ export function createApp(
     const start = (page - 1) * parsed.pageSize;
 
     return c.json({
-      items: items.slice(start, start + parsed.pageSize).map(summaryOf),
+      items: items.slice(start, start + parsed.pageSize).map(cardOf),
       total: items.length,
       page,
       pageSize: parsed.pageSize,

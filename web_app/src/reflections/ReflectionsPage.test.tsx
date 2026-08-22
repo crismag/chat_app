@@ -15,6 +15,9 @@ const reflections = [
     visibility: 'private',
     tags: [],
     updatedAt: new Date(now - 60_000).toISOString(),
+    excerpt: 'Paul writes to a suffering church.',
+    preview: 'It met my fear.',
+    written: ['content', 'heart'],
   },
   {
     id: 'r2',
@@ -24,6 +27,9 @@ const reflections = [
     visibility: 'shared',
     tags: [],
     updatedAt: new Date(now - 200 * DAY).toISOString(),
+    excerpt: 'Paul writes to a suffering church.',
+    preview: 'It met my fear.',
+    written: ['content', 'heart'],
   },
 ]
 
@@ -226,4 +232,42 @@ test('full C.H.A.T. shows every written section, and only when asked', async () 
   await waitFor(() => expect(screen.getAllByText('It met my fear.').length).toBeGreaterThan(0))
   /* An empty section is not shown as an empty heading. */
   expect(screen.queryByRole('heading', { name: /Testimony/ })).toBeNull()
+})
+
+test('a page of reflections is one request, not one per card', async () => {
+  const fetcher = mockFetch()
+  vi.stubGlobal('fetch', fetcher)
+  renderPage()
+
+  await screen.findByRole('link', { name: 'Trusting while I cannot see' })
+  await waitFor(() =>
+    expect(screen.getAllByText(/Paul writes to a suffering church/).length).toBeGreaterThan(0),
+  )
+
+  /*
+   * The card shows what was written, and nothing asked for a reflection
+   * one at a time to find that out.
+   */
+  const detailCalls = fetcher.mock.calls.filter(([input]) =>
+    /\/conversations\/[^/]+$/.test(String(input)),
+  )
+  expect(detailCalls).toHaveLength(0)
+})
+
+test('full density is the one view that asks for more', async () => {
+  const fetcher = mockFetch()
+  vi.stubGlobal('fetch', fetcher)
+  renderPage()
+  await screen.findByRole('link', { name: 'Trusting while I cannot see' })
+
+  fireEvent.change(screen.getByLabelText('How much of each reflection to show'), {
+    target: { value: 'full' },
+  })
+
+  /* It renders every section's text, which a list payload should not carry. */
+  await waitFor(() =>
+    expect(
+      fetcher.mock.calls.filter(([input]) => /\/conversations\/[^/]+$/.test(String(input))).length,
+    ).toBeGreaterThan(0),
+  )
 })

@@ -1,3 +1,5 @@
+import { type ChatSectionType } from './sections.ts';
+
 /*
  * Whether a reflection has been shared, and nothing else.
  *
@@ -31,15 +33,6 @@ export function readVisibility(value: unknown): Visibility {
     : VISIBILITY.PRIVATE;
 }
 
-export const CHAT_SECTION_TYPES = {
-  CONTENT: 'content',
-  HEART: 'heart',
-  APPLICATION: 'application',
-  TESTIMONY: 'testimony',
-} as const;
-
-export type ChatSectionType =
-  (typeof CHAT_SECTION_TYPES)[keyof typeof CHAT_SECTION_TYPES];
 
 /*
  * Condensed C.H.A.T. carries its own two fields, and they are stored beside the
@@ -178,6 +171,8 @@ export * from './bible.ts';
 export * from './community.ts';
 export * from './distribution.ts';
 export * from './preferences.ts';
+export * from './sections.ts';
+export * from './preview.ts';
 
 /*
  * Guest and registered, and the words for them.
