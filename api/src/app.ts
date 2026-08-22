@@ -329,13 +329,36 @@ export function createApp(
    * email from the same payload rather than calling two endpoints and
    * inferring which sort of person came back.
    */
-  const accountBody = (account: AuthUser) => ({
-    id: account.id,
-    accountType: account.accountType,
-    email: account.email,
-    guestName: account.guestName,
-    emailVerified: account.emailVerified,
-  });
+  /*
+   * The account, plus the public identity that goes with it.
+   *
+   * Without this the header showed one face and the profile page another for
+   * the same person: the account knows an email address, the profile knows a
+   * name, and each was deriving its own initial from whichever it had. A
+   * person should not appear to be two people while moving through one
+   * application.
+   *
+   * Read rather than created. Asking for the account must not bring a profile
+   * row into existence for somebody who has never opened one — a guest has no
+   * public profile, and this is not the place to give them one.
+   */
+  const accountBody = (account: AuthUser) => {
+    const profile = profiles.byUserId(account.id);
+    return {
+      id: account.id,
+      accountType: account.accountType,
+      email: account.email,
+      guestName: account.guestName,
+      emailVerified: account.emailVerified,
+      /*
+       * Public identity only: the name and handle a stranger would see
+       * anyway. Nothing private is added to a payload that already travels
+       * everywhere.
+       */
+      displayName: profile?.displayName ?? null,
+      handle: profile?.handle ?? null,
+    };
+  };
 
   /*
    * The refusal that means "choose how to be somebody", not "go away".

@@ -55,6 +55,8 @@ type ProfileView = {
   tagline: string
   favouriteVerses: string[]
   publicChatCount: number | null
+  /** The month the profile was made, as 2026-08. Never a full date. */
+  memberSince?: string | null
   isOwner: boolean
   blocked: boolean
   shares: Share[]
@@ -475,6 +477,27 @@ export function ProfilePage() {
 
   if (!profile) return null
 
+  /*
+   * "2026-08" is not something to show a person.
+   *
+   * `Intl` turns it into words in whatever language the reader's browser is
+   * set to, rather than this file deciding that everybody reads English
+   * month names.
+   */
+  const memberSince = (() => {
+    const raw = profile.memberSince
+    if (!raw) return null
+    const [year, month] = raw.split('-').map(Number)
+    if (!year || !month) return null
+    /*
+     * Local, not UTC. A UTC midnight formatted in a behind-UTC zone lands in
+     * the previous month, so a member since 2026-08 would read "July 2026".
+     */
+    return new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(
+      new Date(year, month - 1, 1),
+    )
+  })()
+
   return (
     <div className={styles.page}>
       {/* Announcements for actions whose result is a change elsewhere. */}
@@ -482,9 +505,15 @@ export function ProfilePage() {
         {notice}
       </div>
 
+      {/*
+        A month, written the reader's way.
+        The API sends 2026-08 rather than a date, because the exact day
+        somebody joined is a fact nothing needs; this turns it into words in
+        whatever language the reader's browser is set to.
+      */}
       <header className={styles.header}>
         <div className={styles.identity}>
-          <Avatar name={profile.displayName} />
+          <Avatar name={profile.displayName} identity={profile.handle} size="large" />
           <div className={styles.names}>
             <h1 className={styles.displayName}>{profile.displayName}</h1>
             <p className={styles.handle}>@{profile.handle}</p>
@@ -510,10 +539,24 @@ export function ProfilePage() {
               </section>
             ) : null}
 
+            {/*
+              One quiet line of facts rather than a row of big numbers. The
+              brief is explicit that this should not become a social-network
+              header, and a count of shares is interesting where a scoreboard
+              is not.
+            */}
             <p className={styles.count}>
-              {profile.publicChatCount === 1
-                ? '1 public C.H.A.T.'
-                : `${profile.publicChatCount ?? 0} public C.H.A.T.s`}
+              <span>
+                {profile.publicChatCount === 1
+                  ? '1 public C.H.A.T.'
+                  : `${profile.publicChatCount ?? 0} public C.H.A.T.s`}
+              </span>
+              {memberSince ? (
+                <>
+                  <span aria-hidden="true"> · </span>
+                  <span>Here since {memberSince}</span>
+                </>
+              ) : null}
             </p>
           </>
         )}

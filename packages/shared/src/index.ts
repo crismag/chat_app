@@ -218,6 +218,20 @@ export type Account = {
   email: string | null;
   guestName: string | null;
   emailVerified: boolean;
+  /**
+   * The public identity, when there is one.
+   *
+   * Carried with the account so that every place showing a person shows the
+   * same person. Without it the header derived a face from an email address
+   * while the profile page derived one from a name, and one person appeared
+   * to be two while moving through a single application.
+   *
+   * Null for somebody who has never opened a profile — a guest, most often.
+   * Public fields only; nothing private travels in a payload that goes
+   * everywhere.
+   */
+  displayName?: string | null;
+  handle?: string | null;
 };
 
 export function isGuest(account: Pick<Account, 'accountType'> | null): boolean {
@@ -231,7 +245,15 @@ export function isGuest(account: Pick<Account, 'accountType'> | null): boolean {
  * matters more than the name, and the name second, because a person needs
  * something to recognise as theirs.
  */
-export function accountLabel(account: Pick<Account, 'accountType' | 'email' | 'guestName'>): string {
+export function accountLabel(
+  account: Pick<Account, 'accountType' | 'email' | 'guestName' | 'displayName'>,
+): string {
+  /*
+   * The name they chose, before the address they signed up with. An email is
+   * an identifier; a display name is what somebody is called, and it is what
+   * the profile page and every shared reflection already show them as.
+   */
+  if (account.displayName?.trim()) return account.displayName.trim();
   if (account.accountType === ACCOUNT_TYPES.REGISTERED) return account.email ?? 'Your account';
   return account.guestName ? `Guest · ${account.guestName}` : 'Guest';
 }

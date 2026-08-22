@@ -115,7 +115,16 @@ export function ProfileMenu({
           two announcements for one control is one too many.
         */}
         <span aria-hidden="true">
-          <Avatar name={label} identity={account.id} size="small" />
+          <Avatar
+            name={label}
+            /*
+              Keyed on the handle when there is one, so the face here is the
+              same face the profile page and every shared reflection show. The
+              account id is the fallback for somebody with no profile yet.
+            */
+            identity={account.handle ?? account.id}
+            size="small"
+          />
         </span>
         <span className="sr-only">Account menu for {label}</span>
       </button>

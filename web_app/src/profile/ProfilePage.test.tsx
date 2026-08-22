@@ -227,3 +227,14 @@ test('a blocked profile shows nothing of the person and offers an undo', async (
   expect(screen.getByRole('button', { name: 'Unblock @cris' })).toBeVisible()
   expect(screen.queryByRole('heading', { name: 'Shares' })).toBeNull()
 })
+
+test('member since names the month the person joined, not the one before it', async () => {
+  /*
+   * The API sends a bare YYYY-MM. Parsing that as UTC and formatting it in a
+   * behind-UTC zone slides the label back a month, so 2026-08 read "July 2026".
+   */
+  vi.stubGlobal('fetch', mockFetch({ isOwner: true, memberSince: '2026-08' }))
+  renderProfile()
+
+  expect(await screen.findByText('Here since August 2026')).toBeVisible()
+})
