@@ -848,6 +848,114 @@ class AccountTable {
       const moved = this.db
         .prepare('UPDATE conversations SET userId = ? WHERE userId = ?')
         .run(intoUserId, fromUserId).changes;
+
+      /*
+       * Everything else the guest owned, in the same transaction.
+       *
+       * Moving only the conversations left the rest of a guest's work behind
+       * under an id nobody can sign in as: publications with no reachable
+       * author, a membership that no longer belongs to anyone, Studio images
+       * orphaned from the person who made them. The reflections arrived and
+       * the community half of the same act did not.
+       *
+       * Two shapes here. A plain reassignment where nothing can collide, and a
+       * delete-then-reassign where the same identity would end up twice in a
+       * row that only allows it once -- both people having encouraged one
+       * publication, or both being in one community. In every one of those the
+       * target's row is the one kept: it is the identity that continues, and
+       * its membership role and its history are the ones that stay true.
+       */
+      /*
+       * Only the tables this database actually has.
+       *
+       * Community, profiles and Studio each create their own tables when their
+       * store is constructed, so a database that never mounted a feature does
+       * not have its tables at all. Asking sqlite_master once is the
+       * difference between "this deployment has no communities" and a merge
+       * that throws half way through and rolls the reflections back with it.
+       */
+      const present = new Set(
+        (
+          this.db
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+            .all() as Row[]
+        ).map((row) => String(row['name'])),
+      );
+
+      const move = (table: string, column: string) => {
+        if (!present.has(table)) return;
+        this.db
+          .prepare(`UPDATE ${table} SET ${column} = ? WHERE ${column} = ?`)
+          .run(intoUserId, fromUserId);
+      };
+
+      /*
+       * Drop the guest's row where the target already holds the same key, then
+       * move what is left. Done in this order because the unique constraint is
+       * what we are avoiding, not discovering.
+       */
+      const moveWithoutColliding = (table: string, column: string, key: string) => {
+        if (!present.has(table)) return;
+        this.db
+          .prepare(
+            `DELETE FROM ${table}
+              WHERE ${column} = ?
+                AND ${key} IN (SELECT ${key} FROM ${table} WHERE ${column} = ?)`,
+          )
+          .run(fromUserId, intoUserId);
+        move(table, column);
+      };
+
+      moveWithoutColliding('publication_reactions', 'userId', 'publicationId');
+      moveWithoutColliding('publication_saves', 'userId', 'publicationId');
+      moveWithoutColliding('publication_hides', 'userId', 'publicationId');
+      moveWithoutColliding('community_members', 'userId', 'communityId');
+
+      move('publications', 'authorUserId');
+      move('publications', 'hiddenByUserId');
+      move('communities', 'createdByUserId');
+      move('community_members', 'invitedByUserId');
+      move('share_events', 'userId');
+      move('publication_reports', 'reporterUserId');
+      move('profile_reports', 'reporterUserId');
+      move('profile_reports', 'subjectUserId');
+      move('studio_image_assets', 'userId');
+
+      /*
+       * Both halves of a pair, and then the pairs that stopped making sense.
+       * A guest who muted the account they are now merging into would be
+       * muting themselves, which no interface can undo because no interface
+       * can express it.
+       */
+      moveWithoutColliding('author_mutes', 'userId', 'mutedUserId');
+      moveWithoutColliding('author_mutes', 'mutedUserId', 'userId');
+      if (present.has('author_mutes')) {
+        this.db.exec('DELETE FROM author_mutes WHERE userId = mutedUserId');
+      }
+
+      moveWithoutColliding('profile_blocks', 'blockerUserId', 'blockedUserId');
+      moveWithoutColliding('profile_blocks', 'blockedUserId', 'blockerUserId');
+      if (present.has('profile_blocks')) {
+        this.db.exec('DELETE FROM profile_blocks WHERE blockerUserId = blockedUserId');
+      }
+
+      /*
+       * The public identity is the target's and stays the target's. A guest
+       * has no route to create one -- the profile endpoints require a
+       * registered account -- so this is defensive, and it prefers the
+       * identity people can already see over one that was never shown.
+       */
+      for (const table of ['profiles', 'profile_avatars', 'profile_preferences']) {
+        if (!present.has(table)) continue;
+        this.db
+          .prepare(
+            `DELETE FROM ${table}
+              WHERE userId = ? AND EXISTS (SELECT 1 FROM ${table} WHERE userId = ?)`,
+          )
+          .run(fromUserId, intoUserId);
+        move(table, 'userId');
+      }
+
       this.db
         .prepare('UPDATE users SET mergedIntoUserId = ? WHERE id = ?')
         .run(intoUserId, fromUserId);
