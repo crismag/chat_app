@@ -142,8 +142,13 @@ A separate domain with its own document root
 `https://chatapi.crishub.com/api`. The `/api` path is kept: the routes are
 defined as `/api/...` and nothing strips it.
 
-**How it is reached.** The Node process listens on `127.0.0.1:8000` and nothing
-on this plan could reach it: a `[P]` rewrite answers 503 because mod_proxy is
+**How it is reached.** The Node process is expected on `127.0.0.1:8000`, and
+the PHP gateway assumes exactly that. It is worth knowing that this is a
+convention, not something the code enforces: `api/src/index.ts` calls
+`serve({ fetch, port })` with no `hostname`, so the process binds every
+interface and only the host's firewall keeps `:8000` private. Binding to
+loopback in production is a pending change. Nothing else on this plan could
+reach it: a `[P]` rewrite answers 503 because mod_proxy is
 not permitted, and the host's Node application manager can only be set up
 through its control panel. PHP can open a loopback socket, so
 `chatapi/index.php` carries the request in and the answer back out. It is
@@ -241,12 +246,21 @@ curl -sSI https://reflections.crishub.com/reflections     # 200 and the app, not
 `restart-api.sh` remains for hosts that do let you run your own process; the
 nohup test above shows it would work here too if the proxy did.
 
-## Still SQLite
+## Two stores, two backups
 
-The live store is still SQLite, at `private/chat_app/data/chat.sqlite`. MariaDB
-is configured and migrated on boot, but no request handler reads from it yet —
-that cutover is in progress. **Back up that file**; it is the whole product.
+This deployment keeps its data in **two** places, and a backup of one is not a
+backup of the product:
+
+- **Accounts are on MariaDB** when `MYSQL_*` is set. `api/src/index.ts` selects
+  `MysqlAuthStore`, so users, credentials, sessions and installations live
+  there — not in the SQLite file.
+- **Content is on SQLite**, at `private/chat_app/data/chat.sqlite`: reflections,
+  community publications, profiles, Studio documents and cached passages.
+
+Restoring one without the other gives you accounts nobody can write with, or
+writing that belongs to nobody. Take both, at the same time:
 
 ```bash
 cp private/chat_app/data/chat.sqlite ~/backups/chat-$(date +%F).sqlite
+mysqldump -u "$MYSQL_USER" -p "$MYSQL_DATABASE" > ~/backups/chat-accounts-$(date +%F).sql
 ```

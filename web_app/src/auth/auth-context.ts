@@ -21,6 +21,16 @@ export type AuthContextValue = {
   user: AuthUser | null
   ready: boolean
   /**
+   * Re-read who we are.
+   *
+   * The account carries public identity — display name, handle, picture — and
+   * that identity is edited on a different page from the one that shows it in
+   * the header. Without this, changing your name or your picture leaves the
+   * account menu showing the old one until the next full page load, and the
+   * same person appears twice over in one application.
+   */
+  refresh: () => Promise<void>
+  /**
    * `keepSignedIn` is the only thing that makes this browser durably
    * recognised afterwards. Left off, the session ends with the window, which
    * is the right behaviour on a shared computer.

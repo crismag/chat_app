@@ -182,6 +182,39 @@ export type SessionOptions = {
   sessionType?: SessionType;
 };
 
+/**
+ * One active session, as its owner may see it.
+ *
+ * No token: `id` is the stored key, a hash whose pre-image is the only thing
+ * that authenticates. Device facts are the coarse ones recorded at first
+ * sight — enough to recognise which entry is your phone, and no more.
+ */
+export type StoredSessionSummary = {
+  id: string;
+  sessionType: string;
+  createdAt: string | null;
+  lastSeenAt: string | null;
+  expiresAt: number;
+  platform: string | null;
+  deviceClass: string | null;
+  browserFamily: string | null;
+  osFamily: string | null;
+};
+
+/**
+ * What a revoked session was, so the caller can finish the job.
+ *
+ * Revoking a session is not the same as signing a device out. A browser that
+ * was "kept signed in" holds a separate installation credential, and will
+ * quietly establish a new session with it on the next request — so "sign out
+ * that device" has to revoke the installation too, exactly as logging out
+ * does. Returning these two facts is what lets the route do that.
+ */
+export type RevokedSession = {
+  installationId: string | null;
+  sessionType: string;
+};
+
 export type StoredSessionInfo = {
   userId: string;
   installationId: string | null;
@@ -281,7 +314,7 @@ export class MysqlAuthStore implements AuthStore {
     return {
       id: user.publicUuid,
       accountType: user.accountType,
-      email: email === undefined ? await this.db.getLocalUsername(userId) : email,
+      email: email === undefined ? ((await this.db.getLocalUsername(userId)) ?? (await this.db.getProviderEmail(userId))) : email,
       guestName: user.guestName,
       emailVerified: user.emailVerifiedAt !== null,
       createdAt: user.createdAt,
@@ -290,7 +323,9 @@ export class MysqlAuthStore implements AuthStore {
 
   async findByEmail(email: string): Promise<AuthUser | null> {
     const handle = MysqlAuthStore.handle(email);
-    const userId = await this.db.findUserIdByLocalUsername(handle);
+    const userId =
+      (await this.db.findUserIdByLocalUsername(handle)) ??
+      (await this.db.findUserIdByIdentityEmail(handle));
     if (userId === null) return null;
     return this.account(userId, handle);
   }
@@ -578,6 +613,10 @@ export interface SqliteAuthTables {
     revoke(token: string): void;
     revokeForUser(userId: string): void;
     revokeForInstallation(installationId: string): void;
+    /* Owner-facing session management. Optional so MemoryStore need not have it. */
+    listForUser?(userId: string): StoredSessionSummary[];
+    revokeById?(userId: string, id: string): RevokedSession | null;
+    revokeOthersForUser?(userId: string, exceptToken: string): RevokedSession[];
   };
 }
 

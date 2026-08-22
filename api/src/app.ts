@@ -23,7 +23,7 @@ import {
   sessionTypeFor,
 } from './auth/identity.ts';
 import { AnonymousAiAllowance } from './ai/anonymous-allowance.ts';
-import { SlidingWindowRateLimiter } from './ai/rate-limit.ts';
+import { SlidingWindowRateLimiter, type RateLimitDecision } from './ai/rate-limit.ts';
 import { addressOf } from './http/address.ts';
 import { createMailer, type Mailer } from './mail/mailer.ts';
 import {
@@ -34,7 +34,7 @@ import {
 } from './auth/password-reset.ts';
 import { CAPABILITIES, isEnabled, unavailableReason } from './http/capabilities.ts';
 import { hashPassword, verifyPassword } from './auth/local-password.ts';
-import { webOrigins } from './http/origins.ts';
+import { publicWebOrigin, webOrigins } from './http/origins.ts';
 import {
   AUTHOR_ORIGINS,
   CHAT_FORMATS,
@@ -45,13 +45,9 @@ import {
   type AuthorOrigin,
   type ChatFormat,
   AI_ACTIONS,
-  CREATE_LAYOUTS,
-  CREATE_STYLES,
   VISIBILITY,
   TITLE_SOURCES,
   type AiAction,
-  type CreateLayout,
-  type CreateStyle,
   type HealthResponse,
   ACCOUNT_TYPES,
   CREATION_METHODS,
@@ -82,6 +78,7 @@ import { createStudioImageRoutes } from './create/image-routes.ts';
 import { createStudioImageAssetStore } from './create/image-store.ts';
 import type { StudioImageProvider } from './create/image-provider.ts';
 import { SqliteStore } from './db.ts';
+import { hashSessionToken } from './mysql/tokens.ts';
 import { MemoryStore, type StoredConversation } from './store.ts';
 import { BOOKS } from './bible/books.ts';
 import { matchesReflection, readReflectionFilters } from './reflections/query.ts';
@@ -177,7 +174,14 @@ export function createApp(
    * an expired one, one identifying nobody — can be exercised without minting
    * real tokens.
    */
-  options: { mailer?: Mailer; googleVerifier?: GoogleVerifier } = {},
+  options: {
+    mailer?: Mailer;
+    googleVerifier?: GoogleVerifier;
+    loginEmailLimiter?: SlidingWindowRateLimiter;
+    loginAddressLimiter?: SlidingWindowRateLimiter;
+    registerLimiter?: SlidingWindowRateLimiter;
+    guestLimiter?: SlidingWindowRateLimiter;
+  } = {},
 ) {
   const googleClientId = readGoogleClientId();
   /*
@@ -189,6 +193,10 @@ export function createApp(
     options.googleVerifier ?? (googleClientId ? createGoogleVerifier(googleClientId) : null);
   /* Ten attempts a minute from one address is generous for a person and mean for a script. */
   const googleAttempts = new SlidingWindowRateLimiter(10);
+  const loginEmailAttempts = options.loginEmailLimiter ?? new SlidingWindowRateLimiter(10);
+  const loginAddressAttempts = options.loginAddressLimiter ?? new SlidingWindowRateLimiter(40);
+  const registerAttempts = options.registerLimiter ?? new SlidingWindowRateLimiter(10);
+  const guestAttempts = options.guestLimiter ?? new SlidingWindowRateLimiter(10);
 
   const app = new Hono();
   const aiService = new AiService(ai);
@@ -203,9 +211,10 @@ export function createApp(
   const resetLimiter = new SlidingWindowRateLimiter(5, Date.now, 60 * 60 * 1000);
   const mailer = options.mailer ?? createMailer();
 
-  /** Where a reset link points: the web app, not the API. */
-  const webOrigin = (c: Context) =>
-    c.req.header('origin') ?? process.env.CHAT_WEB_ORIGINS?.split(',')[0]?.trim() ?? '';
+  const refused = (c: Context, decision: RateLimitDecision, message: string) => {
+    c.header('Retry-After', String(decision.retryAfterSeconds));
+    return c.json({ error: message }, 429);
+  };
   const bibleService = new BibleService();
   const biblePassages = createPassageStore(store);
   const studioCreations = createStudioCreationStore(store);
@@ -285,8 +294,6 @@ export function createApp(
     return token;
   };
 
-  const requireUser = async (c: Parameters<typeof currentUser>[0]) => currentUser(c);
-
   /*
    * Whoever this request is for: the signed-in account, else the guest their
    * credential names, else nobody.
@@ -329,13 +336,46 @@ export function createApp(
    * email from the same payload rather than calling two endpoints and
    * inferring which sort of person came back.
    */
-  const accountBody = (account: AuthUser) => ({
-    id: account.id,
-    accountType: account.accountType,
-    email: account.email,
-    guestName: account.guestName,
-    emailVerified: account.emailVerified,
-  });
+  /*
+   * The account, plus the public identity that goes with it.
+   *
+   * Without this the header showed one face and the profile page another for
+   * the same person: the account knows an email address, the profile knows a
+   * name, and each was deriving its own initial from whichever it had. A
+   * person should not appear to be two people while moving through one
+   * application.
+   *
+   * Read rather than created. Asking for the account must not bring a profile
+   * row into existence for somebody who has never opened one — a guest has no
+   * public profile, and this is not the place to give them one.
+   */
+  const accountBody = (account: AuthUser) => {
+    const profile = profiles.byUserId(account.id);
+    return {
+      id: account.id,
+      accountType: account.accountType,
+      email: account.email,
+      guestName: account.guestName,
+      emailVerified: account.emailVerified,
+      /*
+       * Public identity only: the name and handle a stranger would see
+       * anyway. Nothing private is added to a payload that already travels
+       * everywhere.
+       */
+      displayName: profile?.displayName ?? null,
+      handle: profile?.handle ?? null,
+      /*
+       * The same URL the profile page uses, so the face in the account menu is
+       * the face on the profile. Built here rather than shared with the
+       * profile routes because it is one template; importing across features
+       * to save a line would tie this file to that one.
+       */
+      avatarUrl:
+        profile?.avatarUpdatedAt && profile.handle
+          ? `/api/profiles/${encodeURIComponent(profile.handle)}/avatar?v=${encodeURIComponent(profile.avatarUpdatedAt)}`
+          : null,
+    };
+  };
 
   /*
    * The refusal that means "choose how to be somebody", not "go away".
@@ -366,8 +406,8 @@ export function createApp(
   const registeredUser = async (c: Context) => {
     const user = await currentUser(c);
     /* `createdAt` travels: the distribution limits are tighter on day one. */
-    return user?.email
-      ? { id: user.id, email: user.email, createdAt: user.createdAt }
+    return user?.accountType === ACCOUNT_TYPES.REGISTERED
+      ? { id: user.id, email: user.email ?? '', createdAt: user.createdAt }
       : null;
   };
 
@@ -573,6 +613,15 @@ export function createApp(
     '/api/profiles',
     createProfileRoutes({
       currentUser: (c) => registeredUser(c),
+      /*
+       * Anybody, including a guest and including nobody. Only the public
+       * profile read uses this; everything that writes still requires a
+       * registered account.
+       */
+      currentViewer: async (c) => {
+        const user = await currentUser(c);
+        return user ? { id: user.id } : null;
+      },
       profiles,
     }),
   );
@@ -621,7 +670,7 @@ export function createApp(
               : sectionsFromStore(stored),
         };
       },
-      userIdByEmail: (email) => store.accounts.byEmail(email)?.id ?? null,
+      userIdByEmail: async (email) => (await auth.findByEmail(email))?.id ?? null,
       ensureIdentity: (user) => ensureProfile(profiles, user),
     }),
   );
@@ -642,6 +691,11 @@ export function createApp(
   app.post('/api/auth/guest', async (c) => {
     const existing = await currentAccount(c);
     if (existing) return c.json(accountBody(existing));
+
+    const guestLimited = guestAttempts.take(addressOf(c));
+    if (!guestLimited.allowed) {
+      return refused(c, guestLimited, 'Too many accounts from here. Try again shortly.');
+    }
 
     const body = await c.req.json<unknown>().catch(() => ({}));
     const context = readCreationContext({
@@ -668,6 +722,10 @@ export function createApp(
      */
     if (!isEnabled(CAPABILITIES.REGISTRATION)) {
       return c.json({ error: unavailableReason(CAPABILITIES.REGISTRATION) }, 503);
+    }
+    const registerLimited = registerAttempts.take(addressOf(c));
+    if (!registerLimited.allowed) {
+      return refused(c, registerLimited, 'Too many accounts from here. Try again shortly.');
     }
     const body = await c.req.json<{ email?: string; password?: string }>();
     const email = body.email?.trim().toLowerCase() ?? '';
@@ -724,6 +782,16 @@ export function createApp(
   app.post('/api/auth/login', async (c) => {
     const body = await c.req.json<{ email?: string; password?: string; keepSignedIn?: boolean }>();
     const email = body.email?.trim().toLowerCase() ?? '';
+    const addressLimited = loginAddressAttempts.take(addressOf(c));
+    if (!addressLimited.allowed) {
+      return refused(c, addressLimited, 'Too many sign-in attempts. Try again shortly.');
+    }
+    if (email) {
+      const emailLimited = loginEmailAttempts.take(email);
+      if (!emailLimited.allowed) {
+        return refused(c, emailLimited, 'Too many sign-in attempts. Try again shortly.');
+      }
+    }
     const user = await auth.verify(email, body.password ?? '');
     if (!user) {
       return c.json({ error: 'Invalid email or password.' }, 401);
@@ -866,6 +934,10 @@ export function createApp(
         return c.json({ error: 'That Google account could not be signed in. Try again.' }, 409);
       }
 
+      if (identity.emailVerified) {
+        await auth.markEmailVerified(user.id);
+      }
+
       const keepSignedIn = body.keepSignedIn === true;
       const installationId = keepSignedIn
         ? await rememberInstallation(c, auth, user.id, PERSISTENCE_TYPES.REGISTERED_PERSISTENT)
@@ -931,9 +1003,10 @@ export function createApp(
      */
     const limited = resetLimiter.take(addressOf(c));
     if (limited.allowed && email.includes('@')) {
-      const started = await auth.startPasswordReset(email).catch(() => null);
-      if (started) {
-        const link = resetUrl(webOrigin(c), started.token);
+      const origin = publicWebOrigin();
+      const started = origin ? await auth.startPasswordReset(email).catch(() => null) : null;
+      if (started && origin) {
+        const link = resetUrl(origin, started.token);
         const message = resetEmail(link);
         /*
          * Awaited, but never fatal. A mail server that is refusing connections
@@ -994,6 +1067,92 @@ export function createApp(
     /* Signed in on this browser, deliberately: they have just proved it. */
     await beginSession(c, user, { installationId: null, persistent: false });
     return c.json(accountBody(user));
+  });
+
+  /*
+   * ── Devices and sessions ─────────────────────────────────────────────────
+   *
+   * "Where am I signed in, and how do I stop being signed in there?" — which
+   * is the question somebody asks after losing a phone, and the only useful
+   * answer is a list they can act on.
+   *
+   * Three rules hold this together:
+   *
+   *  1. **No token ever leaves.** Each entry is named by the stored key, a
+   *     hash; signing in requires the pre-image, which stays in the browser
+   *     that holds it. So a list can be shown, and an entry revoked, without
+   *     handing a page anything that could be used to sign in.
+   *  2. **Registered accounts only.** A guest has one browser by definition —
+   *     there is nothing to manage and no second device to be surprised by.
+   *  3. **Scoped in the query.** Revocation matches on user id in the WHERE
+   *     clause, so another account's session id matches nothing rather than
+   *     matching and being refused afterwards.
+   */
+  app.get('/api/auth/sessions', async (c) => {
+    const user = await registeredUser(c);
+    if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
+
+    const sessions = store.sessions.listForUser?.(user.id) ?? [];
+    const current = getCookie(c, SESSION_COOKIE);
+    const currentId = current ? hashSessionToken(current) : null;
+
+    return c.json({
+      sessions: sessions.map((session) => ({
+        ...session,
+        /* Which row is "this device", so it is never revoked by accident. */
+        current: session.id === currentId,
+      })),
+    });
+  });
+
+  app.delete('/api/auth/sessions/:id', async (c) => {
+    const user = await registeredUser(c);
+    if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
+
+    const revoked = store.sessions.revokeById?.(user.id, c.req.param('id')) ?? null;
+    if (!revoked) return c.json({ error: 'That session is already signed out.' }, 404);
+
+    /*
+     * The device, not only the session.
+     *
+     * A browser that was kept signed in holds a separate installation
+     * credential and would quietly establish a fresh session with it on its
+     * next request — so revoking the session alone would leave "sign out that
+     * device" untrue. This mirrors what logging out does.
+     */
+    if (
+      revoked.installationId &&
+      revoked.sessionType === SESSION_TYPES.REGISTERED_PERSISTENT
+    ) {
+      await auth.revokeInstallation(revoked.installationId);
+    }
+
+    /*
+     * Signing out the session making the request is allowed — it is just a
+     * sign-out — but the cookie has to go with it, or the browser keeps
+     * presenting a token the server has stopped honouring.
+     */
+    const current = getCookie(c, SESSION_COOKIE);
+    if (current && hashSessionToken(current) === c.req.param('id')) {
+      deleteCookie(c, SESSION_COOKIE, { path: '/' });
+    }
+    return c.json({ ok: true });
+  });
+
+  app.post('/api/auth/sessions/revoke-others', async (c) => {
+    const user = await registeredUser(c);
+    if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
+
+    const current = getCookie(c, SESSION_COOKIE);
+    if (!current) return c.json({ error: 'Unauthenticated.' }, 401);
+
+    const revoked = store.sessions.revokeOthersForUser?.(user.id, current) ?? [];
+    for (const session of revoked) {
+      if (session.installationId && session.sessionType === SESSION_TYPES.REGISTERED_PERSISTENT) {
+        await auth.revokeInstallation(session.installationId);
+      }
+    }
+    return c.json({ ok: true, revoked: revoked.length });
   });
 
   app.post('/api/auth/logout', async (c) => {
@@ -1583,13 +1742,7 @@ export function createApp(
     });
   });
 
-  /*
-   * Reflections — the user's own work, searched and filtered.
-   *
-   * Kept at /api/library as well, because the web app has not been renamed yet
-   * and a rename that breaks the running client for one commit is a rename done
-   * badly. The old path is an alias and goes when the page moves.
-   */
+  /* Reflections — the user's own work, searched and filtered. */
   const reflections = async (c: Context) => {
     const owner = await currentAccount(c);
     const parsed = readReflectionFilters({
@@ -1667,18 +1820,6 @@ export function createApp(
   };
 
   app.get('/api/reflections', reflections);
-  app.get('/api/library', reflections);
-
-  app.get('/api/community', async (c) => {
-    const user = await requireUser(c);
-    if (!user) {
-      return c.json({ error: 'Unauthenticated.' }, 401);
-    }
-    const items = [...store.conversations.values()]
-      .filter((conversation) => conversation.visibility === VISIBILITY.SHARED)
-      .map(summaryOf);
-    return c.json(items);
-  });
 
   /*
    * Create Studio remains a controlled component. These endpoints persist its
@@ -1709,37 +1850,6 @@ export function createApp(
     }
     studioCreations.set(creation);
     return c.json({ creation });
-  });
-
-  app.post('/api/creations', async (c) => {
-    const user = await requireUser(c);
-    if (!user) {
-      return c.json({ error: 'Unauthenticated.' }, 401);
-    }
-    const body = await c.req.json<{
-      conversationId?: string;
-      layout?: CreateLayout;
-      style?: CreateStyle;
-    }>();
-    if (!body.conversationId) {
-      return c.json({ error: 'conversationId is required.' }, 400);
-    }
-    const { conversation } = await ownedConversation(c, body.conversationId);
-    if (!conversation) {
-      return c.json({ error: 'Conversation not found.' }, 404);
-    }
-    const layout = body.layout ?? CREATE_LAYOUTS.QUOTE_FOCUS;
-    const style = body.style ?? CREATE_STYLES.CREAM_BOTANICAL;
-    const sections = sectionsFromStore(store.sections.get(conversation.id));
-    return c.json({
-      conversationId: conversation.id,
-      title: conversation.title,
-      scriptureReference: conversation.scriptureReference,
-      layout,
-      style,
-      sections,
-      textRenderedBy: 'application',
-    });
   });
 
   return app;

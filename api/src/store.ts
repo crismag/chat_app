@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { ACCOUNT_TYPES, type AccountType } from '@chat/shared';
+import { hashSessionToken } from './mysql/tokens.ts';
+import type { RevokedSession, StoredSessionSummary } from './auth/store.ts';
 /**
  * An account, whichever kind it is.
  *
@@ -339,19 +341,21 @@ export class MemorySessionTable {
   private readonly rows = new Map<string, StoredSession & { revoked: boolean }>();
 
   get(token: string): StoredSession | undefined {
-    const row = this.rows.get(token);
+    const hashed = hashSessionToken(token);
+    const row = this.rows.get(hashed) ?? this.rows.get(token);
     if (!row || row.revoked) return undefined;
     const { revoked: _revoked, ...rest } = row;
-    return { ...rest };
+    return { ...rest, token };
   }
 
   set(token: string, session: StoredSession): this {
-    this.rows.set(token, { ...session, revoked: false });
+    this.rows.set(hashSessionToken(token), { ...session, token, revoked: false });
     return this;
   }
 
   revoke(token: string): void {
-    const row = this.rows.get(token);
+    const hashed = hashSessionToken(token);
+    const row = this.rows.get(hashed) ?? this.rows.get(token);
     if (row) row.revoked = true;
   }
 
@@ -366,7 +370,56 @@ export class MemorySessionTable {
   }
 
   delete(token: string): boolean {
-    return this.rows.delete(token);
+    const hashed = hashSessionToken(token);
+    const byHash = this.rows.delete(hashed);
+    const byRaw = this.rows.delete(token);
+    return byHash || byRaw;
+  }
+
+  /*
+   * Session management, in memory. The device facts are null here because
+   * nothing records them in this implementation — which is honest: a null
+   * platform renders as "Unknown device" rather than inventing one.
+   */
+  listForUser(userId: string): StoredSessionSummary[] {
+    return [...this.rows.entries()]
+      .filter(([, row]) => row.userId === userId && !row.revoked)
+      .map(([id, row]) => ({
+        id,
+        sessionType: row.sessionType ?? 'REGISTERED_TEMPORARY',
+        createdAt: null,
+        lastSeenAt: null,
+        expiresAt: Date.now(),
+        platform: null,
+        deviceClass: null,
+        browserFamily: null,
+        osFamily: null,
+      }));
+  }
+
+  revokeById(userId: string, id: string): RevokedSession | null {
+    const row = this.rows.get(id);
+    /* Scoped by owner, so another account's id simply does not match. */
+    if (!row || row.userId !== userId || row.revoked) return null;
+    row.revoked = true;
+    return {
+      installationId: row.installationId ?? null,
+      sessionType: row.sessionType ?? 'REGISTERED_TEMPORARY',
+    };
+  }
+
+  revokeOthersForUser(userId: string, exceptToken: string): RevokedSession[] {
+    const keep = hashSessionToken(exceptToken);
+    const revoked: RevokedSession[] = [];
+    for (const [id, row] of this.rows.entries()) {
+      if (row.userId !== userId || id === keep || row.revoked) continue;
+      row.revoked = true;
+      revoked.push({
+        installationId: row.installationId ?? null,
+        sessionType: row.sessionType ?? 'REGISTERED_TEMPORARY',
+      });
+    }
+    return revoked;
   }
 }
 

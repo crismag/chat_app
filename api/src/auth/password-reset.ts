@@ -69,6 +69,16 @@ export function resetUrl(webOrigin: string, token: string): string {
   return `${webOrigin.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
 }
 
+/** So a token or origin cannot break out of the HTML attribute. */
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 /**
  * The email itself.
  *
@@ -91,7 +101,7 @@ export function resetEmail(link: string): { subject: string; text: string; html:
   ].join('\n');
   const html = [
     '<p>Somebody asked to set a new password for your C.H.A.T. account.</p>',
-    `<p><a href="${link}">Choose a new password</a></p>`,
+    `<p><a href="${escapeHtml(link)}">Choose a new password</a></p>`,
     '<p>The link works for one hour.</p>',
     '<p>If that was not you, you can ignore this. Nothing has changed, and your password still works.</p>',
     '<p>C.H.A.T. — reflections.crishub.com</p>',

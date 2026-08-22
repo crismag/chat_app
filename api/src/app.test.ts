@@ -97,64 +97,6 @@ describe('private conversation loop', () => {
       headers: { Cookie: stranger.cookie },
     });
     expect(stolen.status).toBe(404);
-
-    const community = await app.request('/api/community', {
-      headers: { Cookie: stranger.cookie },
-    });
-    const feed = await json<unknown[]>(community);
-    expect(feed).toEqual([]);
-  });
-});
-
-describe('publication and community', () => {
-  test('only an explicit publish makes an entry community-visible', async () => {
-    const app = createApp(new MemoryStore());
-    const owner = await register(app, 'owner@example.com');
-    const neighbor = await register(app, 'neighbor@example.com');
-
-    const created = await app.request('/api/conversations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: owner.cookie },
-      body: JSON.stringify({
-        title: 'To share later',
-        scriptureReference: 'Psalm 46:10',
-      }),
-    });
-    const conversation = await json<{ id: string }>(created);
-
-    const before = await app.request('/api/community', {
-      headers: { Cookie: neighbor.cookie },
-    });
-    expect(await json<unknown[]>(before)).toEqual([]);
-
-    /*
-     * Publication enforces the content-format rules, so the reflection has to
-     * be a complete one before it can be shared. An empty C.H.A.T. is a draft
-     * by definition.
-     */
-    for (const type of ['content', 'heart', 'application', 'testimony'] as const) {
-      await app.request(`/api/conversations/${conversation.id}/sections`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Cookie: owner.cookie },
-        body: JSON.stringify({ type, content: `A short ${type} from the author.` }),
-      });
-    }
-
-    const published = await app.request(
-      `/api/conversations/${conversation.id}/share`,
-      { method: 'POST', headers: { Cookie: owner.cookie } },
-    );
-    expect(published.status).toBe(200);
-
-    const after = await app.request('/api/community', {
-      headers: { Cookie: neighbor.cookie },
-    });
-    expect(await json<Array<{ id: string; visibility: string }>>(after)).toEqual([
-      expect.objectContaining({
-        id: conversation.id,
-        visibility: 'shared',
-      }),
-    ]);
   });
 });
 
@@ -621,7 +563,7 @@ describe('library search', () => {
       }),
     });
 
-    const mine = await app.request('/api/library?q=John%2015', {
+    const mine = await app.request('/api/reflections?q=John%2015', {
       headers: { Cookie: owner.cookie },
     });
     expect(await json<{ items: Array<{ scriptureReference: string | null }> }>(mine)).toEqual(
@@ -630,7 +572,7 @@ describe('library search', () => {
       }),
     );
 
-    const theirs = await app.request('/api/library?q=John%2015', {
+    const theirs = await app.request('/api/reflections?q=John%2015', {
       headers: { Cookie: stranger.cookie },
     });
     expect(await json<{ items: unknown[] }>(theirs)).toEqual(
@@ -688,35 +630,6 @@ describe('library search', () => {
       await app.request('/api/reflections?to=2020-01-01', { headers: { Cookie: cookie } }),
     );
     expect(lastYear.items).toHaveLength(0);
-  });
-});
-
-describe('unpublish', () => {
-  test('unpublish removes a conversation from the community feed', async () => {
-    const app = createApp(new MemoryStore());
-    const owner = await register(app, 'owner@example.com');
-    const neighbor = await register(app, 'neighbor@example.com');
-
-    const created = await app.request('/api/conversations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: owner.cookie },
-      body: JSON.stringify({ title: 'Shared then private' }),
-    });
-    const conversation = await json<{ id: string }>(created);
-
-    await app.request(`/api/conversations/${conversation.id}/share`, {
-      method: 'POST',
-      headers: { Cookie: owner.cookie },
-    });
-    await app.request(`/api/conversations/${conversation.id}/make-private`, {
-      method: 'POST',
-      headers: { Cookie: owner.cookie },
-    });
-
-    const feed = await app.request('/api/community', {
-      headers: { Cookie: neighbor.cookie },
-    });
-    expect(await json<unknown[]>(feed)).toEqual([]);
   });
 });
 
@@ -866,12 +779,6 @@ describe('sharing is always an explicit act', () => {
       await app.request(`/api/conversations/${made.id}`, { headers: { Cookie: cookie } }),
     );
     expect(after.visibility).toBe('private');
-
-    /* And it is still absent from anything anyone else can read. */
-    const community = await json<unknown[]>(
-      await app.request('/api/community', { headers: { Cookie: cookie } }),
-    );
-    expect(community).toHaveLength(0);
   });
 
   test('sharing, and then taking it back', async () => {

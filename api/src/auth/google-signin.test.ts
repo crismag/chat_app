@@ -85,6 +85,9 @@ test('a verified Google token makes a registered account', async () => {
   expect(result.cookie).not.toBe('');
   const me = await app.request('/api/auth/me', { headers: { Cookie: result.cookie } });
   expect(me.status).toBe(200);
+  expect(await me.json()).toMatchObject({ emailVerified: true, accountType: 'REGISTERED' });
+  const profile = await app.request('/api/profiles/me', { headers: { Cookie: result.cookie } });
+  expect(profile.status).toBe(200);
 });
 
 test('signing in again reaches the same account rather than making a second', async () => {

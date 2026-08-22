@@ -142,8 +142,9 @@ Particular care is required for Heart and Testimony:
 
 The area is called **Reflections**. It was called Library, and the rename is
 not cosmetic: "library" describes a shelf of other people's books, and this is
-the person's own writing. `GET /api/library` remains only as an alias of
-`GET /api/reflections`, and `/library` in the web app redirects.
+the person's own writing. The API is `GET /api/reflections`; the old
+`GET /api/library` alias has been deleted, and `/library` in the web app still
+redirects so existing bookmarks keep working.
 
 Retrieval by text, filter and sort is built. It should eventually also support
 retrieval by:

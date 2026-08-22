@@ -12,8 +12,10 @@ import { MysqlPersistence } from '../mysql/persistence.ts';
 import { createMysqlPool, type MysqlPool } from '../mysql/pool.ts';
 import { MysqlAuthStore } from './store.ts';
 import { createApp } from '../app.ts';
+import { SqliteStore } from '../db.ts';
 import { MemoryStore } from '../store.ts';
 import { cookieHeader } from '../http/set-cookie.ts';
+import { type GoogleIdentity, type GoogleVerifier } from './google.ts';
 
 const config = (() => {
   try {
@@ -207,5 +209,68 @@ describe.skipIf(!config)('signing in over HTTP, against MariaDB', () => {
 
   it('a request with no cookie is nobody', async () => {
     expect((await app.request('/api/auth/me')).status).toBe(401);
+  });
+
+  it('invites resolve MariaDB emails, not the empty SQLite accounts table', async () => {
+    const sqlite = new SqliteStore();
+    const local = createApp(sqlite, {}, {}, new MysqlAuthStore(db));
+    const request = (path: string, body: unknown, cookie?: string) =>
+      local.request(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(cookie ? { cookie } : {}) },
+        body: JSON.stringify(body),
+      });
+
+    const ownerEmail = `invite-owner-${Date.now()}@example.com`;
+    const memberEmail = `invite-member-${Date.now()}@example.com`;
+    const owner = await request('/api/auth/register', { email: ownerEmail, password: 'a-long-password' });
+    const member = await request('/api/auth/register', { email: memberEmail, password: 'a-long-password' });
+    made.push(((await owner.json()) as { id: string }).id);
+    made.push(((await member.json()) as { id: string }).id);
+    const ownerCookie = cookiesFrom(owner);
+
+    const community = await request(
+      '/api/communities',
+      { name: 'Invite circle', description: 'For the lookup test.', preset: 'private' },
+      ownerCookie,
+    );
+    expect(community.status).toBe(201);
+    const communityId = ((await community.json()) as { id: string }).id;
+
+    const invited = await request(
+      `/api/communities/${communityId}/invitations`,
+      { email: memberEmail },
+      ownerCookie,
+    );
+    expect(invited.status).toBe(201);
+  });
+
+  it('a Google-only MariaDB account is treated as registered for profiles', async () => {
+    const sqlite = new SqliteStore();
+    const verifier: GoogleVerifier = {
+      verify(): Promise<GoogleIdentity> {
+        return Promise.resolve({
+          subject: `google-sub-${Date.now()}`,
+          email: `google-only-${Date.now()}@example.com`,
+          emailVerified: true,
+          name: 'Ada',
+          picture: null,
+        });
+      },
+    };
+    const local = createApp(sqlite, {}, {}, new MysqlAuthStore(db), { googleVerifier: verifier });
+    const signedIn = await local.request('/api/auth/google', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential: 'any' }),
+    });
+    expect(signedIn.status).toBe(200);
+    const account = (await signedIn.json()) as { id: string };
+    made.push(account.id);
+    const cookie = cookiesFrom(signedIn);
+    const profile = await local.request('/api/profiles/me', { headers: { cookie } });
+    expect(profile.status).toBe(200);
+    const me = await local.request('/api/auth/me', { headers: { cookie } });
+    expect(await me.json()).toMatchObject({ accountType: 'REGISTERED', emailVerified: true });
   });
 })

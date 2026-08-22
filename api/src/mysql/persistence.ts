@@ -488,6 +488,35 @@ export class MysqlPersistence {
     return typeof username === 'string' ? username : null;
   }
 
+  /**
+   * Address stored on a provider identity, when there is no local username.
+   *
+   * Google-only accounts never choose a password, so they have no row in
+   * `local_credentials`. The address Google attested is kept as description on
+   * the identity and is the email the rest of the application should show.
+   */
+  async getProviderEmail(userId: number): Promise<string | null> {
+    const [rows] = await this.pool.execute<RowDataPacket[]>(
+      'SELECT provider_data FROM user_identities WHERE user_id = ? LIMIT 1',
+      [userId],
+    );
+    const data = parseJson(rows[0]?.provider_data);
+    if (!data || typeof data !== 'object' || !('email' in data)) return null;
+    const email = (data as { email?: unknown }).email;
+    return typeof email === 'string' && email.includes('@') ? email.trim().toLowerCase() : null;
+  }
+
+  async findUserIdByIdentityEmail(email: string): Promise<number | null> {
+    const [rows] = await this.pool.execute<RowDataPacket[]>(
+      `SELECT user_id FROM user_identities
+        WHERE JSON_UNQUOTE(JSON_EXTRACT(provider_data, '$.email')) = ?
+        LIMIT 1`,
+      [email],
+    );
+    const row = rows[0];
+    return row ? asBigIntId(row.user_id) : null;
+  }
+
   async upsertProfile(
     userId: number,
     profile: {

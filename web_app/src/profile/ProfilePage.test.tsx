@@ -11,6 +11,7 @@
 
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { AuthProvider } from '../auth/AuthContext.tsx'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, expect, test, vi } from 'vitest'
 import { ProfilePage } from './ProfilePage.tsx'
@@ -74,13 +75,19 @@ function mockFetch(overrides: Record<string, unknown> = {}) {
   })
 }
 
-function renderProfile() {
+function renderProfile(entry = '/profile/cris') {
+  /*
+   * The page reads the signed-in account so the header face can follow an
+   * edit, so it needs the provider the application gives it.
+   */
   return render(
-    <MemoryRouter initialEntries={['/profile/cris']}>
-      <Routes>
-        <Route path="/profile/:handle" element={<ProfilePage />} />
-      </Routes>
-    </MemoryRouter>,
+    <AuthProvider>
+      <MemoryRouter initialEntries={[entry]}>
+        <Routes>
+          <Route path="/profile/:handle" element={<ProfilePage />} />
+        </Routes>
+      </MemoryRouter>
+    </AuthProvider>,
   )
 }
 
@@ -226,4 +233,101 @@ test('a blocked profile shows nothing of the person and offers an undo', async (
   expect(await screen.findByText('You blocked this person')).toBeVisible()
   expect(screen.getByRole('button', { name: 'Unblock @cris' })).toBeVisible()
   expect(screen.queryByRole('heading', { name: 'Shares' })).toBeNull()
+})
+
+test('member since names the month the person joined, not the one before it', async () => {
+  /*
+   * The API sends a bare YYYY-MM. Parsing that as UTC and formatting it in a
+   * behind-UTC zone slides the label back a month, so 2026-08 read "July 2026".
+   */
+  vi.stubGlobal('fetch', mockFetch({ isOwner: true, memberSince: '2026-08' }))
+  renderProfile()
+
+  expect(await screen.findByText('Here since August 2026')).toBeVisible()
+})
+
+test('a visitor gets no tab strip, because there is one thing to see', async () => {
+  vi.stubGlobal('fetch', mockFetch({ isOwner: false }))
+  renderProfile()
+
+  await screen.findByRole('heading', { name: 'Cris Magalang' })
+  expect(screen.queryByRole('navigation', { name: 'Profile sections' })).toBeNull()
+  /* Their public shares are still right there, without needing a tab. */
+  expect(screen.getByText('Trusting while I cannot see')).toBeVisible()
+})
+
+test('the owner gets the sections, and lands on their shares', async () => {
+  vi.stubGlobal('fetch', mockFetch({ isOwner: true }))
+  renderProfile()
+
+  const tabs = await screen.findByRole('navigation', { name: 'Profile sections' })
+  expect(tabs).toBeVisible()
+  expect(screen.getByRole('link', { name: 'Shared' })).toHaveAttribute('aria-current', 'page')
+  expect(screen.getByText('Trusting while I cannot see')).toBeVisible()
+})
+
+test('the open section comes from the URL, so it can be linked to', async () => {
+  vi.stubGlobal('fetch', mockFetch({ isOwner: true }))
+  renderProfile('/profile/cris?tab=profile')
+
+  expect(await screen.findByRole('heading', { name: 'Favourite Scripture' })).toBeVisible()
+  expect(screen.getByRole('link', { name: 'Profile' })).toHaveAttribute('aria-current', 'page')
+})
+
+test('a section this release does not have opens the page rather than breaking it', async () => {
+  vi.stubGlobal('fetch', mockFetch({ isOwner: true }))
+  renderProfile('/profile/cris?tab=trophies')
+
+  /* A stale bookmark lands on the default section, not on an error. */
+  expect(await screen.findByText('Trusting while I cannot see')).toBeVisible()
+  expect(screen.getByRole('link', { name: 'Shared' })).toHaveAttribute('aria-current', 'page')
+})
+
+test('a taken handle is said before the form is submitted, not after', async () => {
+  const fetcher = mockFetch({ isOwner: true })
+  vi.stubGlobal('fetch', (input: RequestInfo, init?: RequestInit) => {
+    if (String(input).includes('handle-available')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          handle: 'taken',
+          available: false,
+          problem: 'The handle @taken is already taken. Please choose another.',
+        }),
+      } as Response)
+    }
+    return fetcher(input, init)
+  })
+
+  renderProfile()
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit profile' }))
+  fireEvent.change(await screen.findByLabelText('Handle'), { target: { value: 'taken' } })
+
+  /* Announced without stealing focus, and the field is marked invalid with it. */
+  await waitFor(() =>
+    expect(screen.getByRole('status')).toHaveTextContent('The handle @taken is already taken.'),
+  )
+  expect(screen.getByLabelText('Handle')).toHaveAttribute('aria-invalid', 'true')
+})
+
+test('a free handle says so, and nothing is marked wrong', async () => {
+  const fetcher = mockFetch({ isOwner: true })
+  vi.stubGlobal('fetch', (input: RequestInfo, init?: RequestInit) => {
+    if (String(input).includes('handle-available')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ handle: 'quietcedar', available: true, problem: null }),
+      } as Response)
+    }
+    return fetcher(input, init)
+  })
+
+  renderProfile()
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit profile' }))
+  fireEvent.change(await screen.findByLabelText('Handle'), { target: { value: 'quietcedar' } })
+
+  await waitFor(() =>
+    expect(screen.getByRole('status')).toHaveTextContent('@quietcedar is available.'),
+  )
+  expect(screen.getByLabelText('Handle')).not.toHaveAttribute('aria-invalid', 'true')
 })

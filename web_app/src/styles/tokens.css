@@ -114,8 +114,18 @@
   --normal: 220ms;
   --slow: 380ms;
 
-  /* --- Light theme ------------------------------------------------------ */
+}
 
+/*
+ * The light palette, addressable two ways.
+ *
+ * On the root it is the base every theme starts from. On any element carrying
+ * data-theme="light" it paints that subtree light — which is what lets the
+ * settings page show a real swatch of each appearance rather than a
+ * hand-copied approximation that drifts the first time a colour changes.
+ */
+:root,
+[data-theme='light'] {
   color-scheme: light;
 
   --paper: #f7f1e6;
@@ -180,66 +190,74 @@
  * lifted in lightness to stay legible on a dark ground, which the light values
  * would not be.
  */
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
+/*
+ * Applied by attribute, not by media query.
+ *
+ * A person can now choose an appearance, so "is it dark" is a decision made in
+ * one place — `resolvePalette` — from their choice and, only when that choice
+ * is Default, the operating system's. The attribute is written before first
+ * paint by a small script in index.html, so there is no flash of the wrong
+ * theme and this palette still exists exactly once.
+ */
+:root[data-palette='dark'],
+[data-theme='dark'] {
+  color-scheme: dark;
 
-    --paper: #17140f;
-    --surface: #201c16;
-    --surface-2: #29241d;
-    --surface-sunk: #131009;
+  --paper: #17140f;
+  --surface: #201c16;
+  --surface-2: #29241d;
+  --surface-sunk: #131009;
 
-    --ink: #f0e9dd;
-    --ink-soft: #ddd3c4;
-    --muted: #a89b8a;
-    /*
-     * Placeholders and disabled text: secondary, still legible. 3.60:1 was
-     * borderline against the sunk surfaces a placeholder usually sits on.
-     */
-    --faint: #95897a;
+  --ink: #f0e9dd;
+  --ink-soft: #ddd3c4;
+  --muted: #a89b8a;
+  /*
+   * Placeholders and disabled text: secondary, still legible. 3.60:1 was
+   * borderline against the sunk surfaces a placeholder usually sits on.
+   */
+  --faint: #95897a;
 
-    /*
-     * Borders you can actually see.
-     *
-     * These were #352f26 and #4a4235 — 1.28:1 and 1.71:1 against the surface,
-     * which is not a faint border, it is an invisible one: in the dark theme
-     * there was no way to tell where an input began. WCAG asks 3:1 of a
-     * non-text control boundary, and these measure 3.23:1 and 3.57:1 while
-     * staying in the same warm family the palette is built from.
-     */
-    --line: #746b5c;
-    --line-strong: #7b7263;
+  /*
+   * Borders you can actually see.
+   *
+   * These were #352f26 and #4a4235 — 1.28:1 and 1.71:1 against the surface,
+   * which is not a faint border, it is an invisible one: in the dark theme
+   * there was no way to tell where an input began. WCAG asks 3:1 of a
+   * non-text control boundary, and these measure 3.23:1 and 3.57:1 while
+   * staying in the same warm family the palette is built from.
+   */
+  --line: #746b5c;
+  --line-strong: #7b7263;
 
-    --accent: #8fc0a4;
-    --accent-hover: #a7d2b7;
-    --accent-soft: #23302a;
-    --accent-ink: #b9dcc6;
-    --on-accent: #12211a;
+  --accent: #8fc0a4;
+  --accent-hover: #a7d2b7;
+  --accent-soft: #23302a;
+  --accent-ink: #b9dcc6;
+  --on-accent: #12211a;
 
-    --ok: #7fc39a;
-    --ok-soft: #1f2f26;
-    --warn: #d9a066;
-    --warn-soft: #322619;
-    --danger: #e08d80;
-    --danger-soft: #35211e;
+  --ok: #7fc39a;
+  --ok-soft: #1f2f26;
+  --warn: #d9a066;
+  --warn-soft: #322619;
+  --danger: #e08d80;
+  --danger-soft: #35211e;
 
-    --content: #8fb0d9;
-    --content-soft: #1e2836;
-    --heart: #d98fa2;
-    --heart-soft: #331f26;
-    --application: #d9a066;
-    --application-soft: #322619;
-    --testimony: #8fc0a4;
-    --testimony-soft: #1f2e26;
+  --content: #8fb0d9;
+  --content-soft: #1e2836;
+  --heart: #d98fa2;
+  --heart-soft: #331f26;
+  --application: #d9a066;
+  --application-soft: #322619;
+  --testimony: #8fc0a4;
+  --testimony-soft: #1f2e26;
 
-    --ai-assisted: #a99fdd;
-    --ai-assisted-soft: #262238;
-    --ai-generated: #d9a066;
-    --ai-generated-soft: #322619;
+  --ai-assisted: #a99fdd;
+  --ai-assisted-soft: #262238;
+  --ai-generated: #d9a066;
+  --ai-generated-soft: #322619;
 
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.4), 0 10px 24px rgba(0, 0, 0, 0.35);
-    --shadow-lg: 0 4px 10px rgba(0, 0, 0, 0.45), 0 24px 50px rgba(0, 0, 0, 0.5);
-    --ring: 0 0 0 3px rgba(143, 192, 164, 0.3);
-  }
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.4), 0 10px 24px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 4px 10px rgba(0, 0, 0, 0.45), 0 24px 50px rgba(0, 0, 0, 0.5);
+  --ring: 0 0 0 3px rgba(143, 192, 164, 0.3);
 }

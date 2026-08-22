@@ -43,6 +43,7 @@ import {
 import { ReflectionCard, SECTIONS } from '../shared/ui/ReflectionCard.tsx'
 import { GlobeIcon, LockIcon, CommunityIcon } from '../shared/ui/icons.tsx'
 import { ReportDialog } from './ReportDialog.tsx'
+import { Avatar } from '../shared/ui/Avatar.tsx'
 import type { Publication, ReportReason } from './api.ts'
 import styles from './CommunityPage.module.css'
 
@@ -185,9 +186,11 @@ export function PublicationCard({
       meta={
         <>
           <span className={styles.author}>
-            <span className={styles.avatar} aria-hidden="true">
-              {publication.author.displayName.trim().charAt(0).toUpperCase() || '?'}
-            </span>
+            <Avatar
+              name={publication.author.displayName}
+              identity={publication.author.handle}
+              size="small"
+            />
             {publication.author.displayName}
           </span>
           <span aria-hidden="true">·</span>

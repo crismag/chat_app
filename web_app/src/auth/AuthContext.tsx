@@ -26,6 +26,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value: AuthContextValue = {
     user,
     ready,
+    async refresh() {
+      /* A failure here means the session ended; that is a sign-out, not an error. */
+      setUser(await api<AuthUser>('/auth/me').catch(() => null))
+    },
     async login(email, password, keepSignedIn) {
       const account = await api<AuthUser & { merged?: number }>('/auth/login', {
         method: 'POST',

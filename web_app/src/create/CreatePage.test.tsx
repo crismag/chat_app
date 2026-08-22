@@ -39,8 +39,8 @@ test('the selected reflection opens with its exact saved passage and can be pers
     const url = String(input)
     const json = (value: unknown, ok = true) => Promise.resolve({ ok, status: ok ? 200 : 400, json: async () => value })
     if (url.endsWith('/conversations')) return json([
-      { id: 'first', title: 'First', scriptureReference: null, publicationState: 'private', tags: [], updatedAt: '2026-08-16T10:00:00.000Z' },
-      { id: 'selected', title: 'Selected reflection', scriptureReference: 'John 15:5', publicationState: 'private', tags: [], updatedAt: '2026-08-16T11:00:00.000Z' },
+      { id: 'first', title: 'First', scriptureReference: null, visibility: 'private', tags: [], updatedAt: '2026-08-16T10:00:00.000Z' },
+      { id: 'selected', title: 'Selected reflection', scriptureReference: 'John 15:5', visibility: 'private', tags: [], updatedAt: '2026-08-16T11:00:00.000Z' },
     ])
     if (url.endsWith('/studio-assets/status')) return json({ enabled: true })
     if (url.endsWith('/conversations/selected')) return json({
@@ -48,7 +48,7 @@ test('the selected reflection opens with its exact saved passage and can be pers
       format: 'full',
       title: 'Selected reflection',
       scriptureReference: 'John 15:5',
-      publicationState: 'private',
+      visibility: 'private',
       tags: [],
       updatedAt: '2026-08-16T11:00:00.000Z',
       messages: [],

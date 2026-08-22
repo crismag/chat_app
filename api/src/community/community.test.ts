@@ -239,6 +239,57 @@ describe('publishing', () => {
     expect(communityAfter.body.encouraged.count).toBe(0);
   });
 
+  test('the encouraged feed lists what this person encouraged, and only that', async () => {
+    const author = await register('ada@example.com');
+    const reader = await register('bob@example.com');
+    const reflection = await writeReflection(author, 'Trusting');
+    const other = await writeReflection(author, 'Waiting');
+
+    const encouraged = await publish(author, reflection, AUDIENCES.PUBLIC, {
+      caption: 'For anyone.',
+    });
+    const ignored = await publish(author, other, AUDIENCES.PUBLIC, { caption: 'Also public.' });
+
+    await call(reader, `/api/publications/${encouraged.body.id}/encouraged`, {
+      method: 'POST',
+      body: JSON.stringify({ encouraged: true }),
+    });
+
+    const feed = await call<Feed>(reader, '/api/publications/encouraged');
+    expect(feed.body.items.map((item) => item.id)).toEqual([encouraged.body.id]);
+    expect(feed.body.items.map((item) => item.id)).not.toContain(ignored.body.id);
+  });
+
+  test('withdrawing encouragement removes it from the list', async () => {
+    const author = await register('ada@example.com');
+    const reader = await register('bob@example.com');
+    const reflection = await writeReflection(author, 'Trusting');
+    const published = await publish(author, reflection, AUDIENCES.PUBLIC, { caption: 'For anyone.' });
+    const url = `/api/publications/${published.body.id}/encouraged`;
+
+    await call(reader, url, { method: 'POST', body: JSON.stringify({ encouraged: true }) });
+    await call(reader, url, { method: 'POST', body: JSON.stringify({ encouraged: false }) });
+
+    const feed = await call<Feed>(reader, '/api/publications/encouraged');
+    expect(feed.body.items).toHaveLength(0);
+  });
+
+  test('one person\'s encouragements are not another\'s', async () => {
+    const author = await register('ada@example.com');
+    const reader = await register('bob@example.com');
+    const stranger = await register('cleo@example.com');
+    const reflection = await writeReflection(author, 'Trusting');
+    const published = await publish(author, reflection, AUDIENCES.PUBLIC, { caption: 'For anyone.' });
+
+    await call(reader, `/api/publications/${published.body.id}/encouraged`, {
+      method: 'POST',
+      body: JSON.stringify({ encouraged: true }),
+    });
+
+    const mine = await call<Feed>(stranger, '/api/publications/encouraged');
+    expect(mine.body.items).toHaveLength(0);
+  });
+
   test('publishing copies the reflection and never mutates it', async () => {
     const cookie = await register('ada@example.com');
     const reflection = await writeReflection(cookie, 'Trusting');

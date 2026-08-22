@@ -1,0 +1,54 @@
+.tabs {
+  /*
+   * Scrolls rather than wraps. Five labels do not fit across a 390px phone,
+   * and a second row of tabs costs vertical space the brief asks to protect.
+   */
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--line);
+  /* Bleeds to the page edges so a scrolled tab is not clipped mid-word. */
+  margin-inline: calc(var(--space-4) * -1);
+  padding-inline: var(--space-4);
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.list {
+  display: flex;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  width: max-content;
+  min-width: 100%;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  /* 44px, without a fixed height that a larger text size could not grow past. */
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 2px solid transparent;
+  color: var(--ink-soft);
+  text-decoration: none;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.tab:hover {
+  color: var(--ink);
+}
+
+/*
+ * The current section, said twice: weight and a rule underneath. Colour alone
+ * would leave it unmarked for anybody who cannot see the difference.
+ */
+.tab[aria-current='page'] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}

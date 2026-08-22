@@ -124,7 +124,7 @@ export type CommunityRouteOptions = {
     sections: Record<string, { content: string; authorOrigin: string }>;
   } | null;
   /** Resolve an email to an account, for invitations. */
-  userIdByEmail: (email: string) => string | null;
+  userIdByEmail: (email: string) => string | null | Promise<string | null>;
   /** Ensure the person has a public identity before their name is shown. */
   ensureIdentity: (user: CommunityUser) => { handle: string; displayName: string };
   /** Injected in tests so a ceiling can be reached without making 40 requests. */
@@ -505,7 +505,7 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
 
     const body = await c.req.json<{ email?: string }>().catch(() => ({}) as { email?: string });
     const email = (body.email ?? '').trim().toLowerCase();
-    const invitedId = email ? userIdByEmail(email) : null;
+    const invitedId = email ? await userIdByEmail(email) : null;
     if (!invitedId) {
       /*
        * Deliberately not "no account with that email". Whether an address has
@@ -864,6 +864,15 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     const origin = originOf(c);
     return c.json({
       items: db.savedFeed(user.id).map((view) => serve(view, origin)),
+    });
+  });
+
+  app.get('/publications/encouraged', async (c) => {
+    const { user, store: db, response } = await guard(c);
+    if (!user || !db) return response;
+    const origin = originOf(c);
+    return c.json({
+      items: db.encouragedFeed(user.id).map((view) => serve(view, origin)),
     });
   });
 

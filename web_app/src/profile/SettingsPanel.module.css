@@ -1,0 +1,184 @@
+.settings {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.group {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.legend {
+  padding: 0;
+  font-weight: 600;
+  font-size: var(--text-md);
+}
+
+.help {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.choices,
+.themes {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+/*
+ * Two per row once there is room. Eight appearances in one column is a long
+ * scroll on a phone and a strange narrow list on a desktop.
+ */
+.themes {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+}
+
+.choice,
+.theme {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  /* The whole row is the target, not just the radio inside it. */
+  min-height: var(--tap);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.choice:hover,
+.theme:hover {
+  border-color: var(--line-strong);
+}
+
+/*
+ * The chosen one, marked by border and background rather than colour alone —
+ * and the radio itself remains, so the state is never inferred from styling.
+ */
+.choice:has(input:checked),
+.theme:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.choice:has(input:focus-visible),
+.theme:has(input:focus-visible) {
+  box-shadow: var(--ring);
+}
+
+.choiceText {
+  display: grid;
+  gap: 2px;
+  /* Lets a long description wrap instead of stretching the row. */
+  min-width: 0;
+}
+
+.choiceName {
+  font-weight: 600;
+}
+
+.choiceBody {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+/* --------------------------------------------------------- theme swatches */
+
+/*
+ * A miniature of the theme, painted with that theme's own tokens. `data-theme`
+ * on the swatch makes every var() inside resolve to that palette.
+ */
+.swatch {
+  flex: none;
+  display: block;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.swatchPaper {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  padding: 0 6px;
+  background: var(--paper);
+}
+
+.swatchInk {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--ink);
+}
+
+.swatchAccent {
+  display: block;
+  width: 60%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+.devices {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.device {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.here {
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.action:hover {
+  background: var(--surface-2);
+}
+
+.action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

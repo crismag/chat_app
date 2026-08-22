@@ -6,12 +6,9 @@
  * the person "something went wrong" for a reason that is nothing to do with
  * them and nothing they can fix — and, worse, would make the reply depend on
  * whether the address had an account, since only an existing account reaches
- * the send. So an unconfigured deployment writes the link to the log and the
- * route answers exactly as it always does.
- *
- * That is a real fallback, not a pretend one: an operator can read the log and
- * hand somebody their link. It is not a substitute for configuring mail, and
- * it says so where it appears.
+ * the send. So an unconfigured deployment records that mail was not sent and
+ * the route answers exactly as it always does. The body is never logged: a
+ * reset mail carries a bearer token, and process logs are not a place for one.
  *
  * Credentials come from the environment. Nothing here has a default password,
  * a default host, or a hard-coded address.
@@ -104,7 +101,7 @@ class SmtpMailer implements Mailer {
  * — the caller's behaviour must not change according to whether mail works,
  * or the reply to "I forgot my password" starts leaking who has an account.
  */
-class LoggingMailer implements Mailer {
+export class LoggingMailer implements Mailer {
   readonly configured = false;
   private readonly log: (line: string) => void;
 
@@ -118,10 +115,7 @@ class LoggingMailer implements Mailer {
         'MAIL NOT CONFIGURED — this message was not sent.',
         `  to:      ${message.to}`,
         `  subject: ${message.subject}`,
-        message.text
-          .split('\n')
-          .map((line) => `  | ${line}`)
-          .join('\n'),
+        '  The body is omitted because it may contain a reset token.',
         '  Set SMTP_HOST, SMTP_USER and SMTP_PASSWORD to send this properly.',
       ].join('\n'),
     );

@@ -133,10 +133,16 @@ is Hostinger **MariaDB 11.8**. Internal rows use `BIGINT`; anything shown to a
 browser, URL, or mobile client uses a `CHAR(36)` UUID. Credentials never leave
 the API process.
 
-The live demonstrable app still uses **SQLite** (`api/src/db.ts`, `DATABASE_PATH`)
-so local development does not require Hostinger. When `MYSQL_HOST` is set, the
-API applies migrations on boot. Application routes are not switched onto this
-store in the foundation phase.
+Local development does not require Hostinger: with no `MYSQL_*` configured,
+everything runs on **SQLite** (`api/src/db.ts`, `DATABASE_PATH`).
+
+When `MYSQL_*` is set, the API applies migrations on boot and **accounts are
+served from MariaDB** — `api/src/index.ts` selects `MysqlAuthStore`, so
+sessions, installations and credentials live there. **Content does not move
+with them.** Reflections, community, profiles, Studio and cached passages stay
+on SQLite in both modes, and there is no foreign key from a conversation to a
+MariaDB user; the identity that crosses the boundary is the account's string id
+(`users.public_uuid`). One store for everything is a later, separate decision.
 
 ### The target is MariaDB, not MySQL 8
 
@@ -553,7 +559,7 @@ Search dimensions can include:
 - date (`from` / `to` as `YYYY-MM-DD`).
 
 `GET /api/reflections` answers with `{ items, tags, books }` so the page can
-offer chips it did not invent. `/api/library` is the same payload.
+offer chips it did not invent.
 
 Semantic/vector search should be introduced only when it solves retrieval failures that conventional search cannot.
 

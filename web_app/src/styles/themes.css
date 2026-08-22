@@ -1,0 +1,275 @@
+/*
+ * The chosen appearances.
+ *
+ * Default, Light and Dark are in tokens.css: they are the base palette and its
+ * dark counterpart, selected by `data-palette`. The five here are choices with
+ * a character of their own, selected by `data-theme`, and each one overrides
+ * only the colour tokens — never a size, a radius or a font size, so a theme
+ * can change how the application feels without changing where anything is or
+ * how large a tap target ends up.
+ *
+ * Two rules every one of these keeps:
+ *
+ *  1. **Every token in the set is redefined.** A half-stated theme inherits
+ *     the rest from the light palette, which is how a dark theme ends up with
+ *     one white panel in the middle of it.
+ *  2. **The four section hues stay distinguishable from each other.** Content,
+ *     Heart, Application and Testimony are what the product teaches; a theme
+ *     may restate them in its own register but may not collapse them into one
+ *     colour, because then the framework stops being legible.
+ */
+
+/* --- Formal: restrained, high contrast, close to print -------------------- */
+
+[data-theme='formal'] {
+  color-scheme: light;
+
+  --paper: #f4f4f2;
+  --surface: #ffffff;
+  --surface-2: #ececea;
+  --surface-sunk: #e4e4e1;
+
+  --ink: #1a1a18;
+  --ink-soft: #3b3b38;
+  --muted: #5c5c58;
+  --faint: #82827c;
+
+  --line: #d2d2ce;
+  --line-strong: #b0b0aa;
+
+  --accent: #2f4858;
+  --accent-hover: #243845;
+  --accent-soft: #e3eaef;
+  --accent-ink: #22343f;
+  --on-accent: #ffffff;
+
+  --ok: #2b6045;
+  --ok-soft: #e2ece7;
+  --warn: #7a5320;
+  --warn-soft: #f1e7d7;
+  --danger: #8d2f26;
+  --danger-soft: #f3e0dd;
+
+  --content: #2f4858;
+  --content-soft: #e3eaef;
+  --heart: #7d3345;
+  --heart-soft: #f1e2e5;
+  --application: #7a5320;
+  --application-soft: #f1e7d7;
+  --testimony: #2b6045;
+  --testimony-soft: #e2ece7;
+
+  --ai-assisted: #4f4880;
+  --ai-assisted-soft: #e6e4f0;
+  --ai-generated: #7a5320;
+  --ai-generated-soft: #f1e7d7;
+
+  --shadow-sm: 0 1px 2px rgba(26, 26, 24, 0.08);
+  --shadow-md: 0 2px 4px rgba(26, 26, 24, 0.06), 0 8px 20px rgba(26, 26, 24, 0.1);
+  --shadow-lg: 0 4px 8px rgba(26, 26, 24, 0.07), 0 20px 44px rgba(26, 26, 24, 0.14);
+  --ring: 0 0 0 3px rgba(47, 72, 88, 0.28);
+}
+
+/* --- Zen: soft, airy, unhurried ------------------------------------------ */
+
+[data-theme='zen'] {
+  color-scheme: light;
+
+  --paper: #f2f5f2;
+  --surface: #fbfdfb;
+  --surface-2: #e8efe9;
+  --surface-sunk: #e0e9e2;
+
+  --ink: #2c3630;
+  --ink-soft: #4b5851;
+  --muted: #67736c;
+  --faint: #8b968f;
+
+  --line: #d7e2da;
+  --line-strong: #b6c6bb;
+
+  --accent: #5a7d6a;
+  --accent-hover: #4a6b59;
+  --accent-soft: #e4efe7;
+  --accent-ink: #3c5a49;
+  --on-accent: #fbfdfb;
+
+  --ok: #4a7a5c;
+  --ok-soft: #e3efe7;
+  --warn: #97713f;
+  --warn-soft: #f3ead9;
+  --danger: #a05149;
+  --danger-soft: #f4e4e1;
+
+  --content: #4e6f8a;
+  --content-soft: #e4ecf2;
+  --heart: #a06276;
+  --heart-soft: #f3e6ea;
+  --application: #97713f;
+  --application-soft: #f3ead9;
+  --testimony: #5a7d6a;
+  --testimony-soft: #e4efe7;
+
+  --ai-assisted: #7268a0;
+  --ai-assisted-soft: #eae7f2;
+  --ai-generated: #97713f;
+  --ai-generated-soft: #f3ead9;
+
+  --shadow-sm: 0 1px 2px rgba(44, 54, 48, 0.05);
+  --shadow-md: 0 2px 4px rgba(44, 54, 48, 0.04), 0 8px 20px rgba(44, 54, 48, 0.07);
+  --shadow-lg: 0 4px 8px rgba(44, 54, 48, 0.05), 0 20px 44px rgba(44, 54, 48, 0.1);
+  --ring: 0 0 0 3px rgba(90, 125, 106, 0.25);
+}
+
+/* --- Ladies: rose and plum, a lighter hand -------------------------------- */
+
+[data-theme='ladies'] {
+  color-scheme: light;
+
+  --paper: #fbf3f5;
+  --surface: #fffafb;
+  --surface-2: #f6e8ec;
+  --surface-sunk: #f1e0e5;
+
+  --ink: #33232a;
+  --ink-soft: #55414a;
+  --muted: #715a64;
+  --faint: #9a838d;
+
+  --line: #ecd6de;
+  --line-strong: #d9b8c4;
+
+  --accent: #8e4763;
+  --accent-hover: #7a3a53;
+  --accent-soft: #f6e3ea;
+  --accent-ink: #6d3149;
+  --on-accent: #fffafb;
+
+  --ok: #4f7a5e;
+  --ok-soft: #e6f0e9;
+  --warn: #96683a;
+  --warn-soft: #f5e8d9;
+  --danger: #a63f45;
+  --danger-soft: #f7e2e3;
+
+  --content: #5a6795;
+  --content-soft: #e7e9f4;
+  --heart: #8e4763;
+  --heart-soft: #f6e3ea;
+  --application: #96683a;
+  --application-soft: #f5e8d9;
+  --testimony: #4f7a5e;
+  --testimony-soft: #e6f0e9;
+
+  --ai-assisted: #7a5f9e;
+  --ai-assisted-soft: #eee7f4;
+  --ai-generated: #96683a;
+  --ai-generated-soft: #f5e8d9;
+
+  --shadow-sm: 0 1px 2px rgba(51, 35, 42, 0.06);
+  --shadow-md: 0 2px 4px rgba(51, 35, 42, 0.05), 0 8px 20px rgba(51, 35, 42, 0.08);
+  --shadow-lg: 0 4px 8px rgba(51, 35, 42, 0.06), 0 20px 44px rgba(51, 35, 42, 0.12);
+  --ring: 0 0 0 3px rgba(142, 71, 99, 0.25);
+}
+
+/* --- Retro: paper, ink and amber ----------------------------------------- */
+
+[data-theme='retro'] {
+  color-scheme: light;
+
+  --paper: #f0e6d2;
+  --surface: #f9f1e0;
+  --surface-2: #e8dcc2;
+  --surface-sunk: #e0d2b6;
+
+  --ink: #2f2717;
+  --ink-soft: #4e422c;
+  --muted: #6b5c40;
+  --faint: #8f7f60;
+
+  --line: #d8c8a6;
+  --line-strong: #bda87f;
+
+  --accent: #9a5b1e;
+  --accent-hover: #834c17;
+  --accent-soft: #f2e2c8;
+  --accent-ink: #74430f;
+  --on-accent: #fbf5e8;
+
+  --ok: #4f6b30;
+  --ok-soft: #e7edd8;
+  --warn: #9a5b1e;
+  --warn-soft: #f2e2c8;
+  --danger: #96331f;
+  --danger-soft: #f2ddd5;
+
+  --content: #34566b;
+  --content-soft: #dde8ed;
+  --heart: #8f3f4a;
+  --heart-soft: #f0dcdd;
+  --application: #9a5b1e;
+  --application-soft: #f2e2c8;
+  --testimony: #4f6b30;
+  --testimony-soft: #e7edd8;
+
+  --ai-assisted: #61558c;
+  --ai-assisted-soft: #e5e1ee;
+  --ai-generated: #9a5b1e;
+  --ai-generated-soft: #f2e2c8;
+
+  --shadow-sm: 0 1px 2px rgba(47, 39, 23, 0.08);
+  --shadow-md: 0 2px 4px rgba(47, 39, 23, 0.07), 0 8px 20px rgba(47, 39, 23, 0.1);
+  --shadow-lg: 0 4px 8px rgba(47, 39, 23, 0.08), 0 20px 44px rgba(47, 39, 23, 0.14);
+  --ring: 0 0 0 3px rgba(154, 91, 30, 0.28);
+}
+
+/* --- Techno: dark, cool and precise -------------------------------------- */
+
+[data-theme='techno'] {
+  color-scheme: dark;
+
+  --paper: #0d1117;
+  --surface: #151b23;
+  --surface-2: #1d242e;
+  --surface-sunk: #0a0e13;
+
+  --ink: #e6edf3;
+  --ink-soft: #cdd9e5;
+  --muted: #9aa7b4;
+  --faint: #8695a3;
+
+  --line: #6d7b8a;
+  --line-strong: #7c8b9a;
+
+  --accent: #4fc3f7;
+  --accent-hover: #7fd4fa;
+  --accent-soft: #16303d;
+  --accent-ink: #9adcfb;
+  --on-accent: #08141b;
+
+  --ok: #6ee7a8;
+  --ok-soft: #102a1f;
+  --warn: #f0b862;
+  --warn-soft: #2e2415;
+  --danger: #f38c7f;
+  --danger-soft: #33201d;
+
+  --content: #7fb2f0;
+  --content-soft: #16253a;
+  --heart: #f08cb0;
+  --heart-soft: #331d28;
+  --application: #f0b862;
+  --application-soft: #2e2415;
+  --testimony: #6ee7a8;
+  --testimony-soft: #102a1f;
+
+  --ai-assisted: #b3a4f5;
+  --ai-assisted-soft: #201d38;
+  --ai-generated: #f0b862;
+  --ai-generated-soft: #2e2415;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.5), 0 10px 24px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 4px 10px rgba(0, 0, 0, 0.55), 0 24px 50px rgba(0, 0, 0, 0.6);
+  --ring: 0 0 0 3px rgba(79, 195, 247, 0.32);
+}

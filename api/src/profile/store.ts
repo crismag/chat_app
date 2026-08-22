@@ -26,7 +26,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
-import { CHAT_FORMATS } from '@chat/shared';
+import { CHAT_FORMATS, type Preferences, normalisePreferences } from '@chat/shared';
 import type { StoredConversation, StoredSection } from '../store.ts';
 import { normaliseHandle } from './limits.ts';
 
@@ -38,7 +38,34 @@ export type StoredProfile = {
   favouriteVerses: string[];
   createdAt: string;
   updatedAt: string;
+  /*
+   * When the picture last changed, or null when this person has never set one.
+   *
+   * The bytes deliberately live in their own table and are never part of a
+   * profile read. A profile is read to render a name; an avatar is read to
+   * render one image, on a URL a browser can cache. Keeping the blob out of
+   * `SELECT * FROM profiles` means the common path stays a small row.
+   *
+   * This stamp is what makes that cache safe: it goes into the image URL, so a
+   * replaced picture is a new URL rather than a stale one behind a long TTL.
+   */
+  avatarUpdatedAt: string | null;
 };
+
+/** The stored picture itself, read only by the route that serves it. */
+export type StoredAvatar = {
+  bytes: Uint8Array;
+  contentType: AvatarContentType;
+  updatedAt: string;
+};
+
+/*
+ * No SVG. An avatar is shown on pages belonging to other people, and an SVG is
+ * a document that can carry script, so it is not a picture format here.
+ */
+export const AVATAR_CONTENT_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const;
+
+export type AvatarContentType = (typeof AVATAR_CONTENT_TYPES)[number];
 
 /**
  * One shared reflection, as a stranger may see it.
@@ -73,6 +100,11 @@ export interface ProfileStore {
   /** True when some *other* account already holds this handle. */
   handleTaken(handle: string, exceptUserId: string): boolean;
   save(profile: StoredProfile): void;
+  preferences(userId: string): Preferences;
+  savePreferences(userId: string, preferences: Preferences, at: string): void;
+  avatar(userId: string): StoredAvatar | null;
+  setAvatar(userId: string, bytes: Uint8Array, contentType: AvatarContentType, at: string): void;
+  clearAvatar(userId: string): void;
   /** Only shared reflections. The predicate is applied during retrieval. */
   publicShares(userId: string): PublicShare[];
   /** The same predicate, so the count can never disagree with the list. */
@@ -154,6 +186,26 @@ function migrate(db: DatabaseSync): void {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_handle
       ON profiles(lower(handle));
 
+    CREATE TABLE IF NOT EXISTS profile_avatars (
+      userId TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      bytes BLOB NOT NULL,
+      contentType TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+
+    /*
+     * One row per person, holding a JSON document rather than a column per
+     * preference. Preferences are a list that grows, every one of them is
+     * optional and cosmetic, and normalisePreferences already treats any
+     * missing or unknown field as a default — so a new preference is a shared
+     * constant rather than a migration on a live table.
+     */
+    CREATE TABLE IF NOT EXISTS profile_preferences (
+      userId TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      preferencesJson TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS profile_reports (
       id TEXT PRIMARY KEY,
       reporterUserId TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -190,8 +242,19 @@ function profileFromRow(row: Row): StoredProfile {
     favouriteVerses: verses,
     createdAt: String(row['createdAt']),
     updatedAt: String(row['updatedAt']),
+    avatarUpdatedAt: row['avatarUpdatedAt'] == null ? null : String(row['avatarUpdatedAt']),
   };
 }
+
+/*
+ * The stamp travels with the profile; the bytes never do. A LEFT JOIN keeps a
+ * person with no picture a perfectly ordinary row rather than a missing one.
+ */
+const SELECT_PROFILE = `
+  SELECT p.*, a.updatedAt AS avatarUpdatedAt
+    FROM profiles p
+    LEFT JOIN profile_avatars a ON a.userId = p.userId
+`;
 
 class SqliteProfileStore implements ProfileStore {
   private readonly db: DatabaseSync;
@@ -202,7 +265,7 @@ class SqliteProfileStore implements ProfileStore {
   }
 
   byUserId(userId: string): StoredProfile | null {
-    const row = this.db.prepare('SELECT * FROM profiles WHERE userId = ?').get(userId) as
+    const row = this.db.prepare(`${SELECT_PROFILE} WHERE p.userId = ?`).get(userId) as
       | Row
       | undefined;
     return row ? profileFromRow(row) : null;
@@ -210,7 +273,7 @@ class SqliteProfileStore implements ProfileStore {
 
   byHandle(handle: string): StoredProfile | null {
     const row = this.db
-      .prepare('SELECT * FROM profiles WHERE lower(handle) = ?')
+      .prepare(`${SELECT_PROFILE} WHERE lower(p.handle) = ?`)
       .get(normaliseHandle(handle)) as Row | undefined;
     return row ? profileFromRow(row) : null;
   }
@@ -244,6 +307,61 @@ class SqliteProfileStore implements ProfileStore {
         profile.createdAt,
         profile.updatedAt,
       );
+  }
+
+
+  preferences(userId: string): Preferences {
+    const row = this.db
+      .prepare('SELECT preferencesJson FROM profile_preferences WHERE userId = ?')
+      .get(userId) as Row | undefined;
+    if (!row) return normalisePreferences(undefined);
+    try {
+      return normalisePreferences(JSON.parse(String(row['preferencesJson'])));
+    } catch {
+      /* A malformed row is somebody with default settings, never a 500. */
+      return normalisePreferences(undefined);
+    }
+  }
+
+  savePreferences(userId: string, preferences: Preferences, at: string): void {
+    this.db
+      .prepare(
+        `INSERT INTO profile_preferences (userId, preferencesJson, updatedAt)
+         VALUES (?, ?, ?)
+         ON CONFLICT(userId) DO UPDATE SET
+           preferencesJson = excluded.preferencesJson,
+           updatedAt = excluded.updatedAt`,
+      )
+      .run(userId, JSON.stringify(preferences), at);
+  }
+
+  avatar(userId: string): StoredAvatar | null {
+    const row = this.db.prepare('SELECT * FROM profile_avatars WHERE userId = ?').get(userId) as
+      | Row
+      | undefined;
+    if (!row) return null;
+    return {
+      bytes: new Uint8Array(row['bytes'] as Uint8Array),
+      contentType: String(row['contentType']) as AvatarContentType,
+      updatedAt: String(row['updatedAt']),
+    };
+  }
+
+  setAvatar(userId: string, bytes: Uint8Array, contentType: AvatarContentType, at: string): void {
+    this.db
+      .prepare(
+        `INSERT INTO profile_avatars (userId, bytes, contentType, updatedAt)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(userId) DO UPDATE SET
+           bytes = excluded.bytes,
+           contentType = excluded.contentType,
+           updatedAt = excluded.updatedAt`,
+      )
+      .run(userId, Buffer.from(bytes), contentType, at);
+  }
+
+  clearAvatar(userId: string): void {
+    this.db.prepare('DELETE FROM profile_avatars WHERE userId = ?').run(userId);
   }
 
   /*
@@ -381,6 +499,8 @@ class MemoryProfileStore implements ProfileStore {
   private readonly profiles = new Map<string, StoredProfile>();
   private readonly reports: ProfileReport[] = [];
   private readonly blocks = new Set<string>();
+  private readonly avatars = new Map<string, StoredAvatar>();
+  private readonly prefs = new Map<string, Preferences>();
   private readonly source: ConversationSource;
 
   constructor(source: ConversationSource) {
@@ -388,15 +508,25 @@ class MemoryProfileStore implements ProfileStore {
   }
 
   byUserId(userId: string): StoredProfile | null {
-    return this.profiles.get(userId) ?? null;
+    const found = this.profiles.get(userId);
+    return found ? this.stamped(found) : null;
   }
 
   byHandle(handle: string): StoredProfile | null {
     const wanted = normaliseHandle(handle);
     for (const profile of this.profiles.values()) {
-      if (normaliseHandle(profile.handle) === wanted) return profile;
+      if (normaliseHandle(profile.handle) === wanted) return this.stamped(profile);
     }
     return null;
+  }
+
+  /*
+   * The stamp is derived from the picture rather than stored beside it, for
+   * the same reason the SQLite implementation joins for it: one fact, one
+   * home. Setting a picture cannot then leave a profile claiming it has none.
+   */
+  private stamped(profile: StoredProfile): StoredProfile {
+    return { ...profile, avatarUpdatedAt: this.avatars.get(profile.userId)?.updatedAt ?? null };
   }
 
   handleTaken(handle: string, exceptUserId: string): boolean {
@@ -406,6 +536,28 @@ class MemoryProfileStore implements ProfileStore {
 
   save(profile: StoredProfile): void {
     this.profiles.set(profile.userId, { ...profile });
+  }
+
+
+  preferences(userId: string): Preferences {
+    return normalisePreferences(this.prefs.get(userId));
+  }
+
+  savePreferences(userId: string, preferences: Preferences): void {
+    this.prefs.set(userId, { ...preferences });
+  }
+
+  avatar(userId: string): StoredAvatar | null {
+    const found = this.avatars.get(userId);
+    return found ? { ...found, bytes: new Uint8Array(found.bytes) } : null;
+  }
+
+  setAvatar(userId: string, bytes: Uint8Array, contentType: AvatarContentType, at: string): void {
+    this.avatars.set(userId, { bytes: new Uint8Array(bytes), contentType, updatedAt: at });
+  }
+
+  clearAvatar(userId: string): void {
+    this.avatars.delete(userId);
   }
 
   private shared(userId: string): StoredConversation[] {
@@ -445,11 +597,11 @@ class MemoryProfileStore implements ProfileStore {
   }
 
   isBlocked(blockerUserId: string, blockedUserId: string): boolean {
-    return this.blocks.has(`${blockerUserId} ${blockedUserId}`);
+    return this.blocks.has(`${blockerUserId}\u0000${blockedUserId}`);
   }
 
   setBlocked(blockerUserId: string, blockedUserId: string, blocked: boolean): void {
-    const key = `${blockerUserId} ${blockedUserId}`;
+    const key = `${blockerUserId}\u0000${blockedUserId}`;
     if (blocked) this.blocks.add(key);
     else this.blocks.delete(key);
   }
