@@ -1149,6 +1149,11 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
       return c.json({ ...serve(updated, originOf(c)), alreadyShared: true });
     }
 
+    /*
+     * The share event is recorded inside publish(), in the same transaction as
+     * the publication. It is never removed: the ceilings count shares made,
+     * which is why unsharing does not refund one.
+     */
     const id = db.publish(
       {
         authorUserId: user.id,
@@ -1162,14 +1167,6 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
       },
       source,
     );
-
-    /*
-     * Written after the share succeeded, and never removed. This is what the
-     * ceilings are counted from, which is why unsharing does not refund one.
-     */
-    if (audience !== AUDIENCES.ONLY_ME) {
-      db.recordShare({ userId: user.id, conversationId, audience, communityId });
-    }
 
     const view = db.publication(user.id, id);
     if (!view) return c.json({ error: 'Publication could not be read back.' }, 500);

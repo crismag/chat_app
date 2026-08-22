@@ -37,11 +37,11 @@ A CodeReviewerAssist pass on 2026-08-22, plus three specialized lens reviews, ad
 
 ## P2
 
-- [ ] B3 Merge all SQLite owner-scoped tables
-- [ ] Dual-store merge test (MysqlAuthStore + SqliteStore)
-- [ ] B4 Title Send-button race verified or closed (do not resurrect Scripture input)
-- [ ] B5 `share_events` inside the publish transaction
-- [ ] B6 Conversation delete in one SQLite transaction
+- [x] B3 Merge all SQLite owner-scoped tables — publications, communities, memberships, reactions, saves, hides, mutes, blocks, share events, reports, Studio assets and profiles, in the same transaction as the conversations; `api/src/auth/guest-merge.test.ts`
+- [x] Dual-store merge test (MysqlAuthStore + SqliteStore) — in `guest-merge.test.ts`, `skipIf` without `MYSQL_*`. **Not executed here: no MariaDB configured locally, so it skipped. CI must run it.**
+- [x] B4 Closed by evidence — `ChatPage.test.tsx` “the Send button path keeps a title typed during creation” passes; the free-typed Scripture field is retired (Bible selector), and `scripts/verify/reference-race.mjs` already targets the title. No code change.
+- [x] B5 `share_events` inside the publish transaction — written by `publish()` in the same `BEGIN`; `share-atomicity.test.ts`
+- [x] B6 Conversation delete in one SQLite transaction — publications, sections, messages and the conversation in one `BEGIN`; covered by the existing delete tests on both backings
 
 ## P3
 
