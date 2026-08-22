@@ -80,6 +80,7 @@ import { readStudioCreation } from './create/validation.ts';
 import { createStudioImageRoutes } from './create/image-routes.ts';
 import { createStudioImageAssetStore } from './create/image-store.ts';
 import type { StudioImageProvider } from './create/image-provider.ts';
+import { MailDomainCheck, type MailDomainResolver } from './auth/mail-domain.ts';
 import { SqliteStore } from './db.ts';
 import { onError } from './http/errors.ts';
 import { requestId } from './http/request-id.ts';
@@ -181,6 +182,8 @@ export function createApp(
    */
   options: {
     mailer?: Mailer;
+    /** Injected so the suite never performs a DNS lookup. */
+    mailDomainResolver?: MailDomainResolver;
     googleVerifier?: GoogleVerifier;
     loginEmailLimiter?: SlidingWindowRateLimiter;
     loginAddressLimiter?: SlidingWindowRateLimiter;
@@ -215,6 +218,21 @@ export function createApp(
    */
   const resetLimiter = new SlidingWindowRateLimiter(5, Date.now, 60 * 60 * 1000);
   const mailer = options.mailer ?? createMailer();
+
+  /*
+   * Whether a domain can receive mail at all.
+   *
+   * A resolver is injected in tests, which is what keeps the suite off the
+   * network: nothing here performs a lookup unless a real one is configured.
+   * Without one this answers "unavailable" for everything, which means nothing
+   * is ever refused for it — the safe direction.
+   */
+  const mailDomains = new MailDomainCheck(
+    options.mailDomainResolver ?? {
+      resolveMx: () => Promise.reject(new Error('EAI_AGAIN')),
+      resolveAddress: () => Promise.reject(new Error('EAI_AGAIN')),
+    },
+  );
 
   const refused = (c: Context, decision: RateLimitDecision, message: string) => {
     c.header('Retry-After', String(decision.retryAfterSeconds));
@@ -1074,8 +1092,27 @@ export function createApp(
      */
     const limited = resetLimiter.take(addressOf(c));
     if (limited.allowed && email.includes('@')) {
+      /*
+       * Does this domain take mail at all?
+       *
+       * Asked before anything is sent, because every message to a domain that
+       * cannot receive one is a bounce, and enough bounces are what stop the
+       * real messages arriving. It costs a cached DNS lookup and it protects
+       * the thing every other email in this product depends on.
+       *
+       * Only a definite "no" stops it. A resolver that could not answer is
+       * weather, not a decision, and delaying somebody's reset because DNS
+       * hiccupped is the wrong way to be wrong.
+       *
+       * The reply below does not change either way. Whether the domain can
+       * receive mail is not a fact about whether the address has an account.
+       */
+      const deliverable =
+        (await mailDomains.check(email.slice(email.lastIndexOf('@') + 1))) !== 'undeliverable';
+
       const origin = publicWebOrigin();
-      const started = origin ? await auth.startPasswordReset(email).catch(() => null) : null;
+      const started =
+        origin && deliverable ? await auth.startPasswordReset(email).catch(() => null) : null;
       if (started && origin) {
         const link = resetUrl(origin, started.token);
         const message = resetEmail(link);
