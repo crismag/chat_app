@@ -6,11 +6,11 @@ When a finding is done, set it to **done** and add the commit hash if you have o
 
 Do not mark done without tests named in the phase file.
 
-**2026-08-22, branch `agent/audit-p1`.** P0 was verified present in the working
-tree with green tests rather than re-implemented, per
-[`CODEREVIEWERASSIST.md`](CODEREVIEWERASSIST.md). P1 is finished. Nothing in
-this round is committed yet — see the report; `api/src/app.ts` carries three
-separate uncommitted bodies of work and cannot be staged cleanly per finding.
+**2026-08-22.** P0 was verified present in the working tree with green tests
+rather than re-implemented, per [`CODEREVIEWERASSIST.md`](CODEREVIEWERASSIST.md).
+P1–P4 are committed and merged to `main`; P5 is in progress on
+`agent/audit-p5`. The MariaDB suites were run against a real server (10.11
+locally; CI pins 11.8), so the durable tests that used to skip now pass.
 
 A CodeReviewerAssist pass on 2026-08-22, plus three specialized lens reviews, added S9–S11, O1–O3, M1–M2, B5–B6 and retargeted B4. Inspect the tree before ticking P0 — those items may already be in uncommitted code. See [`CODEREVIEWERASSIST.md`](CODEREVIEWERASSIST.md).
 
