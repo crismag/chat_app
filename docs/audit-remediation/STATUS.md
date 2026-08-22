@@ -38,7 +38,7 @@ A CodeReviewerAssist pass on 2026-08-22, plus three specialized lens reviews, ad
 ## P2
 
 - [x] B3 Merge all SQLite owner-scoped tables — publications, communities, memberships, reactions, saves, hides, mutes, blocks, share events, reports, Studio assets and profiles, in the same transaction as the conversations; `api/src/auth/guest-merge.test.ts`
-- [x] Dual-store merge test (MysqlAuthStore + SqliteStore) — in `guest-merge.test.ts`, `skipIf` without `MYSQL_*`. **Not executed here: no MariaDB configured locally, so it skipped. CI must run it.**
+- [x] Dual-store merge test (MysqlAuthStore + SqliteStore) — **executed** against MariaDB 10.11 on 2026-08-22 and passing, with all 50 previously-skipped MariaDB tests (642 api tests green with `MYSQL_*` set). Note the local version is 10.11; CI pins 11.8.
 - [x] B4 Closed by evidence — `ChatPage.test.tsx` “the Send button path keeps a title typed during creation” passes; the free-typed Scripture field is retired (Bible selector), and `scripts/verify/reference-race.mjs` already targets the title. No code change.
 - [x] B5 `share_events` inside the publish transaction — written by `publish()` in the same `BEGIN`; `share-atomicity.test.ts`
 - [x] B6 Conversation delete in one SQLite transaction — publications, sections, messages and the conversation in one `BEGIN`; covered by the existing delete tests on both backings
@@ -62,8 +62,8 @@ A CodeReviewerAssist pass on 2026-08-22, plus three specialized lens reviews, ad
 ## P5
 
 - [ ] Not started (requires approval)
-- [ ] Schema decision recorded: live SQLite shape
-- [ ] Community columns missing from MariaDB `003` added
+- [x] Schema decision recorded: live SQLite shape — `007` mirrors SQLite *semantics* while keeping MariaDB conventions (BIGINT + `public_uuid`, snake_case). The unused `chat_content`/`reflection_revisions` model is untouched and is not the target.
+- [x] Community columns missing from MariaDB `003` added — migration `007`: community settings, `share_visibility`, `publication_hides`, `author_mutes`, `share_events`, the one-live-share rule and the feed index; `api/src/mysql/community-schema.test.ts` proves the rules against a real MariaDB
 - [ ] Routes flipped
 - [ ] SQLite live path retired
 - [ ] API loopback bind in production (S9 — also listed under P6)
