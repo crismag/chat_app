@@ -23,6 +23,8 @@
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
+
+import { addressOf } from '../http/address.ts';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import {
   BIBLE_OUTCOMES,
@@ -71,13 +73,6 @@ function fail(
       : { retryAfterSeconds: extra.retryAfterSeconds }),
   };
   return c.json(body, STATUS[outcome]);
-}
-
-/** The caller's address, for rate limiting only. Not logged, not stored. */
-function addressOf(c: Context): string {
-  const forwarded = c.req.header('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0]?.trim() || 'unknown';
-  return c.req.header('x-real-ip')?.trim() || 'unknown';
 }
 
 export interface BibleRouteDeps {

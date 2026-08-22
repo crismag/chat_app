@@ -1712,7 +1712,7 @@ export function createApp(
           },
           {
             userId: user?.id ?? 'unknown',
-            address: c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown',
+            address: addressOf(c),
             requestId: randomUUID(),
           },
         );

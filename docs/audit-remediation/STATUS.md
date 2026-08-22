@@ -67,7 +67,7 @@ A CodeReviewerAssist pass on 2026-08-22, plus three specialized lens reviews, ad
 - [~] Backfill written and tested — `api/src/mysql/backfill-content.ts` copies live SQLite content into MariaDB keyed by `public_uuid`: re-runnable, replaces sections and messages rather than merging, skips (never reassigns) a reflection whose owner has no MariaDB account, and never writes to the source.
 - [ ] Routes flipped — **not started.** Needs a content store on MariaDB, a backfill keyed by `public_uuid`, and a read flag defaulting off. Steps 4–5 (flip writes, retire SQLite) also need a production soak, so they cannot be closed from a development machine.
 - [ ] SQLite live path retired
-- [ ] API loopback bind in production (S9 — also listed under P6)
+- [x] API loopback bind in production (S9) — done in P6
 - [ ] Restore drill documented for **both** SQLite content and MariaDB accounts (O3)
 
 ## P6
@@ -80,7 +80,7 @@ A CodeReviewerAssist pass on 2026-08-22, plus three specialized lens reviews, ad
 - [ ] Security headers
 - [ ] CI subset of `scripts/verify`
 - [ ] Public share single POST
-- [ ] S9 Loopback bind + XFF only from loopback
+- [x] S9 Loopback bind + XFF only from loopback — production binds `127.0.0.1`; `x-forwarded-for` is believed only from a loopback peer, and the two duplicate address readers in `bible/routes.ts` and `app.ts` now go through the one helper. `api/src/http/address.test.ts`
 - [ ] S10 Account export/delete (only if named)
 - [x] O1 Readiness probe — `GET /api/health/ready` pings content and, where accounts live across a network, MariaDB; `/api/health` is untouched liveness. `api/src/http/readiness.test.ts`
 - [ ] O2 PHP gateway timeout
