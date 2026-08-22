@@ -207,6 +207,86 @@ for (const backing of backings) {
     });
   });
 
+  describe(`reading a public profile without an account (${backing.name})`, () => {
+    async function published(app: App) {
+      const author = await register(app, 'ada@example.com');
+      await send(app, '/api/profiles/me', author, 'PATCH', {
+        handle: 'ada',
+        displayName: 'Ada Lovelace',
+        tagline: 'Writing slowly, on purpose.',
+      });
+      await writeReflection(app, author, {
+        title: 'Trusting while I cannot see',
+        reference: 'Romans 8:28',
+        text: 'This passage met my fear.',
+        publish: true,
+      });
+      return author;
+    }
+
+    test('a guest may read a public profile, because it is public', async () => {
+      const app = createApp(backing.make());
+      await published(app);
+
+      const guest = await app.request('/api/auth/guest', { method: 'POST' });
+      expect(guest.status).toBe(201);
+      const cookie = cookieHeader(guest.headers.get('set-cookie'));
+
+      const seen = await send(app, '/api/profiles/ada', cookie);
+      expect(seen.status).toBe(200);
+      const view = (await seen.json()) as {
+        displayName: string
+        shares: unknown[]
+        isOwner: boolean
+      };
+      expect(view.displayName).toBe('Ada Lovelace');
+      expect(view.shares).toHaveLength(1);
+      /* A guest is not the owner of somebody else's profile. */
+      expect(view.isOwner).toBe(false);
+    });
+
+    test('a session is still required, so a profile is not open to be scraped', async () => {
+      const app = createApp(backing.make());
+      await published(app);
+
+      /*
+       * A guest has a session and is inside the product. Something with no
+       * session at all is not, and a directory of names and handles should not
+       * be readable by anything that can make a request.
+       */
+      expect((await app.request('/api/profiles/ada')).status).toBe(401);
+    });
+
+    test('reading one still grants nothing: no account, no writing', async () => {
+      const app = createApp(backing.make());
+      await published(app);
+
+      /* Reading is open; every door off it is not. */
+      const guest = await app.request('/api/auth/guest', { method: 'POST' });
+      const cookie = cookieHeader(guest.headers.get('set-cookie'));
+
+      expect((await send(app, '/api/profiles/me', cookie)).status).toBe(401);
+      expect(
+        (await send(app, '/api/profiles/ada/report', cookie, 'POST', { reason: 'spam' })).status,
+      ).toBe(401);
+      expect((await send(app, '/api/profiles/ada/block', cookie, 'POST')).status).toBe(401);
+    });
+
+    test('a private field is absent whoever is reading', async () => {
+      const app = createApp(backing.make());
+      await published(app);
+
+      const guest = await app.request('/api/auth/guest', { method: 'POST' });
+      const cookie = cookieHeader(guest.headers.get('set-cookie'));
+      const view = (await (await send(app, '/api/profiles/ada', cookie)).json()) as Record<
+        string,
+        unknown
+      >;
+      expect(view['email']).toBeUndefined();
+      expect(view['userId']).toBeUndefined();
+    });
+  });
+
   describe(`profile editing (${backing.name})`, () => {
     test('a profile says which month it was made, and not which day', async () => {
       const app = createApp(backing.make());
@@ -293,6 +373,160 @@ for (const backing of backings) {
         favouriteVerses: string[];
       };
       expect(body.favouriteVerses).toEqual(['Romans 8:28', 'Psalm 46:10']);
+    });
+  });
+
+  describe(`handle availability (${backing.name})`, () => {
+    const check = (app: App, cookie: string, handle: string) =>
+      send(app, `/api/profiles/me/handle-available?handle=${encodeURIComponent(handle)}`, cookie);
+
+    test('a free handle is free', async () => {
+      const app = createApp(backing.make());
+      const cookie = await register(app, 'ada@example.com');
+
+      const answer = (await (await check(app, cookie, 'quietcedar')).json()) as {
+        available: boolean
+        problem: string | null
+      };
+      expect(answer).toEqual({ handle: 'quietcedar', available: true, problem: null });
+    });
+
+    test('somebody else\'s handle is not, and says so the way saving would', async () => {
+      const app = createApp(backing.make());
+      const ada = await register(app, 'ada@example.com');
+      await send(app, '/api/profiles/me', ada, 'PATCH', {
+        handle: 'taken',
+        displayName: 'Ada Lovelace',
+      });
+
+      const bob = await register(app, 'bob@example.com');
+      const answer = (await (await check(app, bob, 'taken')).json()) as { available: boolean };
+      expect(answer.available).toBe(false);
+
+      /* The same refusal the PATCH gives, so the two can never disagree. */
+      const refused = await send(app, '/api/profiles/me', bob, 'PATCH', {
+        handle: 'taken',
+        displayName: 'Bob',
+      });
+      expect(refused.status).toBe(409);
+    });
+
+    test('a person may keep the handle they already have', async () => {
+      const app = createApp(backing.make());
+      const cookie = await register(app, 'ada@example.com');
+      const mine = (await (await send(app, '/api/profiles/me', cookie)).json()) as {
+        handle: string
+      };
+
+      const answer = (await (await check(app, cookie, mine.handle)).json()) as {
+        available: boolean
+      };
+      expect(answer.available).toBe(true);
+    });
+
+    test('@Cris and @cris are the same person, so one blocks the other', async () => {
+      const app = createApp(backing.make());
+      const ada = await register(app, 'ada@example.com');
+      await send(app, '/api/profiles/me', ada, 'PATCH', { handle: 'cris', displayName: 'Cris' });
+
+      const bob = await register(app, 'bob@example.com');
+      const answer = (await (await check(app, bob, '@CRIS')).json()) as { available: boolean };
+      expect(answer.available).toBe(false);
+    });
+
+    test('a malformed or reserved handle is refused with its reason', async () => {
+      const app = createApp(backing.make());
+      const cookie = await register(app, 'ada@example.com');
+
+      const tooShort = (await (await check(app, cookie, 'ab')).json()) as { problem: string };
+      expect(tooShort.problem).toMatch(/between/);
+
+      const punctuation = (await (await check(app, cookie, 'not a handle!')).json()) as {
+        problem: string
+      };
+      expect(punctuation.problem).toMatch(/lowercase letters/);
+    });
+
+    test('a signed-out visitor cannot use this to enumerate handles', async () => {
+      const app = createApp(backing.make());
+      const refused = await app.request('/api/profiles/me/handle-available?handle=cris');
+      expect(refused.status).toBe(401);
+    });
+  });
+
+  describe(`settings (${backing.name})`, () => {
+    test('somebody who has chosen nothing has the defaults', async () => {
+      const app = createApp(backing.make());
+      const cookie = await register(app, 'ada@example.com');
+
+      const read = await send(app, '/api/profiles/me/preferences', cookie);
+      expect(read.status).toBe(200);
+      expect((await read.json()) as unknown).toEqual({
+        preferences: { theme: 'default', bibleTranslationId: null, defaultChatFormat: 'full' },
+      });
+    });
+
+    test('a change keeps everything it did not mention', async () => {
+      const app = createApp(backing.make());
+      const cookie = await register(app, 'ada@example.com');
+
+      await send(app, '/api/profiles/me/preferences', cookie, 'PATCH', {
+        theme: 'techno',
+        bibleTranslationId: 111,
+      });
+      const after = await send(app, '/api/profiles/me/preferences', cookie, 'PATCH', {
+        defaultChatFormat: 'condensed',
+      });
+
+      expect(((await after.json()) as { preferences: unknown }).preferences).toEqual({
+        theme: 'techno',
+        bibleTranslationId: 111,
+        defaultChatFormat: 'condensed',
+      });
+    });
+
+    test('a value this release does not have falls back instead of failing', async () => {
+      const app = createApp(backing.make());
+      const cookie = await register(app, 'ada@example.com');
+
+      const saved = await send(app, '/api/profiles/me/preferences', cookie, 'PATCH', {
+        theme: 'neon-1998',
+        defaultChatFormat: 'epic',
+      });
+
+      expect(saved.status).toBe(200);
+      expect(((await saved.json()) as { preferences: { theme: string } }).preferences.theme).toBe(
+        'default',
+      );
+    });
+
+    test('settings survive the round trip, because they belong to the person', async () => {
+      const app = createApp(backing.make());
+      const cookie = await register(app, 'ada@example.com');
+      await send(app, '/api/profiles/me/preferences', cookie, 'PATCH', { theme: 'zen' });
+
+      const read = await send(app, '/api/profiles/me/preferences', cookie);
+      expect(((await read.json()) as { preferences: { theme: string } }).preferences.theme).toBe(
+        'zen',
+      );
+    });
+
+    test('one person cannot read or write another person\'s settings', async () => {
+      const app = createApp(backing.make());
+      const ada = await register(app, 'ada@example.com');
+      await send(app, '/api/profiles/me/preferences', ada, 'PATCH', { theme: 'retro' });
+
+      const bob = await register(app, 'bob@example.com');
+      const theirs = await send(app, '/api/profiles/me/preferences', bob);
+      expect(((await theirs.json()) as { preferences: { theme: string } }).preferences.theme).toBe(
+        'default',
+      );
+    });
+
+    test('a signed-out visitor has no settings to read', async () => {
+      const app = createApp(backing.make());
+      const refused = await app.request('/api/profiles/me/preferences');
+      expect(refused.status).toBe(401);
     });
   });
 

@@ -30,6 +30,8 @@ import type {
   StoredSession,
 } from './store.ts';
 import { readStoredTags, tagsJson } from './reflections/tags.ts';
+import { hashSessionToken } from './mysql/tokens.ts';
+import type { RevokedSession, StoredSessionSummary } from './auth/store.ts';
 
 /** How long a session lasts before it must be established again. */
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -184,6 +186,8 @@ function migrate(db: DatabaseSync): void {
      * have a session that outlives nothing.
      */
     CREATE TABLE IF NOT EXISTS sessions (
+      /* SHA-256 of the cookie value. Legacy rows may still hold the raw token;
+       * SessionTable.get looks up the hash first, then the presented value. */
       token TEXT PRIMARY KEY,
       userId TEXT NOT NULL,
       installationId TEXT,
@@ -1098,11 +1102,16 @@ class SessionTable {
    * revived by a clock change or a missed cron.
    */
   get(token: string): StoredSession | undefined {
-    const row = this.db
-      .prepare(
-        'SELECT token, userId, installationId, sessionType, expiresAt, revokedAt FROM sessions WHERE token = ?',
-      )
-      .get(token) as Row | undefined;
+    const hashed = hashSessionToken(token);
+    const lookup = this.db.prepare(
+      'SELECT token, userId, installationId, sessionType, expiresAt, revokedAt FROM sessions WHERE token = ?',
+    );
+    /*
+     * Hash first. A row whose primary key is still the cookie value is a
+     * session issued before hashing: look it up as a fallback until every
+     * such cookie has expired (SESSION_TTL_MS after this change shipped).
+     */
+    const row = (lookup.get(hashed) ?? lookup.get(token)) as Row | undefined;
     if (!row) return undefined;
     /* Revoked is not expired: the row stays, and it answers nobody. */
     if (row['revokedAt']) return undefined;
@@ -1112,15 +1121,101 @@ class SessionTable {
       return undefined;
     }
     return {
-      token: String(row['token']),
+      token,
       userId: String(row['userId']),
       installationId: row['installationId'] == null ? null : String(row['installationId']),
       sessionType: String(row['sessionType']),
     };
   }
 
+  /**
+   * The sessions this account currently has, for the person who owns them.
+   *
+   * The identifier handed out is the stored key, which is a SHA-256 of the
+   * cookie value. That is deliberately not a credential: authenticating still
+   * requires the pre-image, which never leaves the browser that holds it. So
+   * this can name a session in a list, and revoke one, without a page ever
+   * touching a token that could be used to sign in.
+   *
+   * Coarse device facts only — the platform, browser and OS family recorded
+   * when the device was first seen. Enough to answer "which of these is my
+   * phone", and nothing that identifies a device beyond this account.
+   */
+  listForUser(userId: string): StoredSessionSummary[] {
+    const rows = this.db
+      .prepare(
+        `SELECT s.token, s.sessionType, s.createdAt, s.lastSeenAt, s.expiresAt,
+                i.platform, i.deviceClass, i.browserFamily, i.osFamily
+           FROM sessions s
+           LEFT JOIN account_installations i ON i.installationId = s.installationId
+          WHERE s.userId = ? AND s.revokedAt IS NULL AND s.expiresAt > ?
+          ORDER BY s.lastSeenAt DESC, s.createdAt DESC`,
+      )
+      .all(userId, Date.now()) as Row[];
+
+    return rows.map((row) => ({
+      id: String(row['token']),
+      sessionType: String(row['sessionType']),
+      createdAt: row['createdAt'] == null ? null : String(row['createdAt']),
+      lastSeenAt: row['lastSeenAt'] == null ? null : String(row['lastSeenAt']),
+      expiresAt: Number(row['expiresAt']),
+      platform: row['platform'] == null ? null : String(row['platform']),
+      deviceClass: row['deviceClass'] == null ? null : String(row['deviceClass']),
+      browserFamily: row['browserFamily'] == null ? null : String(row['browserFamily']),
+      osFamily: row['osFamily'] == null ? null : String(row['osFamily']),
+    }));
+  }
+
+  /**
+   * Revoke one session of this account.
+   *
+   * Scoped by user id in the WHERE clause rather than checked afterwards, so
+   * an id belonging to somebody else matches nothing instead of matching and
+   * then being refused.
+   */
+  revokeById(userId: string, id: string): RevokedSession | null {
+    const row = this.db
+      .prepare(
+        `SELECT installationId, sessionType FROM sessions
+          WHERE token = ? AND userId = ? AND revokedAt IS NULL`,
+      )
+      .get(id, userId) as Row | undefined;
+    if (!row) return null;
+
+    this.db
+      .prepare('UPDATE sessions SET revokedAt = ? WHERE token = ? AND userId = ?')
+      .run(new Date().toISOString(), id, userId);
+
+    return {
+      installationId: row['installationId'] == null ? null : String(row['installationId']),
+      sessionType: String(row['sessionType']),
+    };
+  }
+
+  /** Everything except the session making the request. "Sign out everywhere else". */
+  revokeOthersForUser(userId: string, exceptToken: string): RevokedSession[] {
+    const keep = hashSessionToken(exceptToken);
+    const rows = this.db
+      .prepare(
+        `SELECT installationId, sessionType FROM sessions
+          WHERE userId = ? AND token <> ? AND revokedAt IS NULL`,
+      )
+      .all(userId, keep) as Row[];
+
+    this.db
+      .prepare('UPDATE sessions SET revokedAt = ? WHERE userId = ? AND token <> ? AND revokedAt IS NULL')
+      .run(new Date().toISOString(), userId, keep);
+
+    return rows.map((row) => ({
+      installationId: row['installationId'] == null ? null : String(row['installationId']),
+      sessionType: String(row['sessionType']),
+    }));
+  }
+
+
   set(token: string, session: StoredSession): this {
     const now = new Date().toISOString();
+    const hashed = hashSessionToken(token);
     this.db
       .prepare(
         `INSERT INTO sessions (token, userId, installationId, sessionType, createdAt, lastSeenAt, expiresAt)
@@ -1129,7 +1224,7 @@ class SessionTable {
                                           lastSeenAt = excluded.lastSeenAt`,
       )
       .run(
-        token,
+        hashed,
         session.userId,
         session.installationId ?? null,
         session.sessionType ?? 'REGISTERED_TEMPORARY',
@@ -1148,9 +1243,15 @@ class SessionTable {
    * never existed.
    */
   revoke(token: string): void {
+    const at = new Date().toISOString();
+    const hashed = hashSessionToken(token);
     this.db
       .prepare('UPDATE sessions SET revokedAt = ? WHERE token = ? AND revokedAt IS NULL')
-      .run(new Date().toISOString(), token);
+      .run(at, hashed);
+    /* Legacy rows stored the cookie itself. */
+    this.db
+      .prepare('UPDATE sessions SET revokedAt = ? WHERE token = ? AND revokedAt IS NULL')
+      .run(at, token);
   }
 
   /** Everything this account has open: used when an account is retired. */
@@ -1168,7 +1269,10 @@ class SessionTable {
   }
 
   delete(token: string): boolean {
-    return this.db.prepare('DELETE FROM sessions WHERE token = ?').run(token).changes > 0;
+    const hashed = hashSessionToken(token);
+    const byHash = this.db.prepare('DELETE FROM sessions WHERE token = ?').run(hashed).changes > 0;
+    const byRaw = this.db.prepare('DELETE FROM sessions WHERE token = ?').run(token).changes > 0;
+    return byHash || byRaw;
   }
 }
 
@@ -1291,40 +1395,6 @@ class MessageTable {
         message.draftText ?? null,
         message.draftSection ?? null,
       );
-    return this;
-  }
-
-  set(conversationId: string, messages: StoredMessage[]): this {
-    const insert = this.db.prepare(
-      `INSERT INTO messages
-         (id, conversationId, position, role, content, originalContent, authorOrigin, createdAt,
-          draftText, draftSection)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    );
-    this.db.exec('BEGIN');
-    try {
-      this.db
-        .prepare('DELETE FROM messages WHERE conversationId = ?')
-        .run(conversationId);
-      messages.forEach((message, position) => {
-        insert.run(
-          message.id,
-          conversationId,
-          position,
-          message.role,
-          message.content,
-          message.originalContent,
-          message.authorOrigin,
-          message.createdAt,
-          message.draftText ?? null,
-          message.draftSection ?? null,
-        );
-      });
-      this.db.exec('COMMIT');
-    } catch (error) {
-      this.db.exec('ROLLBACK');
-      throw error;
-    }
     return this;
   }
 

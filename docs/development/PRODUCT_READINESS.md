@@ -24,8 +24,8 @@ Create section below was rewritten for that work; the original 2026-08-16
 
 A further follow-through the same day restored Community to the primary
 navigation because a shared entry can now be opened: audiences,
-membership, `GET /api/shares`, a gallery of cards, and
-`/community/shares/:id`. The **Community** section below still describes
+membership, `GET /api/publications`, a gallery of cards, and
+`/community/publications/:id`. The **Community** section below still describes
 the 2026-08-16 listing; treat that verdict as historical.
 
 The rest of this document is still the 2026-08-16 browser tour.
@@ -256,8 +256,9 @@ trusting a line item below.
   not implemented.
 - **Blocker — no author is named.** Shared entries show a title and a
   reference. Whose reflection it is — the single thing that makes a community
-  feed mean anything — is not shown, and `GET /api/community` does not return
-  it.
+  feed mean anything — is not shown. (That verdict is historical: it described
+  the deleted `GET /api/community` listing. The live feed is
+  `GET /api/publications`, which names the author.)
 - **Important — the rows are leftover test fixtures.** Five identical *"Be
   still and know / Psalm 46:10"* entries (`out/tour-community-1280.png`), left
   in the development database by `scripts/verify/reflections.mjs`. They are

@@ -64,7 +64,7 @@ Only explicit publishing makes an entry visible to the platform community.
 Conversational Scripture study, reflection, AI assistance, and structured C/H/A/T views.
 
 ### Reflections
-Persistent conversation history, Scripture references, tags, collections, search, and personal testimony history. (Named Library once; `GET /api/library` is now only an alias of `GET /api/reflections`.)
+Persistent conversation history, Scripture references, tags, collections, search, and personal testimony history. (Named Library once; the API is `GET /api/reflections`.)
 
 ### Community
 Discovery of only those C.H.A.T.s that users explicitly publish, either publicly or into one community they belong to. Encouraged and private Save are in V1. Comment threads, following, and ranking are not.

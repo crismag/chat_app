@@ -14,11 +14,12 @@
  * publication count, no saved items, no reactions, no communities. Fields
  * cannot leak from a shape that never held them, and the shape is built here.
  *
- * `GET /:handle` requires a session for the same reason `GET /api/community`
- * does — this deployment has no anonymous surface yet — and because Report and
- * Block need to know who is asking.
+ * `GET /:handle` requires a session — a guest one counts — because this
+ * deployment has no anonymous surface yet, and because Report and Block need
+ * to know who is asking.
  */
 
+import { normalisePreferences } from '@chat/shared';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import {
@@ -60,7 +61,20 @@ const REPORT_DETAIL_LIMIT = 500;
 export type ProfileUser = { id: string; email: string };
 
 export type ProfileRouteOptions = {
+  /** A registered account. Everything that writes, and everything private. */
   currentUser: (c: Context) => Promise<ProfileUser | null>;
+  /**
+   * Whoever is reading, including a guest and including nobody.
+   *
+   * A public profile is public content, and the rule in this product is that
+   * a guest may read public content. Requiring a *registered* account to view
+   * one made a profile link from a community page a dead end for exactly the
+   * people most likely to follow it.
+   *
+   * "Including nobody" still means refused: see the handler. A guest has a
+   * session and is inside the product; an anonymous request is not.
+   */
+  currentViewer?: (c: Context) => Promise<{ id: string } | null>;
   profiles: ProfileStore;
 };
 
@@ -178,7 +192,11 @@ function sniffImageType(bytes: Uint8Array): AvatarContentType | null {
   return null;
 }
 
-export function createProfileRoutes({ currentUser, profiles }: ProfileRouteOptions) {
+export function createProfileRoutes({
+  currentUser,
+  currentViewer,
+  profiles,
+}: ProfileRouteOptions) {
   const app = new Hono();
 
   const requireUser = (c: Context) => currentUser(c);
@@ -307,6 +325,66 @@ export function createProfileRoutes({ currentUser, profiles }: ProfileRouteOptio
    * The response is deliberately the profile view rather than a bare ok, so the
    * page gets the new URL — stamp and all — from the same round trip.
    */
+  /*
+   * Settings.
+   *
+   * A PATCH that merges: the page sends the one thing that changed, and
+   * anything absent keeps its stored value. `normalisePreferences` is given
+   * the stored preferences as its base, so an unknown or withdrawn value
+   * falls back rather than making a person's settings page unloadable.
+   */
+  /*
+   * Is this handle free?
+   *
+   * A handle is the address of a public profile, so this discloses nothing
+   * that visiting /profile/<handle> would not. It still requires a signed-in
+   * account: only somebody editing a profile has any use for it, and leaving
+   * it open would make it a convenient way to enumerate handles in bulk.
+   *
+   * The answer deliberately carries the same message the PATCH would give, so
+   * a person cannot be told "available" here and refused a moment later by
+   * different wording.
+   */
+  app.get('/me/handle-available', async (c) => {
+    const user = await requireUser(c);
+    if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
+
+    const handle = normaliseHandle(c.req.query('handle') ?? '');
+    const problem = handleProblem(handle);
+    if (problem) return c.json({ handle, available: false, problem });
+
+    /*
+     * Their own current handle is available *to them*, so re-saving a profile
+     * without changing the handle is not reported as a collision.
+     */
+    if (profiles.handleTaken(handle, user.id)) {
+      return c.json({
+        handle,
+        available: false,
+        problem: `The handle @${handle} is already taken. Please choose another.`,
+      });
+    }
+    return c.json({ handle, available: true, problem: null });
+  });
+
+  app.get('/me/preferences', async (c) => {
+    const user = await requireUser(c);
+    if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
+    ensureProfile(profiles, user);
+    return c.json({ preferences: profiles.preferences(user.id) });
+  });
+
+  app.patch('/me/preferences', async (c) => {
+    const user = await requireUser(c);
+    if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
+    ensureProfile(profiles, user);
+
+    const body = await c.req.json<unknown>().catch(() => ({}));
+    const next = normalisePreferences(body, profiles.preferences(user.id));
+    profiles.savePreferences(user.id, next, nowIso());
+    return c.json({ preferences: next });
+  });
+
   app.put('/me/avatar', async (c) => {
     const user = await requireUser(c);
     if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
@@ -366,20 +444,33 @@ export function createProfileRoutes({ currentUser, profiles }: ProfileRouteOptio
   });
 
   app.get('/:handle', async (c) => {
-    const user = await requireUser(c);
-    if (!user) return c.json({ error: 'Unauthenticated.' }, 401);
+    /*
+     * Anybody may read this — a guest, or somebody not signed in at all. The
+     * viewer's identity is used for two things only: deciding whether this is
+     * their own profile, and honouring a block they have made. Neither
+     * question has an answer for a visitor with no account, and both default
+     * to the safe one.
+     */
+    const viewer = currentViewer ? await currentViewer(c) : await requireUser(c);
+    /*
+     * A session is still required — a guest session counts, an absent one does
+     * not. Profiles are readable inside the product, not by anything that can
+     * make an HTTP request, which is what keeps a directory of names and
+     * handles from being trivially enumerable from outside.
+     */
+    if (!viewer) return c.json({ error: 'Unauthenticated.' }, 401);
 
     const subject = subjectOf(c);
     if (!subject) return c.json({ error: 'No profile with that handle.' }, 404);
 
-    const isOwner = subject.userId === user.id;
+    const isOwner = subject.userId === viewer.id;
 
     /*
      * A blocked person's work is not fetched, not counted and not described.
      * The response says only that the viewer blocked them, which is the one
      * fact the viewer needs to undo it.
      */
-    if (!isOwner && profiles.isBlocked(user.id, subject.userId)) {
+    if (!isOwner && profiles.isBlocked(viewer.id, subject.userId)) {
       return c.json({
         handle: subject.handle,
         displayName: subject.displayName,

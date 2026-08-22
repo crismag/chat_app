@@ -88,6 +88,30 @@ describe('asking for a link', () => {
     expect(asked.status).toBe(200);
     expect(outbox.sent).toHaveLength(0);
   });
+
+  test('a forged Origin header does not become the reset link', async () => {
+    const previous = process.env.CHAT_PUBLIC_WEB_ORIGIN;
+    process.env.CHAT_PUBLIC_WEB_ORIGIN = 'https://reflections.example';
+    try {
+      await register('phished@example.com');
+      await app.request('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: 'https://evil.example',
+        },
+        body: JSON.stringify({ email: 'phished@example.com' }),
+      });
+      const message = outbox.sent[0]!;
+      expect(message.text).toContain('https://reflections.example/reset-password?token=');
+      expect(message.text).not.toContain('evil.example');
+      expect(message.html).toContain('href="https://reflections.example/reset-password?token=');
+      expect(message.html).not.toContain('evil.example');
+    } finally {
+      if (previous === undefined) delete process.env.CHAT_PUBLIC_WEB_ORIGIN;
+      else process.env.CHAT_PUBLIC_WEB_ORIGIN = previous;
+    }
+  });
 });
 
 describe('using the link', () => {

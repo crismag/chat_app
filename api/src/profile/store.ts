@@ -26,7 +26,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
-import { CHAT_FORMATS } from '@chat/shared';
+import { CHAT_FORMATS, type Preferences, normalisePreferences } from '@chat/shared';
 import type { StoredConversation, StoredSection } from '../store.ts';
 import { normaliseHandle } from './limits.ts';
 
@@ -100,6 +100,8 @@ export interface ProfileStore {
   /** True when some *other* account already holds this handle. */
   handleTaken(handle: string, exceptUserId: string): boolean;
   save(profile: StoredProfile): void;
+  preferences(userId: string): Preferences;
+  savePreferences(userId: string, preferences: Preferences, at: string): void;
   avatar(userId: string): StoredAvatar | null;
   setAvatar(userId: string, bytes: Uint8Array, contentType: AvatarContentType, at: string): void;
   clearAvatar(userId: string): void;
@@ -188,6 +190,19 @@ function migrate(db: DatabaseSync): void {
       userId TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       bytes BLOB NOT NULL,
       contentType TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+
+    /*
+     * One row per person, holding a JSON document rather than a column per
+     * preference. Preferences are a list that grows, every one of them is
+     * optional and cosmetic, and normalisePreferences already treats any
+     * missing or unknown field as a default — so a new preference is a shared
+     * constant rather than a migration on a live table.
+     */
+    CREATE TABLE IF NOT EXISTS profile_preferences (
+      userId TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      preferencesJson TEXT NOT NULL,
       updatedAt TEXT NOT NULL
     );
 
@@ -292,6 +307,32 @@ class SqliteProfileStore implements ProfileStore {
         profile.createdAt,
         profile.updatedAt,
       );
+  }
+
+
+  preferences(userId: string): Preferences {
+    const row = this.db
+      .prepare('SELECT preferencesJson FROM profile_preferences WHERE userId = ?')
+      .get(userId) as Row | undefined;
+    if (!row) return normalisePreferences(undefined);
+    try {
+      return normalisePreferences(JSON.parse(String(row['preferencesJson'])));
+    } catch {
+      /* A malformed row is somebody with default settings, never a 500. */
+      return normalisePreferences(undefined);
+    }
+  }
+
+  savePreferences(userId: string, preferences: Preferences, at: string): void {
+    this.db
+      .prepare(
+        `INSERT INTO profile_preferences (userId, preferencesJson, updatedAt)
+         VALUES (?, ?, ?)
+         ON CONFLICT(userId) DO UPDATE SET
+           preferencesJson = excluded.preferencesJson,
+           updatedAt = excluded.updatedAt`,
+      )
+      .run(userId, JSON.stringify(preferences), at);
   }
 
   avatar(userId: string): StoredAvatar | null {
@@ -459,6 +500,7 @@ class MemoryProfileStore implements ProfileStore {
   private readonly reports: ProfileReport[] = [];
   private readonly blocks = new Set<string>();
   private readonly avatars = new Map<string, StoredAvatar>();
+  private readonly prefs = new Map<string, Preferences>();
   private readonly source: ConversationSource;
 
   constructor(source: ConversationSource) {
@@ -494,6 +536,15 @@ class MemoryProfileStore implements ProfileStore {
 
   save(profile: StoredProfile): void {
     this.profiles.set(profile.userId, { ...profile });
+  }
+
+
+  preferences(userId: string): Preferences {
+    return normalisePreferences(this.prefs.get(userId));
+  }
+
+  savePreferences(userId: string, preferences: Preferences): void {
+    this.prefs.set(userId, { ...preferences });
   }
 
   avatar(userId: string): StoredAvatar | null {

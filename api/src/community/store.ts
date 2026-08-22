@@ -1326,6 +1326,31 @@ export class CommunityStore {
     return rows.map((row) => this.hydrate(viewerUserId, row));
   }
 
+  /**
+   * What this person has encouraged, most recent first.
+   *
+   * Ordered by when the publication was written rather than when it was
+   * encouraged, matching every other feed here. `VISIBLE_TO` still applies:
+   * encouraging something does not grant standing access to it, so a
+   * publication withdrawn or moved out of reach drops out of this list too.
+   *
+   * The viewer is always the person themselves — there is no query here that
+   * produces somebody else's encouragements, and deliberately so. A list of
+   * what a named person approved of is a profile of them.
+   */
+  encouragedFeed(viewerUserId: string): PublicationView[] {
+    const rows = this.db
+      .prepare(
+        `${SELECT_PUBLICATION}
+          WHERE ${VISIBLE_TO}
+            AND EXISTS (SELECT 1 FROM publication_reactions AS er
+                         WHERE er.publicationId = p.id AND er.userId = $viewer)
+          ORDER BY p.createdAt DESC LIMIT 100`,
+      )
+      .all({ viewer: viewerUserId }) as Row[];
+    return rows.map((row) => this.hydrate(viewerUserId, row));
+  }
+
   /* -------------------------------------------------------- moderation */
 
   /** Raw row access for the routes' authorisation decisions. Never served. */

@@ -177,6 +177,7 @@ export * from './ai.ts';
 export * from './bible.ts';
 export * from './community.ts';
 export * from './distribution.ts';
+export * from './preferences.ts';
 
 /*
  * Guest and registered, and the words for them.

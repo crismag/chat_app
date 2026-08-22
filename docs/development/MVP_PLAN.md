@@ -104,9 +104,9 @@ A natural conversation can be transformed into a useful C.H.A.T. entry without f
 
 ## Phase 4 — Reflections and search
 
-The area is called **Reflections**, not Library. `GET /api/library` survives
-only as an alias of `GET /api/reflections`, and `/library` in the web app
-redirects.
+The area is called **Reflections**, not Library. The API is
+`GET /api/reflections`; the old `GET /api/library` alias has been deleted, and
+`/library` in the web app still redirects so existing bookmarks keep working.
 
 Status: **done.** The list, its filters (`all` / `drafts` / `completed` /
 `shared`), its sorts (`recent` / `title`) and a text query are built and
@@ -202,13 +202,13 @@ Authorisation is a single SQL visibility predicate applied before retrieval,
 not a filter after the list is loaded.
 
 The Community page is a reading feed (Shared, Public, Communities) with
-openable share cards and a dedicated `/community/shares/:id`
+openable share cards and a dedicated `/community/publications/:id`
 address. Possessing that URL grants nothing: a member reads it; someone who
 has left the community gets the same 404 as a missing record. Encouraged and
 private Save exist; comment threads, following, and ranking do not.
 
-`GET /api/community` remains as a shared-conversation listing for older
-callers. The live feed is `GET /api/shares`.
+The live feed is `GET /api/publications`. `GET /api/community`, a legacy
+shared-conversation listing, has been deleted.
 
 Deliverables:
 

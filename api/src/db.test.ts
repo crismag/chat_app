@@ -6,6 +6,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { createApp } from './app.ts';
 import { SESSION_TTL_MS, SqliteStore } from './db.ts';
 import { cookieHeader } from './http/set-cookie.ts';
+import { hashSessionToken } from './mysql/tokens.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'chat-db-'));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -151,17 +152,34 @@ describe('SQLite store', () => {
     const { id: userId } = store.accounts.byEmail('expiry@example.com')!;
     store.sessions.set('token-1', { token: 'token-1', userId });
     expect(store.sessions.get('token-1')).toBeTruthy();
+    expect(
+      store.db.prepare('SELECT token FROM sessions WHERE userId = ?').get(userId) as { token: string },
+    ).toEqual({ token: hashSessionToken('token-1') });
 
     // Age it past the window rather than waiting thirty days.
     store.db
       .prepare('UPDATE sessions SET expiresAt = ? WHERE token = ?')
-      .run(Date.now() - SESSION_TTL_MS, 'token-1');
+      .run(Date.now() - SESSION_TTL_MS, hashSessionToken('token-1'));
 
     expect(store.sessions.get('token-1')).toBeUndefined();
     const remaining = store.db
       .prepare('SELECT COUNT(*) AS n FROM sessions WHERE token = ?')
-      .get('token-1') as { n: number };
+      .get(hashSessionToken('token-1')) as { n: number };
     expect(remaining.n).toBe(0);
+    store.close();
+  });
+
+  it('still authenticates a session stored as the raw cookie, until those rows expire', () => {
+    const store = new SqliteStore();
+    store.accounts.createRegistered('legacy-session@example.com', 'x');
+    const { id: userId } = store.accounts.byEmail('legacy-session@example.com')!;
+    store.db
+      .prepare(
+        `INSERT INTO sessions (token, userId, sessionType, expiresAt)
+         VALUES (?, ?, 'REGISTERED_TEMPORARY', ?)`,
+      )
+      .run('raw-legacy-token', userId, Date.now() + SESSION_TTL_MS);
+    expect(store.sessions.get('raw-legacy-token')?.userId).toBe(userId);
     store.close();
   });
 });
