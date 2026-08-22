@@ -52,6 +52,7 @@ import {
   COMMUNITY_ROLES,
   MEMBERSHIP_STATES,
   MODERATION_STATES,
+  AUDIENCES,
   REPORT_STATES,
   canModerate,
   readCommunityRole,
@@ -883,28 +884,6 @@ export class CommunityStore {
   /* ------------------------------------------------------ share history */
 
   /** Written on every successful share. Never removed. */
-  recordShare(input: {
-    userId: string;
-    conversationId: string;
-    audience: string;
-    communityId: string | null;
-    at?: number;
-  }): void {
-    this.db
-      .prepare(
-        `INSERT INTO share_events (id, userId, conversationId, audience, communityId, createdAt)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        randomUUID(),
-        input.userId,
-        input.conversationId,
-        input.audience,
-        input.communityId,
-        input.at ?? Date.now(),
-      );
-  }
-
   /**
    * Everything the sharing ceilings need, in one read.
    *
@@ -1145,6 +1124,34 @@ export class CommunityStore {
       );
       for (const hashtag of input.hashtags) {
         insertTag.run(id, hashtag.tag, hashtag.label);
+      }
+
+      /*
+       * The share event is written here, not by the caller afterwards.
+       *
+       * It is what the sharing ceilings are counted from, so a crash between
+       * the publication row and this one would leave a share that exists and
+       * cost the author nothing. Inside the same BEGIN, either both rows are
+       * there or neither is.
+       *
+       * Only Me is not a share. It reaches nobody, so it is not metered, and
+       * the audience is the thing that decides that -- which is why the
+       * decision lives with the insert rather than at the call site.
+       */
+      if (input.audience !== AUDIENCES.ONLY_ME) {
+        this.db
+          .prepare(
+            `INSERT INTO share_events (id, userId, conversationId, audience, communityId, createdAt)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            randomUUID(),
+            input.authorUserId,
+            input.conversationId,
+            input.audience,
+            input.communityId,
+            Date.now(),
+          );
       }
 
       this.db.exec('COMMIT');

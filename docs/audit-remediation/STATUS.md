@@ -40,7 +40,7 @@ A CodeReviewerAssist pass on 2026-08-22, plus three specialized lens reviews, ad
 - [ ] B3 Merge all SQLite owner-scoped tables
 - [ ] Dual-store merge test (MysqlAuthStore + SqliteStore)
 - [x] B4 Closed by evidence — `ChatPage.test.tsx` “the Send button path keeps a title typed during creation” passes; the free-typed Scripture field is retired (Bible selector), and `scripts/verify/reference-race.mjs` already targets the title. No code change.
-- [ ] B5 `share_events` inside the publish transaction
+- [x] B5 `share_events` inside the publish transaction — written by `publish()` in the same `BEGIN`; `share-atomicity.test.ts`
 - [ ] B6 Conversation delete in one SQLite transaction
 
 ## P3
