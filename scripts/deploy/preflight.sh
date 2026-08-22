@@ -57,6 +57,6 @@ warn "the API is mounted by the host's Node application manager, not by these"
 echo "        scripts and not by .htaccess — a [P] rewrite answers 503 here."
 echo "        Create it once in hPanel (see README), then after every deploy:"
 echo "          restart the application there, and"
-echo "          curl -sS ${DEPLOY_URL}/api/health"
+echo "          curl -sS ${DEPLOY_API_URL}/api/health/ready"
 
 exit "${fail}"
