@@ -86,4 +86,4 @@ A CodeReviewerAssist pass on 2026-08-22, plus three specialized lens reviews, ad
 - [ ] O2 PHP gateway timeout
 - [x] M1 Request IDs on generic HTTP — one middleware, echoed on every response, a client's own id honoured after being made safe to log; `api/src/http/request-id.test.ts`
 - [x] M2 `app.onError` JSON `{ error }` — uncaught throws answer JSON with the request id; the driver's message goes to the log and never to a browser
-- [ ] S11 Studio image generate rate limit
+- [x] S11 Studio image generate rate limit — 6/minute per account and 24/minute per address, 429 + `Retry-After`, using the existing sliding window; `image-routes.test.ts`

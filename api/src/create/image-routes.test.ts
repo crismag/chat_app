@@ -144,3 +144,70 @@ describe('Studio generated-image host routes', () => {
     }
   })
 })
+
+describe('Studio generation is metered', () => {
+  /*
+   * Every generate costs money once a real model is wired, and nothing
+   * upstream limited it: auth, ownership, a kill switch, then the provider.
+   * A held-down button was a bill.
+   */
+  test('a burst is refused with Retry-After, and the honest first call is not', async () => {
+    const app = createApp(new SqliteStore(), {}, { provider: new DeterministicStudioImageProvider() })
+    const cookie = await register(app, 'burst@example.com')
+    const reflection = await createReflection(app, cookie)
+    const path = `/api/studio-assets/${reflection.id}/generate`
+
+    const generate = () =>
+      app.request(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: cookie },
+        body: JSON.stringify(generationBody()),
+      })
+
+    const statuses: number[] = []
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      statuses.push((await generate()).status)
+    }
+
+    /* The first ones work. Somebody trying a few backgrounds is not abuse. */
+    expect(statuses[0]).toBe(200)
+    expect(statuses.filter((status) => status === 200).length).toBeGreaterThanOrEqual(6)
+    expect(statuses.at(-1)).toBe(429)
+
+    const refused = await generate()
+    expect(refused.status).toBe(429)
+    expect(Number(refused.headers.get('Retry-After'))).toBeGreaterThan(0)
+    const body = (await refused.json()) as { error: string; retryAfterSeconds: number }
+    /* Said as a wait, not as a failure: it ends, and the person can be told when. */
+    expect(body.error).toMatch(/wait a moment/i)
+    expect(body.retryAfterSeconds).toBeGreaterThan(0)
+  })
+
+  test('one person exhausting their allowance does not spend anybody else\'s', async () => {
+    const app = createApp(new SqliteStore(), {}, { provider: new DeterministicStudioImageProvider() })
+    const heavy = await register(app, 'heavy@example.com')
+    const quiet = await register(app, 'quiet@example.com')
+    const theirs = await createReflection(app, heavy)
+    const mine = await createReflection(app, quiet)
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      await app.request(`/api/studio-assets/${theirs.id}/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: heavy },
+        body: JSON.stringify(generationBody()),
+      })
+    }
+
+    /*
+     * The account ceiling is the one that bit. The address ceiling is looser
+     * on purpose, so a household or an office behind one address is not
+     * squeezed by whoever generated first.
+     */
+    const other = await app.request(`/api/studio-assets/${mine.id}/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: quiet },
+      body: JSON.stringify(generationBody()),
+    })
+    expect(other.status).toBe(200)
+  })
+})
