@@ -90,6 +90,22 @@ test('a verified Google token makes a registered account', async () => {
   expect(profile.status).toBe(200);
 });
 
+test('the reply says the address is verified, not only the next request', async () => {
+  const result = await signInWithGoogle('token-ada');
+
+  /*
+   * The browser keeps this reply as "who I am". When it lagged a write that
+   * had already happened, somebody whose address Google had just vouched for
+   * was shown as unverified until they reloaded — and, since publishing asks
+   * for a confirmed address, told to go and confirm one they had proved.
+   */
+  expect(result.body['emailVerified']).toBe(true);
+
+  const me = await app.request('/api/auth/me', { headers: { Cookie: result.cookie } });
+  /* The two must agree at the moment of signing in, not eventually. */
+  expect(await me.json()).toMatchObject({ emailVerified: true });
+});
+
 test('signing in again reaches the same account rather than making a second', async () => {
   const first = await signInWithGoogle('token-ada');
   const second = await signInWithGoogle('token-ada');

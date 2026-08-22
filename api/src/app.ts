@@ -1116,6 +1116,18 @@ export function createApp(
 
       if (identity.emailVerified) {
         await auth.markEmailVerified(user.id);
+        /*
+         * Read back, because `user` was fetched before that write.
+         *
+         * The reply is what the browser keeps as "who I am", so a stale copy
+         * here means somebody whose address Google has just vouched for is
+         * shown as unverified until they reload — and, now that publishing
+         * asks for a confirmed address, told to go and confirm one they have
+         * already proved. The next request said the right thing all along,
+         * which is exactly what makes this the kind of bug nobody reports
+         * precisely.
+         */
+        user = (await auth.findByIdentity('google', identity.subject)) ?? user;
       }
 
       const keepSignedIn = body.keepSignedIn === true;
