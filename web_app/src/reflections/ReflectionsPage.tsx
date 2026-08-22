@@ -28,7 +28,7 @@ import {
   type ConversationSummary,
   previewFor,
 } from '@chat/shared'
-import { api } from '../shared/api/client.ts'
+import { fetchReflection, fetchReflectionPage } from './api.ts'
 import {
   ChatProgress,
   ReflectionCard,
@@ -771,7 +771,7 @@ export function ReflectionsPage() {
     })
     if (from) request.set('from', from)
     if (to) request.set('to', to)
-    api<unknown>(`/reflections?${request.toString()}`)
+    fetchReflectionPage<unknown>(request)
       .then((body) => {
         if (!live) return
         const payload = readPayload(body)
@@ -821,7 +821,7 @@ export function ReflectionsPage() {
     }
     const grace = setTimeout(() => setSettled(true), FIRST_PASS_GRACE)
     void Promise.allSettled(
-      wanted.map((item) => api<ReflectionDetail>(`/conversations/${item.id}`)),
+      wanted.map((item) => fetchReflection<ReflectionDetail>(item.id)),
     ).then((results) => {
       if (!live) return
       setSettled(true)

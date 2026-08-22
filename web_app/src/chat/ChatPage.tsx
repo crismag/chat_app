@@ -77,6 +77,17 @@ import type {
   Summary,
 } from './types.ts'
 import { fetchCommunities } from '../community/api.ts'
+import {
+  addMessage,
+  createReflection,
+  deleteReflection,
+  fetchReflection,
+  fetchReflections,
+  makeReflectionPrivate,
+  saveSection,
+  shareReflection,
+  updateReflection,
+} from '../reflections/api.ts'
 import { ActionMenu, type ActionItem } from '../shared/ui/ActionMenu.tsx'
 import { AddToSectionSheet } from './ChatSheets.tsx'
 import styles from './ChatPage.module.css'
@@ -320,7 +331,7 @@ export function ChatPage() {
   const hasUnsaved = dirtyFields.size > 0
 
   const refreshList = useCallback(async () => {
-    setConversations(await api<Summary[]>('/conversations'))
+    setConversations(await fetchReflections())
   }, [])
 
   /**
@@ -344,7 +355,7 @@ export function ChatPage() {
   const openConversation = useCallback(
     async (id: string, options: { continuing?: boolean } = {}) => {
       const generation = viewGeneration.current
-      const next = await api<ConversationDetail>(`/conversations/${id}`)
+      const next = await fetchReflection<ConversationDetail>(id)
       if (viewGeneration.current !== generation) return next
       const switching = openedRef.current !== id && !options.continuing
       openedRef.current = id
@@ -379,15 +390,12 @@ export function ChatPage() {
       if (activeId) return activeId
       if (creatingRef.current) return creatingRef.current
       const work = (async () => {
-        const conversation = await api<Summary>('/conversations', {
-          method: 'POST',
-          body: JSON.stringify({
+        const conversation = await createReflection<Summary>({
             title: seed.title?.trim() || titleDraft?.trim() || 'New reflection',
             ...(seed.scriptureReference?.trim()
               ? { scriptureReference: seed.scriptureReference.trim() }
               : {}),
-          }),
-        })
+          })
         await openConversation(conversation.id, { continuing: true })
         await refreshList()
         return conversation.id
@@ -562,12 +570,9 @@ export function ChatPage() {
           (storedOrigin(field as FieldType) === AUTHOR_ORIGINS.USER
             ? AUTHOR_ORIGINS.USER
             : AUTHOR_ORIGINS.AI_ASSISTED)
-        await api(`/conversations/${id}/sections`, {
-          method: 'PATCH',
-          body: JSON.stringify({ type: field, content: value, authorOrigin: origin }),
-        })
+        await saveSection(id, { type: field, content: value, authorOrigin: origin })
       }
-      const next = await api<ConversationDetail>(`/conversations/${id}`)
+      const next = await fetchReflection<ConversationDetail>(id)
       if (viewGeneration.current !== generation) return true
       setDetail(next)
       /* Only what was actually written is forgotten; later keystrokes stay. */
@@ -643,8 +648,8 @@ export function ChatPage() {
     const generation = viewGeneration.current
     setSaveState({ status: 'saving' })
     try {
-      await api(`/conversations/${conversationId}`, { method: 'PATCH', body: JSON.stringify(body) })
-      const next = await api<ConversationDetail>(`/conversations/${conversationId}`)
+      await updateReflection(conversationId, body)
+      const next = await fetchReflection<ConversationDetail>(conversationId)
       if (viewGeneration.current !== generation) return true
       setDetail(next)
       await refreshList()
@@ -760,19 +765,13 @@ export function ChatPage() {
       let id = activeId
       let created = false
       if (!id) {
-        const conversation = await api<Summary>('/conversations', {
-          method: 'POST',
-          body: JSON.stringify({
+        const conversation = await createReflection<Summary>({
             title: deriveTitle(content),
-          }),
-        })
+          })
         id = conversation.id
         created = true
       }
-      await api(`/conversations/${id}/messages`, {
-        method: 'POST',
-        body: JSON.stringify({ content }),
-      })
+      await addMessage(id, { content })
       setDraft('')
       await openConversation(id, { continuing: created })
       await refreshList()
@@ -1049,10 +1048,7 @@ export function ChatPage() {
     if (!activeId) return
     setSaveState({ status: 'saving' })
     try {
-      await api(`/conversations/${activeId}/sections`, {
-        method: 'PATCH',
-        body: JSON.stringify({ type: field, content, authorOrigin: origin }),
-      })
+      await saveSection(activeId, { type: field, content, authorOrigin: origin })
       await openConversation(activeId)
       setEdits((current) => {
         const next = { ...current }
@@ -1210,19 +1206,13 @@ export function ChatPage() {
     let created = false
     try {
       if (!id) {
-        const conversation = await api<Summary>('/conversations', {
-          method: 'POST',
-          body: JSON.stringify({
+        const conversation = await createReflection<Summary>({
             title: deriveTitle(chip.message),
-          }),
-        })
+          })
         id = conversation.id
         created = true
       }
-      await api(`/conversations/${id}/messages`, {
-        method: 'POST',
-        body: JSON.stringify({ content: chip.message }),
-      })
+      await addMessage(id, { content: chip.message })
       await openConversation(id, { continuing: created })
       await refreshList()
     } catch (caught: unknown) {
@@ -1244,10 +1234,7 @@ export function ChatPage() {
     if (!content) return
     if (!(await leaveSafely())) return
     try {
-      await api(`/conversations/${activeId}/messages`, {
-        method: 'POST',
-        body: JSON.stringify({ content }),
-      })
+      await addMessage(activeId, { content })
       setDiscussing(field)
       setProposal(null)
       await openConversation(activeId)
@@ -1304,7 +1291,7 @@ export function ChatPage() {
     const acknowledge = acknowledgeExtension ? '?acknowledgeExtension=true' : ''
     try {
       if (audience === 'only-me') {
-        await api(`/conversations/${activeId}/make-private`, { method: 'POST' })
+        await makeReflectionPrivate(activeId)
       } else if (audience === 'community') {
         /*
          * A community share, and nothing else. The reflection's own
@@ -1322,7 +1309,7 @@ export function ChatPage() {
           }),
         })
       } else {
-        await api(`/conversations/${activeId}/share${acknowledge}`, { method: 'POST' })
+        await shareReflection(activeId, { acknowledgeExtension: Boolean(acknowledge) })
         await api(`/publications${acknowledge}`, {
           method: 'POST',
           body: JSON.stringify({ conversationId: activeId, audience: 'public' }),
@@ -1353,14 +1340,11 @@ export function ChatPage() {
     if (!activeId) return
     if (!(await leaveSafely())) return
     if (carry) {
-      await api(`/conversations/${activeId}/sections`, {
-        method: 'PATCH',
-        body: JSON.stringify({
+      await saveSection(activeId, {
           type: carry.field,
           content: carry.content,
           authorOrigin: AUTHOR_ORIGINS.USER,
-        }),
-      })
+        })
     }
     await patchConversation({ format: next })
     setFormatOpen(false)
@@ -1369,7 +1353,7 @@ export function ChatPage() {
   async function removeConversation() {
     if (!activeId) return
     try {
-      await api(`/conversations/${activeId}`, { method: 'DELETE' })
+      await deleteReflection(activeId)
       setDeleteOpen(false)
       viewGeneration.current += 1
       openedRef.current = null

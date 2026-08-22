@@ -23,6 +23,7 @@ import {
 import '@crismag/create-studio/styles.css'
 import { fetchSavedPassage } from '../bible/api.ts'
 import { api } from '../shared/api/client.ts'
+import { fetchReflection, fetchReflections } from '../reflections/api.ts'
 import { savePng } from '../shared/native/save-image.ts'
 import {
   CHAT_STUDIO_CAPABILITIES,
@@ -147,7 +148,7 @@ export function CreatePage() {
   }, [])
 
   useEffect(() => {
-    api<ConversationSummary[]>('/conversations')
+    fetchReflections()
       .then((items) => {
         setConversations(items)
         setConversationId((current) => items.some(({ id }) => id === current) ? current : (items[0]?.id ?? ''))
@@ -167,7 +168,7 @@ export function CreatePage() {
     setError(null)
     setMessage(null)
     Promise.all([
-      api<StudioReflectionSource>(`/conversations/${encodeURIComponent(conversationId)}`),
+      fetchReflection<StudioReflectionSource>(conversationId),
       fetchSavedPassage(conversationId),
       api<{ creation: StoredCreation | null }>(`/studio-creations/${encodeURIComponent(conversationId)}`),
     ])

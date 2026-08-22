@@ -21,6 +21,7 @@ import {
 import type { BiblePassage } from '@chat/shared'
 import { CONDENSED_FIELDS } from '../chat/sections.ts'
 import { ApiError, api } from '../shared/api/client.ts'
+import { fetchReflection } from './api.ts'
 import { SECTIONS, StateBadge, formatDate } from '../shared/ui/ReflectionCard.tsx'
 import { MoreIcon } from '../shared/ui/icons.tsx'
 import { useMobileBar } from '../shared/mobile/MobileBar.tsx'
@@ -58,7 +59,7 @@ export function ReflectionViewPage() {
     let live = true
     setDetail(null)
     setError(null)
-    api<Detail>(`/conversations/${id}`)
+    fetchReflection<Detail>(id)
       .then((value) => live && setDetail(value))
       .catch((caught: unknown) => {
         if (!live) return

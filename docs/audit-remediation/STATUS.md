@@ -55,7 +55,7 @@ A CodeReviewerAssist pass on 2026-08-22, plus three specialized lens reviews, ad
 
 - [ ] ChatPage split into hooks (workspace, edits, assist, helper, share)
 - [ ] Chat sheets use shared `Sheet`
-- [ ] `web_app/src/reflections/api.ts` (or equivalent) exists; pages stop scattering paths
+- [x] `web_app/src/reflections/api.ts` exists; pages stop scattering paths — ChatPage, ReflectionsPage, ReflectionViewPage and CreatePage all go through it; no raw `/conversations` path left outside the module
 - [ ] One report dialog
 - [x] `MoreMenu` removed — ActionMenu called at the site; ChatPage tests unchanged
 
