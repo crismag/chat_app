@@ -70,7 +70,8 @@ else
 fi
 echo
 echo "Installed. Now check the two things this script cannot:"
-echo "  curl -sS ${DEPLOY_URL}/api/health     # the browser's route to the API"
+echo "  curl -sS ${DEPLOY_API_URL}/api/health        # the browser's route to the API"
+echo "  curl -sS ${DEPLOY_API_URL}/api/health/ready  # and that it can reach both stores"
 echo "  curl -sSI ${DEPLOY_URL}/reflections   # a deep link must return the app, not a 404"
 echo
 echo "Keeping the last five releases:"

@@ -238,9 +238,20 @@ After that, and after every deploy, restart the app from hPanel. These answer
 whether it worked:
 
 ```bash
-curl -sS  https://reflections.crishub.com/api/health      # {"status":"ok",…}
+curl -sS  https://chatapi.crishub.com/api/health          # {"status":"ok",…}
+curl -sS  https://chatapi.crishub.com/api/health/ready     # both stores answering
 curl -sSI https://reflections.crishub.com/reflections     # 200 and the app, not a 404
 ```
+
+The API is asked on **chatapi.crishub.com**, not on the site's own domain.
+`reflections.crishub.com/api/health` returns the host's "This Page Does Not
+Exist" page, because `/api` there is a path on a static site and mod_proxy is
+not permitted — which reads exactly like the API being down when it is fine.
+
+`/api/health` says the process is alive; `/api/health/ready` says it can reach
+the SQLite content and, when `MYSQL_*` is configured, MariaDB. After a deploy
+the second is the one worth reading: a release that starts but cannot reach its
+database answers the first perfectly well.
 
 `restart-api.sh` remains for hosts that do let you run your own process; the
 nohup test above shows it would work here too if the proxy did.
