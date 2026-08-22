@@ -12,8 +12,6 @@ import {
   AI_CHAT_NOTICE,
   AI_DISCLOSURE,
   ACCOUNT_TYPES,
-  AI_OUTCOMES,
-  AI_UNAVAILABLE_MESSAGE,
   AUTHOR_ORIGINS,
   CHAT_SECTION_TYPES,
   TITLE_SOURCES,
@@ -23,7 +21,6 @@ import {
   validateChat,
   type AiAction,
   type AiCapabilities,
-  type AiGuidanceSection,
   type AuthorOrigin,
   type ChatFormat,
   type ValidationResult,
@@ -44,7 +41,6 @@ import {
 } from '../shared/ui/icons.tsx'
 import { shareWithPlatform } from '../shared/native/share.ts'
 import { ChatArtifact } from './ChatArtifact.tsx'
-import { MoreMenu, type MoreMenuItem } from './MoreMenu.tsx'
 import { Recoverable } from '../shared/ui/Recoverable.tsx'
 import { NARROW_QUERY, useMediaQuery } from '../shared/ui/useMediaQuery.ts'
 import { useMobileBar } from '../shared/mobile/MobileBar.tsx'
@@ -66,11 +62,7 @@ import type { Chip } from './chips.ts'
 import { fieldsFor, mergeInto } from './sections.ts'
 import type {
   AddedNotice,
-  AssistBusy,
-  AssistState,
   ConversationDetail,
-  FieldGuidance,
-  FieldImprovement,
   FieldType,
   PendingAdd,
   Proposal,
@@ -78,6 +70,20 @@ import type {
   Summary,
 } from './types.ts'
 import { fetchCommunities } from '../community/api.ts'
+import {
+  addMessage,
+  createReflection,
+  deleteReflection,
+  fetchReflection,
+  fetchReflections,
+  makeReflectionPrivate,
+  saveSection,
+  shareReflection,
+  updateReflection,
+} from '../reflections/api.ts'
+import { useReflectionAssist } from './useReflectionAssist.ts'
+import { useReflectionChat } from './useReflectionChat.ts'
+import { ActionMenu, type ActionItem } from '../shared/ui/ActionMenu.tsx'
 import { AddToSectionSheet } from './ChatSheets.tsx'
 import styles from './ChatPage.module.css'
 
@@ -93,7 +99,6 @@ const SIDEBAR_KEY = 'chat.reflect.sidebar'
 const DISCLOSURE_KEY = 'chat.ai.disclosure'
 
 /** The four sections assistance understands. Heart, never a highlight. */
-const SECTION_FIELDS: AiGuidanceSection[] = ['content', 'heart', 'application', 'testimony']
 
 /** How long after the last keystroke the artifact writes itself down. */
 const AUTOSAVE_MS = 1200
@@ -152,39 +157,24 @@ export function ChatPage() {
    * section write the author makes by hand, and it only runs when they press
    * a button that says so.
    */
-  const [assistBusy, setAssistBusy] = useState<{ field: FieldType; kind: AssistBusy } | null>(null)
-  const [guidance, setGuidance] = useState<Partial<Record<FieldType, FieldGuidance>>>({})
-  const [improvement, setImprovement] = useState<
-    ({ field: FieldType } & FieldImprovement) | null
-  >(null)
-  const [clarification, setClarification] = useState<{ field: FieldType; question: string } | null>(
-    null,
-  )
-  const [assistError, setAssistError] = useState<{ field: FieldType; message: string } | null>(null)
-  /* What Undo puts back. Set only when a suggestion was actually accepted. */
-  const [undoable, setUndoable] = useState<{ field: FieldType; previous: string } | null>(null)
-  /* The action waiting behind the disclosure, if the disclosure is showing. */
-  const [pendingAssist, setPendingAssist] = useState<
-    { field: AiGuidanceSection; kind: Exclude<AssistBusy, null> } | null
-  >(null)
-
   /*
-   * The bounded conversation.
-   *
-   * `replying` is separate from `sending` on purpose. Sending is over in
-   * milliseconds and must never be held up by a provider; waiting for a reply
-   * is a different, slower thing, and the composer stays usable throughout it.
+   * The reply thread. It is handed how to find the reflection on screen rather
+   * than the ref itself, because what it needs to know is "is this still the
+   * one they are looking at" at the moment a reply lands.
    */
-  const [replying, setReplying] = useState(false)
-  const [chatError, setChatError] = useState<string | null>(null)
-  /* A message whose reply is waiting behind the disclosure. */
-  const [pendingChat, setPendingChat] = useState<
-    { id: string; message: string; chip?: Chip } | null
-  >(null)
-  /** The last reply request, so "Try again" repeats it without re-sending it. */
-  const [lastRequest, setLastRequest] = useState<
-    { conversationId: string; message: string; chip?: Chip } | null
-  >(null)
+  const {
+    replying,
+    chatError,
+    setChatError,
+    pendingChat,
+    setPendingChat,
+    requestReply,
+    retryLast,
+  } = useReflectionChat({
+    discussing,
+    openedId: () => openedRef.current,
+    reopen: (id) => openConversation(id, { continuing: true }),
+  })
 
   /*
    * Adding a draft into a section.
@@ -320,7 +310,7 @@ export function ChatPage() {
   const hasUnsaved = dirtyFields.size > 0
 
   const refreshList = useCallback(async () => {
-    setConversations(await api<Summary[]>('/conversations'))
+    setConversations(await fetchReflections())
   }, [])
 
   /**
@@ -344,7 +334,7 @@ export function ChatPage() {
   const openConversation = useCallback(
     async (id: string, options: { continuing?: boolean } = {}) => {
       const generation = viewGeneration.current
-      const next = await api<ConversationDetail>(`/conversations/${id}`)
+      const next = await fetchReflection<ConversationDetail>(id)
       if (viewGeneration.current !== generation) return next
       const switching = openedRef.current !== id && !options.continuing
       openedRef.current = id
@@ -379,15 +369,12 @@ export function ChatPage() {
       if (activeId) return activeId
       if (creatingRef.current) return creatingRef.current
       const work = (async () => {
-        const conversation = await api<Summary>('/conversations', {
-          method: 'POST',
-          body: JSON.stringify({
+        const conversation = await createReflection<Summary>({
             title: seed.title?.trim() || titleDraft?.trim() || 'New reflection',
             ...(seed.scriptureReference?.trim()
               ? { scriptureReference: seed.scriptureReference.trim() }
               : {}),
-          }),
-        })
+          })
         await openConversation(conversation.id, { continuing: true })
         await refreshList()
         return conversation.id
@@ -562,12 +549,9 @@ export function ChatPage() {
           (storedOrigin(field as FieldType) === AUTHOR_ORIGINS.USER
             ? AUTHOR_ORIGINS.USER
             : AUTHOR_ORIGINS.AI_ASSISTED)
-        await api(`/conversations/${id}/sections`, {
-          method: 'PATCH',
-          body: JSON.stringify({ type: field, content: value, authorOrigin: origin }),
-        })
+        await saveSection(id, { type: field, content: value, authorOrigin: origin })
       }
-      const next = await api<ConversationDetail>(`/conversations/${id}`)
+      const next = await fetchReflection<ConversationDetail>(id)
       if (viewGeneration.current !== generation) return true
       setDetail(next)
       /* Only what was actually written is forgotten; later keystrokes stay. */
@@ -643,8 +627,8 @@ export function ChatPage() {
     const generation = viewGeneration.current
     setSaveState({ status: 'saving' })
     try {
-      await api(`/conversations/${conversationId}`, { method: 'PATCH', body: JSON.stringify(body) })
-      const next = await api<ConversationDetail>(`/conversations/${conversationId}`)
+      await updateReflection(conversationId, body)
+      const next = await fetchReflection<ConversationDetail>(conversationId)
       if (viewGeneration.current !== generation) return true
       setDetail(next)
       await refreshList()
@@ -699,56 +683,6 @@ export function ChatPage() {
    * than read from state — the first message of a new reflection creates the
    * conversation, and `activeId` has not caught up by the time this runs.
    */
-  async function requestReply(conversationId: string, message: string, chip?: Chip) {
-    setReplying(true)
-    setChatError(null)
-    setLastRequest({ conversationId, message, ...(chip ? { chip } : {}) })
-    try {
-      await api('/ai/reflection-chat', {
-        method: 'POST',
-        body: JSON.stringify({
-          conversationId,
-          message,
-          /*
-           * An identifier from a fixed set, not prompt text. The server decides
-           * what it means and — crucially — whether this turn may produce a
-           * draft at all.
-           */
-          ...(chip ? { action: chip.action } : {}),
-          ...(chip?.section ? { section: chip.section } : {}),
-          /*
-           * Scoped mode travels as application state. The server validates it
-           * against the section enum anyway and uses it — not anything the
-           * model says — to decide where a draft would go.
-           */
-          ...(discussing && SECTION_FIELDS.includes(discussing as never)
-            ? { focusSection: discussing }
-            : {}),
-        }),
-      })
-      /*
-       * The reply was stored server-side; re-reading is what puts it on screen.
-       *
-       * Only if the author is still here, though. A reply takes seconds, and in
-       * those seconds they may have started a new reflection — at which point
-       * re-opening the old one drags them back to a reflection they left AND
-       * runs the switch reset over whatever they have begun typing in the new
-       * one. Nothing is lost by skipping it: the reply is stored, and it is
-       * there when they come back.
-       */
-      if (openedRef.current === conversationId) {
-        await openConversation(conversationId, { continuing: true })
-      }
-    } catch (caught: unknown) {
-      /*
-       * A failed reply is not a failed message. What they wrote is already
-       * saved, so this reports beside the thread and leaves it alone.
-       */
-      setChatError(assistMessage(caught))
-    } finally {
-      setReplying(false)
-    }
-  }
 
   async function sendMessage(event: FormEvent, override?: string) {
     event.preventDefault()
@@ -760,19 +694,13 @@ export function ChatPage() {
       let id = activeId
       let created = false
       if (!id) {
-        const conversation = await api<Summary>('/conversations', {
-          method: 'POST',
-          body: JSON.stringify({
+        const conversation = await createReflection<Summary>({
             title: deriveTitle(content),
-          }),
-        })
+          })
         id = conversation.id
         created = true
       }
-      await api(`/conversations/${id}/messages`, {
-        method: 'POST',
-        body: JSON.stringify({ content }),
-      })
+      await addMessage(id, { content })
       setDraft('')
       await openConversation(id, { continuing: created })
       await refreshList()
@@ -905,154 +833,12 @@ export function ChatPage() {
    * no body to read — the network went away — it falls back to the one message
    * that always applies, which points at the manual workflow.
    */
-  function assistMessage(caught: unknown): string {
-    if (caught instanceof ApiError) {
-      const body = caught.body as { error?: string; outcome?: string; retryAfterSeconds?: number }
-      if (body.outcome === AI_OUTCOMES.RATE_LIMITED && body.retryAfterSeconds) {
-        return `${body.error ?? ''} Try again in about ${body.retryAfterSeconds} seconds.`.trim()
-      }
-      if (body.error) return body.error
-    }
-    return AI_UNAVAILABLE_MESSAGE
-  }
-
-  async function askForQuestions(field: AiGuidanceSection) {
-    if (!activeId || !detail) return
-    setAssistError(null)
-    setAssistBusy({ field, kind: 'questions' })
-    try {
-      /*
-       * Only what this action needs travels: the passage, the sections being
-       * asked about, and what has already been written in them. No profile, no
-       * other reflections, no identifiers, no message history.
-       */
-      const written: Partial<Record<AiGuidanceSection, string>> = {}
-      for (const meta of SECTION_FIELDS) {
-        const value = valueOf(meta).trim()
-        if (value) written[meta] = value
-      }
-
-      const result = await api<{
-        sections: Partial<Record<AiGuidanceSection, { questions: string[] }>>
-        notice: string
-      }>('/ai/reflection-guidance', {
-        method: 'POST',
-        body: JSON.stringify({
-          passageReference: detail.scriptureReference ?? '',
-          sections: [field],
-          written,
-        }),
-      })
-
-      setGuidance((current) => ({
-        ...current,
-        [field]: {
-          questions: result.sections[field]?.questions ?? [],
-          notice: result.notice,
-        },
-      }))
-    } catch (caught: unknown) {
-      setAssistError({ field, message: assistMessage(caught) })
-    } finally {
-      setAssistBusy(null)
-    }
-  }
-
-  async function askForImprovement(field: AiGuidanceSection) {
-    if (!activeId || !detail) return
-    const text = valueOf(field).trim()
-    if (!text) return
-    setAssistError(null)
-    setClarification(null)
-    setAssistBusy({ field, kind: 'improve' })
-    try {
-      const result = await api<{
-        outcome: string
-        original: string
-        suggested?: string
-        summaryOfChanges?: string[]
-        question?: string
-      }>('/ai/improve-writing', {
-        method: 'POST',
-        body: JSON.stringify({
-          section: field,
-          text,
-          passageReference: detail.scriptureReference ?? '',
-        }),
-      })
-
-      /*
-       * The honest answer when meaning was uncertain. It is shown as a question
-       * rather than as a failure, because the request worked — the model
-       * declined to guess, which is exactly what it was told to do.
-       */
-      if (result.outcome === AI_OUTCOMES.NEEDS_USER_CLARIFICATION) {
-        setClarification({ field, question: result.question ?? '' })
-        return
-      }
-
-      setImprovement({
-        field,
-        original: result.original,
-        suggested: result.suggested ?? '',
-        summaryOfChanges: result.summaryOfChanges ?? [],
-      })
-    } catch (caught: unknown) {
-      setAssistError({ field, message: assistMessage(caught) })
-    } finally {
-      setAssistBusy(null)
-    }
-  }
-
-  /**
-   * The gate in front of the first real request.
-   *
-   * The disclosure is shown once, before anything leaves the browser, and the
-   * action that prompted it is held rather than dropped — declining costs the
-   * person nothing and running it afterwards costs them no second click.
-   */
-  function requestAssist(field: AiGuidanceSection, kind: Exclude<AssistBusy, null>) {
-    /* One request at a time, page-wide. Two in flight would race to set state. */
-    if (assistBusy) return
-    if (window.localStorage.getItem(DISCLOSURE_KEY) !== 'accepted') {
-      setPendingAssist({ field, kind })
-      return
-    }
-    void (kind === 'questions' ? askForQuestions(field) : askForImprovement(field))
-  }
-
-  /**
-   * Accept a suggested wording — an ordinary section write, marked as assisted.
-   *
-   * The author's original is kept in `undoable` first. "The original must remain
-   * recoverable" is not satisfied by a preview that has already been replaced by
-   * the thing it was previewing.
-   */
-  async function acceptImprovement() {
-    if (!improvement) return
-    const { field, original, suggested } = improvement
-    setImprovement(null)
-    setUndoable({ field, previous: original })
-    await putIntoField(field, suggested, AUTHOR_ORIGINS.AI_ASSISTED)
-  }
-
-  async function undoImprovement() {
-    if (!undoable) return
-    const { field, previous } = undoable
-    setUndoable(null)
-    /* Their words come back as theirs. Undo restores authorship, not only text. */
-    await putIntoField(field, previous, AUTHOR_ORIGINS.USER)
-  }
-
   /** Put a piece of text into a field, saying plainly where it came from. */
   async function putIntoField(field: FieldType, content: string, origin: string) {
     if (!activeId) return
     setSaveState({ status: 'saving' })
     try {
-      await api(`/conversations/${activeId}/sections`, {
-        method: 'PATCH',
-        body: JSON.stringify({ type: field, content, authorOrigin: origin }),
-      })
+      await saveSection(activeId, { type: field, content, authorOrigin: origin })
       await openConversation(activeId)
       setEdits((current) => {
         const next = { ...current }
@@ -1141,7 +927,7 @@ export function ChatPage() {
      * replacement the author regrets is one press away from being undone.
      */
     if (mode === 'replace' && existing.trim()) {
-      setUndoable({ field, previous: existing })
+      rememberUndo(field, existing)
     }
 
     setPendingAdd(null)
@@ -1186,10 +972,6 @@ export function ChatPage() {
    * tell the model what was wrong with the first attempt, so a second draft can
    * resemble the first — a known limitation rather than a surprise.
    */
-  function retryLast() {
-    if (!lastRequest || replying) return
-    void requestReply(lastRequest.conversationId, lastRequest.message, lastRequest.chip)
-  }
 
   /**
    * Invoke a structured action from a chip.
@@ -1210,19 +992,13 @@ export function ChatPage() {
     let created = false
     try {
       if (!id) {
-        const conversation = await api<Summary>('/conversations', {
-          method: 'POST',
-          body: JSON.stringify({
+        const conversation = await createReflection<Summary>({
             title: deriveTitle(chip.message),
-          }),
-        })
+          })
         id = conversation.id
         created = true
       }
-      await api(`/conversations/${id}/messages`, {
-        method: 'POST',
-        body: JSON.stringify({ content: chip.message }),
-      })
+      await addMessage(id, { content: chip.message })
       await openConversation(id, { continuing: created })
       await refreshList()
     } catch (caught: unknown) {
@@ -1244,10 +1020,7 @@ export function ChatPage() {
     if (!content) return
     if (!(await leaveSafely())) return
     try {
-      await api(`/conversations/${activeId}/messages`, {
-        method: 'POST',
-        body: JSON.stringify({ content }),
-      })
+      await addMessage(activeId, { content })
       setDiscussing(field)
       setProposal(null)
       await openConversation(activeId)
@@ -1304,7 +1077,7 @@ export function ChatPage() {
     const acknowledge = acknowledgeExtension ? '?acknowledgeExtension=true' : ''
     try {
       if (audience === 'only-me') {
-        await api(`/conversations/${activeId}/make-private`, { method: 'POST' })
+        await makeReflectionPrivate(activeId)
       } else if (audience === 'community') {
         /*
          * A community share, and nothing else. The reflection's own
@@ -1322,7 +1095,7 @@ export function ChatPage() {
           }),
         })
       } else {
-        await api(`/conversations/${activeId}/share${acknowledge}`, { method: 'POST' })
+        await shareReflection(activeId, { acknowledgeExtension: Boolean(acknowledge) })
         await api(`/publications${acknowledge}`, {
           method: 'POST',
           body: JSON.stringify({ conversationId: activeId, audience: 'public' }),
@@ -1353,14 +1126,11 @@ export function ChatPage() {
     if (!activeId) return
     if (!(await leaveSafely())) return
     if (carry) {
-      await api(`/conversations/${activeId}/sections`, {
-        method: 'PATCH',
-        body: JSON.stringify({
+      await saveSection(activeId, {
           type: carry.field,
           content: carry.content,
           authorOrigin: AUTHOR_ORIGINS.USER,
-        }),
-      })
+        })
     }
     await patchConversation({ format: next })
     setFormatOpen(false)
@@ -1369,7 +1139,7 @@ export function ChatPage() {
   async function removeConversation() {
     if (!activeId) return
     try {
-      await api(`/conversations/${activeId}`, { method: 'DELETE' })
+      await deleteReflection(activeId)
       setDeleteOpen(false)
       viewGeneration.current += 1
       openedRef.current = null
@@ -1437,51 +1207,21 @@ export function ChatPage() {
   /* Whether a reply can be asked for at all. */
   const chatReady = ai.capabilities?.reflectionChat === true
 
-  const assist: AssistState = {
-    available: ai.capabilities?.improveWriting === true && detail !== null,
-    unavailableReason: !detail
-      ? 'Start a reflection first.'
-      : ai.capabilities?.improveWriting
-        ? null
-        : (ai.reason ?? AI_UNAVAILABLE_MESSAGE),
-    busyField: assistBusy?.field ?? null,
-    busyKind: assistBusy?.kind ?? null,
-    guidance,
-    improvement,
-    clarification,
-    error: assistError,
-    undoable,
-    /*
-     * Asking about a section also tells the conversation which section it is.
-     *
-     * The Reflect panel already has a scoped mode; it was only ever reachable
-     * through a "Discuss in chat" button on every field. Setting it here is
-     * what lets those buttons go: choosing an assistance action *is* saying
-     * which section is being worked on, so the helper stops having to be told
-     * again in a second control.
-     */
-    onAsk: (field) => {
-      setDiscussing(field)
-      requestAssist(field, 'questions')
-    },
-    onImprove: (field) => {
-      setDiscussing(field)
-      requestAssist(field, 'improve')
-    },
-    onAccept: () => void acceptImprovement(),
-    onDiscard: () => {
-      /* Discard leaves the author's words exactly as they were. */
-      setImprovement(null)
-      setClarification(null)
-    },
-    onDismissGuidance: (field) =>
-      setGuidance((current) => {
-        const next = { ...current }
-        delete next[field]
-        return next
-      }),
-    onUndo: () => void undoImprovement(),
-  }
+  /*
+   * Assistance owns its own state; the page hands it the two things it may
+   * touch — what is written, and the one write that records where words came
+   * from — and gets back the controller the editor renders.
+   */
+  const { assist, pendingAssist, clearPendingAssist, runPendingAssist, rememberUndo } =
+    useReflectionAssist({
+    activeId,
+    detail,
+    capabilities: ai.capabilities ?? null,
+    unavailableReason: ai.reason ?? null,
+    valueOf,
+    putIntoField,
+    onFieldChosen: setDiscussing,
+  })
 
   useEffect(() => {
     if (!helperOpen && !listOpen) return
@@ -1581,7 +1321,7 @@ export function ChatPage() {
    * a screen reader to announce and one of them is always the wrong one.
    */
   /* One list of secondary actions, offered from the phone's bar and the desktop head. */
-  const moreItems: MoreMenuItem[] = [
+  const moreItems: ActionItem[] = [
           {
             label: 'Suggest a title',
             reason: suggestTitleReason ?? (suggesting ? 'Thinking…' : null),
@@ -1886,9 +1626,17 @@ export function ChatPage() {
               Share
             </button>
 
-            {/* Everything else that can be done to a reflection, behind one press. */}
-            <MoreMenu
+            {/*
+              Everything else that can be done to a reflection, behind one
+              press. ActionMenu decides whether that is a popover or a sheet
+              from the bottom of the screen; on a phone this control sits near
+              the left edge, and a popover growing leftwards from it put its
+              own labels off screen.
+            */}
+            <ActionMenu
               label="More actions for this reflection"
+              triggerClassName={styles.iconButton}
+              trigger={<span aria-hidden="true">⋯</span>}
               items={moreItems}
             />
 
@@ -2289,17 +2037,11 @@ export function ChatPage() {
         <AiDisclosureSheet
           disclosure={AI_DISCLOSURE}
           onAccept={() => {
-            const assist = pendingAssist
             const chat = pendingChat
             window.localStorage.setItem(DISCLOSURE_KEY, 'accepted')
-            setPendingAssist(null)
             setPendingChat(null)
             /* Held rather than dropped: agreeing does not cost a second click. */
-            if (assist) {
-              void (assist.kind === 'questions'
-                ? askForQuestions(assist.field)
-                : askForImprovement(assist.field))
-            }
+            runPendingAssist()
             if (chat) void requestReply(chat.id, chat.message, chat.chip)
           }}
           /*
@@ -2307,7 +2049,7 @@ export function ChatPage() {
            * it simply goes unanswered, which is the note-to-self behaviour.
            */
           onClose={() => {
-            setPendingAssist(null)
+            clearPendingAssist()
             setPendingChat(null)
           }}
         />

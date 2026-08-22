@@ -42,7 +42,8 @@ import {
 } from '@chat/shared'
 import { ReflectionCard, SECTIONS } from '../shared/ui/ReflectionCard.tsx'
 import { GlobeIcon, LockIcon, CommunityIcon } from '../shared/ui/icons.tsx'
-import { ReportDialog } from './ReportDialog.tsx'
+import { reportIsSubmittable } from '@chat/shared'
+import { ReportDialog } from '../shared/ui/ReportDialog.tsx'
 import { Avatar } from '../shared/ui/Avatar.tsx'
 import type { Publication, ReportReason } from './api.ts'
 import styles from './CommunityPage.module.css'
@@ -378,7 +379,16 @@ export function PublicationCard({
 
           {reporting ? (
             <ReportDialog
+              title="Report this reflection"
+              lead="What is wrong with it? Reports are read before anything happens — reporting does not remove anything by itself."
               reasons={reportReasons}
+              notePlaceholder={(reason) =>
+                reason === 'other'
+                  ? 'What is wrong with this reflection?'
+                  : 'Anything that would help somebody understand the problem.'
+              }
+              /* Its own gate, so the publication reason ids stay an allowlist. */
+              isSubmittable={reportIsSubmittable}
               onClose={() => setReporting(false)}
               onSubmit={(reason, note) => onReport(reason, note)}
             />

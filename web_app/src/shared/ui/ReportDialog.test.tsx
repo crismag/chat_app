@@ -8,7 +8,7 @@
  */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
-import { PUBLICATION_REPORT_REASONS } from '@chat/shared'
+import { PUBLICATION_REPORT_REASONS, reportIsSubmittable } from '@chat/shared'
 import { ReportDialog } from './ReportDialog.tsx'
 
 afterEach(cleanup)
@@ -17,7 +17,14 @@ function open() {
   const onSubmit = vi.fn(async () => {})
   const onClose = vi.fn()
   render(
-    <ReportDialog reasons={[...PUBLICATION_REPORT_REASONS]} onClose={onClose} onSubmit={onSubmit} />,
+    <ReportDialog
+      title="Report this reflection"
+      lead="What is wrong with it?"
+      reasons={[...PUBLICATION_REPORT_REASONS]}
+      isSubmittable={reportIsSubmittable}
+      onClose={onClose}
+      onSubmit={onSubmit}
+    />,
   )
   return { onSubmit, onClose }
 }
@@ -85,7 +92,10 @@ test('a failed report keeps what was typed, and says it can be tried again', asy
 
   render(
     <ReportDialog
+      title="Report this reflection"
+      lead="What is wrong with it?"
       reasons={[...PUBLICATION_REPORT_REASONS]}
+      isSubmittable={reportIsSubmittable}
       onClose={() => {}}
       onSubmit={onSubmit}
     />,

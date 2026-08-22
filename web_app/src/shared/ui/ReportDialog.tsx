@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { reportIsSubmittable } from '@chat/shared'
-import type { ReportReason } from './api.ts'
 import styles from './ReportDialog.module.css'
+
+export type ReportReason = { id: string; label: string }
 
 /*
  * Reporting, asked properly.
@@ -26,20 +26,44 @@ import styles from './ReportDialog.module.css'
  *
  * And it does not promise removal. "Report received" is the truth; "we will
  * remove this" is a promise made before anybody has looked.
+ *
+ * ── One dialog, two things to report ────────────────────────────────────────
+ *
+ * Reflections and profiles were reported through two different components: a
+ * modal here and a form inside the profile page, with their own wording, their
+ * own failure handling and their own idea of when Submit should be allowed.
+ * Reporting somebody is exactly the interaction that should not vary by where
+ * you happened to be standing, so the words are parameters and the behaviour
+ * is not.
  */
 export function ReportDialog({
+  title,
+  lead,
   reasons,
+  notePlaceholder,
+  isSubmittable,
   onClose,
   onSubmit,
 }: {
+  title: string
+  lead: string
   reasons: ReportReason[]
+  /** What the free-text box invites, given the chosen reason. */
+  notePlaceholder?: (reason: string | null) => string
+  /**
+   * Whether Submit may be pressed. Defaults to "a reason, and a sentence when
+   * the reason is Something else" — the rule both surfaces already wanted.
+   * Community passes its own so its reason ids stay an allowlist.
+   */
+  isSubmittable?: (reason: string, note: string) => boolean
   onClose: () => void
-  onSubmit: (reason: string, note: string) => Promise<void>
+  /** May resolve with what to say instead of the default confirmation. */
+  onSubmit: (reason: string, note: string) => Promise<string | void>
 }) {
   const [reason, setReason] = useState<string | null>(null)
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
-  const [sent, setSent] = useState(false)
+  const [sent, setSent] = useState<string | null>(null)
   /*
    * A failure that can be tried again, said out loud.
    *
@@ -63,7 +87,11 @@ export function ReportDialog({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const submittable = reason !== null && reportIsSubmittable(reason, note)
+  const submittable =
+    reason !== null &&
+    (isSubmittable
+      ? isSubmittable(reason, note)
+      : reason !== 'other' || note.trim().length >= 10)
 
   return (
     <div className={styles.scrim} onClick={onClose}>
@@ -74,15 +102,12 @@ export function ReportDialog({
         aria-labelledby={headingId}
         onClick={(event) => event.stopPropagation()}
       >
-        {sent ? (
+        {sent !== null ? (
           <>
             <h2 className={styles.title} id={headingId}>
               Report received.
             </h2>
-            <p className={styles.lead}>
-              Thanks for helping keep the community useful and respectful. Somebody will look at
-              it.
-            </p>
+            <p className={styles.lead}>{sent}</p>
             <div className={styles.actions}>
               <button type="button" className="btn btn-primary btn-sm" onClick={onClose}>
                 Close
@@ -92,12 +117,9 @@ export function ReportDialog({
         ) : (
           <>
             <h2 className={styles.title} id={headingId}>
-              Report this reflection
+              {title}
             </h2>
-            <p className={styles.lead}>
-              What is wrong with it? Reports are read before anything happens — reporting does not
-              remove anything by itself.
-            </p>
+            <p className={styles.lead}>{lead}</p>
 
             <fieldset className={styles.reasons}>
               <legend className="sr-only">Choose a reason</legend>
@@ -127,9 +149,8 @@ export function ReportDialog({
               maxLength={500}
               onChange={(event) => setNote(event.target.value)}
               placeholder={
-                reason === 'other'
-                  ? 'What is wrong with this reflection?'
-                  : 'Anything that would help somebody understand the problem.'
+                notePlaceholder?.(reason) ??
+                'Anything that would help somebody understand the problem.'
               }
             />
             {problem ? (
@@ -161,7 +182,12 @@ export function ReportDialog({
                   setBusy(true)
                   setProblem(null)
                   void onSubmit(reason, note)
-                    .then(() => setSent(true))
+                    .then((message) =>
+                      setSent(
+                        message ??
+                          'Thanks for helping keep the community useful and respectful. Somebody will look at it.',
+                      ),
+                    )
                     .catch((caught: unknown) => {
                       setProblem(
                         caught instanceof Error && caught.message

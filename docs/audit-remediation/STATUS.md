@@ -53,11 +53,11 @@ A CodeReviewerAssist pass on 2026-08-22, plus three specialized lens reviews, ad
 
 ## P4
 
-- [ ] ChatPage split into hooks (workspace, edits, assist, helper, share)
-- [ ] Chat sheets use shared `Sheet`
-- [ ] `web_app/src/reflections/api.ts` (or equivalent) exists; pages stop scattering paths
-- [ ] One report dialog
-- [ ] `MoreMenu` removed
+- [~] ChatPage split into hooks — **assist** (`useReflectionAssist`) and **helper thread** (`useReflectionChat`) extracted, 2316 → 2078 lines. Workspace, edits and share still in the page.
+- [ ] Chat sheets use shared `Sheet` — **attempted and reverted.** The shared Sheet pushes a history entry on open and pops it on cleanup; React's development double-mount delivers that pop to the remounted instance, which reads it as Back and closes. Chat sheets mount already-open (`{shareOpen ? <ShareSheet/> : null}`), so the share sheet stopped opening in a browser while every unit test still passed. Needs either the sheets kept mounted with `open` toggled, or the shared Sheet's history handling reworked — neither is a small change.
+- [x] `web_app/src/reflections/api.ts` exists; pages stop scattering paths — ChatPage, ReflectionsPage, ReflectionViewPage and CreatePage all go through it; no raw `/conversations` path left outside the module
+- [x] One report dialog — `shared/ui/ReportDialog.tsx` serves both publications and profiles; the profile's inline `ReportForm` is deleted
+- [x] `MoreMenu` removed — ActionMenu called at the site; ChatPage tests unchanged
 
 ## P5
 

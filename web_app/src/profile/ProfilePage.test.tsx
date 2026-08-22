@@ -162,8 +162,11 @@ test('reporting states that nothing is removed, and confirms afterwards', async 
   fireEvent.click(await screen.findByRole('button', { name: 'Report profile' }))
   expect(screen.getByText(/does not remove anything for other people/i)).toBeVisible()
 
-  /* A reason is required, so the submit is unavailable until one is chosen. */
-  const send = screen.getByRole('button', { name: 'Send report' })
+  /*
+   * "Submit report", as Community says it: one dialog reports both a
+   * reflection and a profile, and the label came with it.
+   */
+  const send = screen.getByRole('button', { name: 'Submit report' })
   expect(send).toBeDisabled()
   fireEvent.click(screen.getByLabelText('Spam or advertising'))
   expect(send).toBeEnabled()
