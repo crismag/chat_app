@@ -77,6 +77,7 @@ import type {
   SaveState,
   Summary,
 } from './types.ts'
+import { fetchCommunities } from '../community/api.ts'
 import { AddToSectionSheet } from './ChatSheets.tsx'
 import styles from './ChatPage.module.css'
 
@@ -219,10 +220,10 @@ export function ChatPage() {
 
   const [shareOpen, setShareOpen] = useState(false)
   /*
-   * The communities this person may share into. Loaded once and only used to
-   * populate the share sheet — the server checks membership again when a
-   * publication is created, because a stale list must never be able to place
-   * something in a community someone has left.
+   * The communities this person may share into. Fetched when the share sheet
+   * opens, and only used to populate it — the server checks membership again
+   * when a publication is created, because a stale list must never be able to
+   * place something in a community someone has left.
    */
   const [communities, setCommunities] = useState<{ id: string; name: string }[]>([])
   const [formatOpen, setFormatOpen] = useState(false)
@@ -425,10 +426,29 @@ export function ChatPage() {
    * anyway if this list were wrong.
    */
   useEffect(() => {
-    api<{ communities: { id: string; name: string }[] }>('/communities')
-      .then((response) => setCommunities(response.communities))
-      .catch(() => setCommunities([]))
-  }, [])
+    /*
+     * When the sheet opens, not when the page does.
+     *
+     * Every visit to Reflect asked the server which communities this person
+     * belongs to, whether or not they went anywhere near sharing — and most
+     * visits are somebody writing. Opening the sheet is the first moment the
+     * answer is needed. Re-asked each time it opens, which is also more
+     * correct than the single load it replaces: a community joined in another
+     * tab now appears.
+     */
+    if (!shareOpen) return
+    let live = true
+    fetchCommunities()
+      .then((response) => {
+        if (live) setCommunities(response.communities)
+      })
+      .catch(() => {
+        if (live) setCommunities([])
+      })
+    return () => {
+      live = false
+    }
+  }, [shareOpen])
 
   /**
    * Whether `?new=1` has already been acted on.

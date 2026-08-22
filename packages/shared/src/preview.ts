@@ -1,4 +1,5 @@
-import { CHAT_FORMATS, CHAT_SECTION_TYPES, type ChatFormat } from '@chat/shared'
+import { CHAT_FORMATS, type ChatFormat } from './formats.ts'
+import { CHAT_SECTION_TYPES } from './sections.ts'
 
 /*
  * The line of a reflection that a card shows.

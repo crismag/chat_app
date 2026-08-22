@@ -1435,6 +1435,21 @@ class ConversationTable {
   }
 
   /**
+   * One person's reflections.
+   *
+   * `idx_conversations_user` has always existed; the list route simply did not
+   * ask in a way that could use it, reading every row in the file and then
+   * discarding everybody else's in JavaScript. On a shared database that is
+   * the whole product's writing materialised to answer one person's page.
+   */
+  byUser(userId: string): StoredConversation[] {
+    return this.db
+      .prepare('SELECT * FROM conversations WHERE userId = ?')
+      .all(userId)
+      .map((row) => conversationFromRow(row as Row));
+  }
+
+  /**
    * Deleting a reflection deletes all of it.
    *
    * `PRAGMA foreign_keys = ON` and the `ON DELETE CASCADE` on messages and

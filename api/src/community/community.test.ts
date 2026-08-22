@@ -290,6 +290,48 @@ describe('publishing', () => {
     expect(mine.body.items).toHaveLength(0);
   });
 
+  test('a feed of several publications keeps each one’s sections its own', async () => {
+    const author = await register('ada@example.com');
+    const reader = await register('bob@example.com');
+
+    const first = await writeReflection(author, 'The first reflection');
+    const second = await writeReflection(author, 'The second reflection');
+    const third = await writeReflection(author, 'The third reflection');
+
+    const published = [];
+    for (const [reflection, caption] of [
+      [first, 'Caption for the first.'],
+      [second, 'Caption for the second.'],
+      [third, 'Caption for the third.'],
+    ] as const) {
+      published.push(await publish(author, reflection, AUDIENCES.PUBLIC, { caption }));
+    }
+
+    /*
+     * The feed hydrates a page in a fixed number of queries rather than three
+     * per row. The thing that goes wrong when rows are grouped by hand is that
+     * one publication ends up wearing another's writing.
+     */
+    const feed = await call<Feed>(reader, '/api/publications?scope=public');
+    expect(feed.body.items).toHaveLength(3);
+
+    for (const item of feed.body.items) {
+      const single = await call<Publication>(reader, `/api/publications/${item.id}`);
+      /* Read one at a time, each is identical to how it arrived in the page. */
+      expect(item.sections).toEqual(single.body.sections);
+      expect(item.title).toBe(single.body.title);
+      expect(item.caption).toBe(single.body.caption);
+    }
+
+    const captions = feed.body.items.map((item) => item.caption).sort();
+    expect(captions).toEqual([
+      'Caption for the first.',
+      'Caption for the second.',
+      'Caption for the third.',
+    ]);
+    expect(published).toHaveLength(3);
+  });
+
   test('publishing copies the reflection and never mutates it', async () => {
     const cookie = await register('ada@example.com');
     const reflection = await writeReflection(cookie, 'Trusting');
