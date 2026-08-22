@@ -1,0 +1,82 @@
+.list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+/*
+ * The whole row is the link, so the target is the row rather than the few
+ * pixels of its title — and there is nothing else interactive inside it, so
+ * there is no nested control to trap a keyboard.
+ */
+.rowLink {
+  display: grid;
+  gap: 2px;
+  min-height: var(--tap);
+  padding: var(--space-3);
+  color: inherit;
+  text-decoration: none;
+}
+
+.rowLink:hover {
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+}
+
+.rowLink:focus-visible {
+  box-shadow: var(--ring);
+  border-radius: var(--radius-md);
+}
+
+.rowTitle {
+  font-weight: 600;
+}
+
+.rowBody,
+.rowMeta {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.rowBody {
+  /* Two lines of description, then it stops rather than growing the row. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.empty {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  text-align: center;
+}
+
+.emptyTitle {
+  margin: 0;
+  font-size: var(--text-md);
+}
+
+.emptyBody {
+  margin: 0;
+  color: var(--muted);
+}
+
+.loading {
+  margin: 0;
+  padding: var(--space-5);
+  color: var(--muted);
+  text-align: center;
+}

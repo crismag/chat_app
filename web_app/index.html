@@ -12,6 +12,36 @@
       content="C.H.A.T. — private conversational Scripture reflection. Content, Heart, Application, Testimony."
     />
     <title>C.H.A.T.</title>
+    <!--
+      The chosen theme, before the first pixel.
+
+      This runs ahead of the stylesheet and the application, so a person who
+      chose Dark never sees a white page flash first. It reads a mirror of the
+      preference the account holds; the application replaces it with whatever
+      the server says a moment later. Deliberately tiny, dependency-free and
+      wrapped in try/catch, because it sits in front of everything: if storage
+      is unavailable this must fall through to the default, not stop the page.
+    -->
+    <script>
+      (function () {
+        try {
+          var THEMES = ['default', 'formal', 'zen', 'ladies', 'retro', 'techno', 'light', 'dark'];
+          var stored = window.localStorage.getItem('chat.theme');
+          var theme = THEMES.indexOf(stored) >= 0 ? stored : 'default';
+          var root = document.documentElement;
+          root.dataset.theme = theme;
+          if (theme === 'default') {
+            root.dataset.palette = window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light';
+          } else if (theme === 'light' || theme === 'dark') {
+            root.dataset.palette = theme;
+          }
+        } catch (error) {
+          /* No theme is a working application; a thrown error here is not. */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
