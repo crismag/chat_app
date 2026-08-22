@@ -287,3 +287,18 @@
     min-block-size: 0;
   }
 }
+
+/*
+ * What the screen says while there is no composition on it.
+ *
+ * On a phone these are the only things there: the setup lives in a sheet and
+ * the canvas does not exist yet, so without them the editor is a bar above
+ * nothing.
+ */
+.state {
+  margin: 0;
+  padding: var(--space-4) var(--edge);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  color: var(--muted);
+}

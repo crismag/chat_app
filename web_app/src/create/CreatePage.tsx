@@ -425,8 +425,6 @@ export function CreatePage() {
         </label>
       </header>
 
-      {loading ? <p role="status">Opening Studio…</p> : null}
-      {!loading && conversations.length === 0 ? <p>Finish a reflection before creating an image.</p> : null}
       {source ? (
         <div className={styles.sourceControls}>
           <label>
@@ -476,6 +474,31 @@ export function CreatePage() {
   return (
     <section className={styles.page} data-narrow={narrow ? 'true' : 'false'}>
       {narrow ? null : setupControls}
+
+      {/*
+        Said on every screen, because when there is no composition yet these
+        are the only things on it.
+        They used to live inside the setup block, which is hidden on a phone —
+        so a visitor arriving at /create with no reflections saw a bar and an
+        empty screen, and nothing telling them what to do about it.
+      */}
+      {loading ? (
+        <p className={styles.state} role="status">
+          Opening Studio…
+        </p>
+      ) : null}
+      {!loading && conversations.length === 0 ? (
+        <p className={styles.state}>
+          Finish a reflection first — Create Studio makes an image from something you have
+          written.
+        </p>
+      ) : null}
+      {!loading && conversations.length > 0 && !document && narrow ? (
+        <p className={styles.state}>
+          Choose a reflection and a look, and Studio will compose it.
+        </p>
+      ) : null}
+
 
       {/*
         On a phone the setup lives in a sheet, and the menu is how it is

@@ -12,8 +12,53 @@ const WEB = process.env.WEB_URL ?? 'http://localhost:5173';
 const OUT = new URL('./out/', import.meta.url).pathname;
 
 const checks = [];
+
 const check = (what, pass, detail = '') =>
   checks.push(`  ${pass ? 'ok  ' : 'FAIL'}  ${what}${detail ? ` — ${detail}` : ''}`);
+
+/*
+ * The screen must say something, whoever arrives.
+ *
+ * A visitor with no reflections reached /create and got a bar above an empty
+ * screen: the setup moved into a sheet that only opens when there is
+ * something to set up, and the "finish a reflection first" line had gone with
+ * it. Nothing told them what to do, and nothing looked broken enough to
+ * report — which is the worst kind of broken.
+ */
+async function checkEmptyStates() {
+  for (const [label, seeded] of [['a visitor with no reflections', false], ['somebody with reflections but none chosen', true]]) {
+    const d = await newDriver({ width: 390, height: 844 });
+    try {
+      await d.get(WEB);
+      await wait(1500);
+      if (seeded) await seed(d);
+      await d.get(`${WEB}/create`);
+      await wait(6000);
+      const said = await d.executeScript(`
+        const text = document.body.innerText.replace(/\s+/g, ' ').trim();
+        return JSON.stringify({
+          text,
+          /* The bar's title alone is not the screen saying anything. */
+          saysSomething: text.replace('Skip to content', '').replace('Create visual', '').trim().length > 12,
+          sheet: !!document.querySelector('[role=dialog]'),
+          studio: !!document.querySelector('.create-studio'),
+        });
+      `);
+      const state = JSON.parse(said);
+      check(
+        `${label}: the screen is not blank`,
+        state.saysSomething || state.sheet || state.studio,
+        state.text.slice(0, 60),
+      );
+    } catch (error) {
+      check(`${label}: loaded`, false, error.message);
+    } finally {
+      await d.quit();
+    }
+  }
+}
+
+await checkEmptyStates();
 
 for (const vp of [
   { name: '390', width: 390, height: 844 },
