@@ -214,13 +214,58 @@
   display: grid;
   justify-items: center;
   gap: 0.2rem;
-  padding: var(--space-2) var(--space-1) calc(var(--space-2) + 2px);
+  padding: var(--space-2) 2px calc(var(--space-2) + 2px);
+  /*
+   * Each destination measures itself, not the window.
+   *
+   * A cell is the bar's width divided by however many destinations there are,
+   * so the room a label has depends on that count and not on the phone. Asking
+   * the container rather than the viewport is what lets one rule cover four
+   * items on a small phone and five on a large one.
+   */
+  container-type: inline-size;
+  /* Without this a long label sets the column width and the others shrink. */
+  min-inline-size: 0;
   color: var(--muted);
   font-size: var(--text-xs);
   font-weight: 550;
   text-decoration: none;
   position: relative;
   transition: color var(--fast) var(--ease);
+}
+
+/*
+ * One line, always.
+ *
+ * Wrapping was the real failure: at five destinations on a small phone
+ * "Reflections" broke in two, which made the bar taller and left every other
+ * label sitting alone above a gap. Ellipsis is the last resort and should not
+ * be reached — the sizes below are chosen so the longest label fits.
+ */
+.mobileLabel {
+  max-inline-size: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+ * As large as the person asked for, or as large as the cell can hold.
+ *
+ * `cqi` is a percentage of this destination's own width, so the second half of
+ * that `min()` is "the biggest size at which the longest label still fits".
+ * Measured, not guessed: the longest label is about 5.3× the font size wide,
+ * and 18% of the cell keeps it inside the content box at four destinations or
+ * five, on any phone.
+ *
+ * Written as a cap rather than as breakpoints because it also answers the
+ * harder question. Somebody running their system text at 200% gets larger
+ * labels here too — up to the point where a larger one would start cutting
+ * words off, which is where the cap holds it. Breakpoints on the container
+ * could not see that: the cell has not changed size, the text has.
+ */
+.mobileLabel {
+  font-size: min(var(--text-xs), 18cqi);
 }
 
 .mobileLink.active {

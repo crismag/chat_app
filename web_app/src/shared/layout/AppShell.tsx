@@ -227,7 +227,7 @@ function Shell() {
             }
           >
             <Icon className={styles.mobileIcon} />
-            <span>{label}</span>
+            <span className={styles.mobileLabel}>{label}</span>
           </NavLink>
         ))}
       </nav>
