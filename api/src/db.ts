@@ -920,6 +920,7 @@ class AccountTable {
       move('profile_reports', 'reporterUserId');
       move('profile_reports', 'subjectUserId');
       move('studio_image_assets', 'userId');
+      move('notes', 'userId');
 
       /*
        * Both halves of a pair, and then the pairs that stopped making sense.
