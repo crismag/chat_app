@@ -82,6 +82,12 @@ function mockAuthenticatedFetch() {
         json: async () => ({ items: [], view: 'active' }),
       })
     }
+    if (url.includes('/messaging')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ items: [] }),
+      })
+    }
     if (
       url.includes('/conversations') ||
       url.includes('/community') ||
@@ -251,6 +257,13 @@ test('Notes is in the primary navigation', async () => {
   renderAt('/')
   const desktop = await screen.findByRole('navigation', { name: 'Primary desktop' })
   expect(within(desktop).getByRole('link', { name: 'Notes' })).toHaveAttribute('href', '/notes')
+})
+
+test('Messages is in the primary navigation', async () => {
+  vi.stubGlobal('fetch', mockAuthenticatedFetch())
+  renderAt('/')
+  const desktop = await screen.findByRole('navigation', { name: 'Primary desktop' })
+  expect(within(desktop).getByRole('link', { name: 'Messages' })).toHaveAttribute('href', '/messages')
 })
 
 test('open-source licences remain directly reachable without signing in', async () => {

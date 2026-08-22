@@ -942,6 +942,22 @@ class AccountTable {
       move('profile_reports', 'subjectUserId');
       move('studio_image_assets', 'userId');
       move('notes', 'userId');
+      move('messaging_threads', 'createdByUserId');
+      moveWithoutColliding('messaging_thread_members', 'userId', 'threadId');
+      move('messaging_messages', 'senderUserId');
+      moveWithoutColliding('messaging_contacts', 'userId', 'contactUserId');
+      moveWithoutColliding('messaging_contacts', 'contactUserId', 'userId');
+      move('messaging_requests', 'senderUserId');
+      move('messaging_requests', 'recipientUserId');
+      if (present.has('messaging_preferences')) {
+        this.db
+          .prepare(
+            `DELETE FROM messaging_preferences
+              WHERE userId = ? AND EXISTS (SELECT 1 FROM messaging_preferences WHERE userId = ?)`,
+          )
+          .run(fromUserId, intoUserId);
+        move('messaging_preferences', 'userId');
+      }
 
       /*
        * Both halves of a pair, and then the pairs that stopped making sense.

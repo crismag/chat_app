@@ -74,6 +74,8 @@ function seedOwnedRows(store: SqliteStore, userId: string, conversationId: strin
   const communityId = randomUUID();
   const publicationId = randomUUID();
   const noteId = randomUUID();
+  const threadId = randomUUID();
+  const counterpartId = randomUUID();
 
   db.prepare(
     `INSERT INTO communities (id, name, description, createdByUserId, createdAt)
@@ -116,11 +118,35 @@ function seedOwnedRows(store: SqliteStore, userId: string, conversationId: strin
   ).run(noteId, userId, 'A private note', 'Written as a guest.', stamp, stamp);
 
   db.prepare(
+    `INSERT INTO messaging_threads (id, kind, createdByUserId, createdAt, updatedAt, directPairKey)
+     VALUES (?, 'direct', ?, ?, ?, ?)`,
+  ).run(threadId, userId, stamp, stamp, `${userId}:${counterpartId}`);
+  db.prepare(
+    `INSERT INTO messaging_thread_members (threadId, userId, role, joinedAt, lastReadMessageId)
+     VALUES (?, ?, 'member', ?, NULL)`,
+  ).run(threadId, userId, stamp);
+  db.prepare(
+    `INSERT INTO messaging_messages (id, threadId, senderUserId, body, createdAt)
+     VALUES (?, ?, ?, 'A guest line', ?)`,
+  ).run(randomUUID(), threadId, userId, stamp);
+  db.prepare(
+    `INSERT INTO messaging_contacts (userId, contactUserId, createdAt) VALUES (?, ?, ?)`,
+  ).run(userId, counterpartId, stamp);
+  db.prepare(
+    `INSERT INTO messaging_requests
+       (id, senderUserId, recipientUserId, threadId, status, createdAt, respondedAt)
+     VALUES (?, ?, ?, ?, 'pending', ?, NULL)`,
+  ).run(randomUUID(), userId, counterpartId, threadId, stamp);
+  db.prepare(
+    `INSERT INTO messaging_preferences (userId, allowNonContactRequests, updatedAt) VALUES (?, 1, ?)`,
+  ).run(userId, stamp);
+
+  db.prepare(
     `INSERT INTO profiles (userId, handle, displayName, tagline, favouriteVerses, createdAt, updatedAt)
      VALUES (?, ?, ?, '', '[]', ?, ?)`,
   ).run(userId, `handle-${userId.slice(0, 8)}`, 'A guest', stamp, stamp);
 
-  return { communityId, publicationId, noteId };
+  return { communityId, publicationId, noteId, threadId };
 }
 
 function ownerOf(store: SqliteStore, sql: string, ...params: unknown[]) {
@@ -154,7 +180,7 @@ describe('a guest signing into an account they already had', () => {
     const app = createApp(store);
 
     const target = await registerElsewhere(app, 'ada@example.com');
-    const { guest, conversationId, communityId, publicationId, noteId } = await guestWithEverything(
+    const { guest, conversationId, communityId, publicationId, noteId, threadId } = await guestWithEverything(
       app,
       store,
     );
@@ -200,6 +226,12 @@ describe('a guest signing into an account they already had', () => {
     expect(ownerOf(store, 'SELECT userId FROM notes WHERE id = ?', noteId)).toEqual({
       userId: target.id,
     });
+    expect(ownerOf(store, 'SELECT createdByUserId FROM messaging_threads WHERE id = ?', threadId)).toEqual({
+      createdByUserId: target.id,
+    });
+    expect(ownerOf(store, 'SELECT userId FROM messaging_thread_members WHERE threadId = ?', threadId)).toEqual({
+      userId: target.id,
+    });
 
     /* Nothing at all is still owned by the guest. */
     for (const [table, column] of [
@@ -212,6 +244,12 @@ describe('a guest signing into an account they already had', () => {
       ['share_events', 'userId'],
       ['studio_image_assets', 'userId'],
       ['notes', 'userId'],
+      ['messaging_threads', 'createdByUserId'],
+      ['messaging_thread_members', 'userId'],
+      ['messaging_messages', 'senderUserId'],
+      ['messaging_contacts', 'userId'],
+      ['messaging_requests', 'senderUserId'],
+      ['messaging_preferences', 'userId'],
     ] as const) {
       const left = store.db
         .prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE ${column} = ?`)
