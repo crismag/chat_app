@@ -1,0 +1,15 @@
+# allowlist.txt — domains this application always accepts.
+#
+# Highest precedence: an entry here wins over blocklist.txt and over the
+# downloaded disposable registry. It exists so a legitimate organisation that
+# upstream has misclassified can be rescued by editing a file, without a
+# deployment and without changing application code.
+#
+# Say why. An override with no reason is one nobody can safely remove later.
+#
+# One domain per line, lowercase. Never a whole email address — account-level
+# problems belong in the moderation system, not in a domain list.
+#
+# Example:
+#   # Small church, listed upstream by mistake — reported 2026-08-21
+#   church-example.org

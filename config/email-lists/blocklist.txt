@@ -1,0 +1,15 @@
+# blocklist.txt — domains this application refuses, whatever upstream says.
+#
+# Consulted after allowlist.txt and before the downloaded registry, so a
+# provider being abused here today can be refused today rather than whenever
+# upstream notices.
+#
+# For domains, not for people. A single abusive account is an account-level
+# problem and belongs in the moderation system; putting a whole provider here
+# to stop one person turns away everybody else who uses it.
+#
+# One domain per line, lowercase, with a reason.
+#
+# Example:
+#   # Disposable service, not yet upstream — seen 2026-08-21
+#   temporary-example.test

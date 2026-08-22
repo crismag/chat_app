@@ -80,6 +80,12 @@ import { readStudioCreation } from './create/validation.ts';
 import { createStudioImageRoutes } from './create/image-routes.ts';
 import { createStudioImageAssetStore } from './create/image-store.ts';
 import type { StudioImageProvider } from './create/image-provider.ts';
+import {
+  EMPTY_LISTS,
+  type DomainListSnapshot,
+  classifyDomain,
+  loadDomainLists,
+} from './auth/email-domains.ts';
 import { MailDomainCheck, type MailDomainResolver } from './auth/mail-domain.ts';
 import { SqliteStore } from './db.ts';
 import { onError } from './http/errors.ts';
@@ -227,6 +233,28 @@ export function createApp(
    * Without one this answers "unavailable" for everything, which means nothing
    * is ever refused for it — the safe direction.
    */
+  /*
+   * The domain lists, read once on first use and then held.
+   *
+   * Membership is asked on every registration, so it is a hash lookup against
+   * memory rather than a scan of a file with tens of thousands of lines in it.
+   * Nothing here reaches the network: the registry is a local cache that a
+   * separate updater refreshes, because signing up has to keep working when
+   * GitHub does not.
+   *
+   * Unset means no lists, which means every domain is unknown and nothing is
+   * refused for it. A deployment that has not configured this is not thereby
+   * turning people away.
+   */
+  const listDirectory = process.env['EMAIL_DOMAIN_LIST_DIR']?.trim();
+  let loadedLists: Promise<DomainListSnapshot> | null = null;
+  const domainLists = () => {
+    loadedLists ??= listDirectory
+      ? loadDomainLists(listDirectory).catch(() => EMPTY_LISTS)
+      : Promise.resolve(EMPTY_LISTS);
+    return loadedLists;
+  };
+
   const mailDomains = new MailDomainCheck(
     options.mailDomainResolver ?? {
       resolveMx: () => Promise.reject(new Error('EAI_AGAIN')),
@@ -822,6 +850,34 @@ export function createApp(
     if (!email || password.length < 8) {
       return c.json({ error: 'Email and a password of at least 8 characters are required.' }, 400);
     }
+
+    /*
+     * A domain worth sending a link to.
+     *
+     * Deny-based, never a list of approved providers: a whitelist of the big
+     * four turns away the pastor at a church domain, the student at a
+     * university and everybody who runs their own — a large share of the
+     * people this is for. The question is not "have we heard of this
+     * provider", it is "will this mailbox still exist tomorrow".
+     *
+     * This may be specific about why, unlike the sign-in and reset replies. It
+     * discloses nothing about who has an account, and telling somebody their
+     * throwaway address was refused is the only way they can use a real one.
+     * It does not say *which* list caught it, because that would tell somebody
+     * probing exactly which one to try next.
+     */
+    const domain = email.slice(email.lastIndexOf('@') + 1);
+    const verdict = classifyDomain(domain, await domainLists());
+    if (verdict === 'disposable' || verdict === 'blocked') {
+      return c.json(
+        {
+          error:
+            'That email provider cannot be used here. Please use an address you will still have next month.',
+        },
+        400,
+      );
+    }
+
     /*
      * A guest registering claims the account they already have.
      *
