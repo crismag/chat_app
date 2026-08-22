@@ -123,6 +123,8 @@ export interface MessagingStore {
   sendMessage(actorId: string, threadId: string, body: string): PublicMessage | null | 'forbidden';
   markRead(actorId: string, threadId: string, messageId: string): boolean;
   areContacts(a: string, b: string): boolean;
+  /** Whether these two already have a direct thread, however it began. */
+  hasDirectThread(a: string, b: string): boolean;
   listContacts(actorId: string, lookup: PersonLookup): PublicContact[];
   listIncomingRequests(actorId: string, lookup: PersonLookup): PublicRequest[];
   pendingBetween(a: string, b: string): StoredRequest | null;
@@ -144,14 +146,24 @@ function defaultPreferences(): MessagingPreferences {
   return { allowNonContactRequests: true, updatedAt: nowIso() };
 }
 
-function messageAfter(cursor: StoredMessage, candidate: StoredMessage): boolean {
-  if (candidate.createdAt !== cursor.createdAt) return candidate.createdAt > cursor.createdAt;
-  return candidate.id > cursor.id;
-}
-
-function sortMessages(a: StoredMessage, b: StoredMessage): number {
-  if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
-  return a.id < b.id ? -1 : 1;
+/**
+ * Everything after the message the caller already has.
+ *
+ * By position in the thread, not by comparing values. `createdAt` is
+ * millisecond resolution, so two messages sent in the same millisecond — which
+ * is ordinary in a conversation and constant in a test — carried the same
+ * timestamp, and the tie was broken by comparing random UUIDs. When the newer
+ * message's id happened to sort lower, polling never returned it: not a
+ * delayed message, a permanently missing one.
+ *
+ * The rows arrive in the order they were written, which is the order the
+ * thread happened in, so "after" is simply "further along".
+ */
+function after(rows: StoredMessage[], afterId: string | undefined): StoredMessage[] {
+  if (!afterId) return rows;
+  const at = rows.findIndex((row) => row.id === afterId);
+  /* An id from another thread, or one since deleted: send the thread. */
+  return at === -1 ? rows : rows.slice(at + 1);
 }
 
 /* ------------------------------------------------------------------ sqlite */
@@ -210,6 +222,18 @@ class SqliteMessagingStore implements MessagingStore {
         updatedAt TEXT NOT NULL
       );
     `);
+  }
+
+  /*
+   * Used to tell a new conversation from returning to one. Reopening a thread
+   * that exists is navigation, and must not be counted against the daily
+   * ceiling on reaching new people.
+   */
+  hasDirectThread(a: string, b: string): boolean {
+    const row = this.db
+      .prepare('SELECT 1 FROM messaging_threads WHERE directPairKey = ?')
+      .get(directPairKey(a, b));
+    return row !== undefined;
   }
 
   openDirect(actorId: string, otherId: string, lookup: PersonLookup): PublicThread {
@@ -287,13 +311,10 @@ class SqliteMessagingStore implements MessagingStore {
       .prepare(
         `SELECT id, threadId, senderUserId, body, createdAt
            FROM messaging_messages WHERE threadId = ?
-          ORDER BY createdAt ASC, id ASC`,
+          ORDER BY rowid ASC`,
       )
       .all(threadId) as StoredMessage[];
-    if (!afterId) return rows;
-    const cursor = rows.find((row) => row.id === afterId);
-    if (!cursor) return rows;
-    return rows.filter((row) => messageAfter(cursor, row));
+    return after(rows, afterId);
   }
 
   sendMessage(actorId: string, threadId: string, body: string): PublicMessage | null | 'forbidden' {
@@ -565,21 +586,23 @@ class SqliteMessagingStore implements MessagingStore {
     };
   }
 
+  /*
+   * How many of the other person's messages arrived after the one this reader
+   * last saw — by write position, for the same reason listMessages is. Two
+   * messages in one millisecond used to be ordered by comparing UUIDs, which
+   * could leave a message uncounted and the thread looking read when it was
+   * not.
+   */
   private unreadCount(threadId: string, actorId: string, lastReadMessageId: string | null): number {
-    const rows = this.db
+    const row = this.db
       .prepare(
-        `SELECT id, threadId, senderUserId, body, createdAt FROM messaging_messages
-          WHERE threadId = ? AND senderUserId <> ?`,
+        `SELECT COUNT(*) AS n FROM messaging_messages
+          WHERE threadId = ? AND senderUserId <> ?
+            AND rowid > COALESCE(
+              (SELECT rowid FROM messaging_messages WHERE id = ?), 0)`,
       )
-      .all(threadId, actorId) as StoredMessage[];
-    if (!lastReadMessageId) return rows.length;
-    const cursor = this.db
-      .prepare(
-        `SELECT id, threadId, senderUserId, body, createdAt FROM messaging_messages WHERE id = ?`,
-      )
-      .get(lastReadMessageId) as StoredMessage | undefined;
-    if (!cursor) return rows.length;
-    return rows.filter((row) => messageAfter(cursor, row)).length;
+      .get(threadId, actorId, lastReadMessageId ?? '') as { n: number } | undefined;
+    return Number(row?.n ?? 0);
   }
 }
 
@@ -659,11 +682,8 @@ class MemoryMessagingStore implements MessagingStore {
 
   listMessages(actorId: string, threadId: string, afterId?: string): PublicMessage[] | null {
     if (!this.isMember(threadId, actorId)) return null;
-    const rows = this.state.messages.filter((row) => row.threadId === threadId).sort(sortMessages);
-    if (!afterId) return rows.map((row) => ({ ...row }));
-    const cursor = rows.find((row) => row.id === afterId);
-    if (!cursor) return rows.map((row) => ({ ...row }));
-    return rows.filter((row) => messageAfter(cursor, row)).map((row) => ({ ...row }));
+    const rows = this.state.messages.filter((row) => row.threadId === threadId);
+    return after(rows, afterId).map((row) => ({ ...row }));
   }
 
   sendMessage(actorId: string, threadId: string, body: string): PublicMessage | null | 'forbidden' {
@@ -696,6 +716,11 @@ class MemoryMessagingStore implements MessagingStore {
 
   areContacts(a: string, b: string): boolean {
     return this.state.contacts.some((row) => row.userId === a && row.contactUserId === b);
+  }
+
+  hasDirectThread(a: string, b: string): boolean {
+    const key = directPairKey(a, b);
+    return [...this.state.threads.values()].some((thread) => thread.directPairKey === key);
   }
 
   listContacts(actorId: string, lookup: PersonLookup): PublicContact[] {
@@ -813,7 +838,7 @@ class MemoryMessagingStore implements MessagingStore {
   }
 
   private lastMessage(threadId: string): StoredMessage | null {
-    const rows = this.state.messages.filter((row) => row.threadId === threadId).sort(sortMessages);
+    const rows = this.state.messages.filter((row) => row.threadId === threadId);
     return rows.at(-1) ?? null;
   }
 
@@ -849,11 +874,20 @@ class MemoryMessagingStore implements MessagingStore {
   }
 
   private unreadCount(threadId: string, actorId: string, lastReadMessageId: string | null): number {
-    const rows = this.state.messages.filter((row) => row.threadId === threadId && row.senderUserId !== actorId);
-    if (!lastReadMessageId) return rows.length;
-    const cursor = this.state.messages.find((row) => row.id === lastReadMessageId);
-    if (!cursor) return rows.length;
-    return rows.filter((row) => messageAfter(cursor, row)).length;
+    if (!lastReadMessageId) {
+      return this.state.messages.filter(
+        (row) => row.threadId === threadId && row.senderUserId !== actorId,
+      ).length;
+    }
+    const readAt = this.state.messages.findIndex((row) => row.id === lastReadMessageId);
+    if (readAt === -1) {
+      return this.state.messages.filter(
+        (row) => row.threadId === threadId && row.senderUserId !== actorId,
+      ).length;
+    }
+    return this.state.messages
+      .slice(readAt + 1)
+      .filter((row) => row.threadId === threadId && row.senderUserId !== actorId).length;
   }
 }
 

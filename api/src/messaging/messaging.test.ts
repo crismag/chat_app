@@ -3,6 +3,8 @@
  */
 
 import { beforeEach, describe, expect, test } from 'vitest';
+import { randomUUID } from 'node:crypto';
+
 import { createApp } from '../app.ts';
 import { SqliteStore } from '../db.ts';
 import { MemoryStore } from '../store.ts';
@@ -12,18 +14,45 @@ import { MESSAGE_BODY_MAX } from './limits.ts';
 type App = ReturnType<typeof createApp>;
 
 let app: App;
+let store: SqliteStore;
 
 beforeEach(() => {
-  app = createApp(new SqliteStore());
+  store = new SqliteStore();
+  app = createApp(store);
 });
 
-async function register(email: string, target: App = app) {
+/**
+ * What opening the confirmation link does, without sending one.
+ *
+ * Takes the store rather than the app, because the in-memory store used by one
+ * test below keeps its accounts somewhere else entirely.
+ */
+function confirmEmail(email: string, target: SqliteStore | MemoryStore): void {
+  const db = (target as { db?: { prepare(sql: string): { run(...a: unknown[]): unknown } } }).db;
+  if (db) {
+    db.prepare('UPDATE users SET emailVerifiedAt = ? WHERE email = ?').run(
+      new Date().toISOString(),
+      email,
+    );
+    return;
+  }
+  const accounts = (target as MemoryStore).accounts;
+  const account = accounts.byEmail(email);
+  if (account) accounts.setEmailVerified(account.id);
+}
+
+async function register(email: string, target: App = app, backing: SqliteStore | MemoryStore = store) {
   const response = await target.request('/api/auth/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password: 'secret12' }),
   });
   expect(response.status).toBe(201);
+  /*
+   * Confirmed, because sending asks for it and these tests are about what
+   * happens after that point. The gate has its own tests below.
+   */
+  confirmEmail(email, backing);
   const cookie = cookieHeader(response.headers.get('set-cookie'));
   const me = await target.request('/api/profiles/me', { headers: { Cookie: cookie } });
   const profile = (await me.json()) as { handle: string };
@@ -283,9 +312,10 @@ describe('block from a request', () => {
 
 describe('memory backing', () => {
   test('createApp(new MemoryStore()) still serves messaging', async () => {
-    const memory = createApp(new MemoryStore());
-    const ada = await register('ada@example.com', memory);
-    const bea = await register('bea@example.com', memory);
+    const backing = new MemoryStore();
+    const memory = createApp(backing);
+    const ada = await register('ada@example.com', memory, backing);
+    const bea = await register('bea@example.com', memory, backing);
     const opened = await call<{ thread: Thread }>(
       ada.cookie,
       '/api/messaging/open',
@@ -295,4 +325,192 @@ describe('memory backing', () => {
     expect(opened.status).toBe(201);
     expect(opened.body.thread.other.handle).toBe(bea.handle);
   });
+});
+
+test('an unconfirmed address may read its messages but not send one', async () => {
+  const ada = await register('ada@example.com');
+  const bea = await register('bea@example.com');
+
+  /* Bea has not opened her link. Ada has. */
+  store.db.prepare('UPDATE users SET emailVerifiedAt = NULL WHERE email = ?').run('bea@example.com');
+
+  const opened = await call<{ thread: { id: string } }>(ada.cookie, '/api/messaging/open', {
+    method: 'POST',
+    body: JSON.stringify({ handle: bea.handle }),
+  });
+  expect(opened.status).toBe(201);
+  const threadId = opened.body.thread.id;
+
+  /* Reading is open: being unable to see a message somebody sent you would be
+     a strange punishment for not having clicked a link yet. */
+  const read = await call(bea.cookie, `/api/messaging/threads/${threadId}/messages`);
+  expect(read.status).toBe(200);
+
+  const replied = await call<{ error: string; needsEmailVerification: boolean }>(
+    bea.cookie,
+    `/api/messaging/threads/${threadId}/messages`,
+    { method: 'POST', body: JSON.stringify({ body: 'Hello back.' }) },
+  );
+  expect(replied.status).toBe(403);
+  expect(replied.body.needsEmailVerification).toBe(true);
+  expect(replied.body.error).toMatch(/confirm your email/i);
+});
+
+test('an unconfirmed address cannot start a conversation either', async () => {
+  const ada = await register('ada@example.com');
+  const bea = await register('bea@example.com');
+  store.db.prepare('UPDATE users SET emailVerifiedAt = NULL WHERE email = ?').run('ada@example.com');
+
+  const opened = await call<{ needsEmailVerification: boolean }>(ada.cookie, '/api/messaging/open', {
+    method: 'POST',
+    body: JSON.stringify({ handle: bea.handle }),
+  });
+
+  /* The stranger-facing direction is the one that matters most. */
+  expect(opened.status).toBe(403);
+  expect(opened.body.needsEmailVerification).toBe(true);
+});
+
+test('sending very fast is refused, and says when to try again', async () => {
+  const ada = await register('ada@example.com');
+  const bea = await register('bea@example.com');
+  const opened = await call<{ thread: { id: string } }>(ada.cookie, '/api/messaging/open', {
+    method: 'POST',
+    body: JSON.stringify({ handle: bea.handle }),
+  });
+  const threadId = opened.body.thread.id;
+  await call(bea.cookie, `/api/messaging/requests`);
+  const path = `/api/messaging/threads/${threadId}/messages`;
+
+  const statuses: number[] = [];
+  for (let n = 0; n < 32; n += 1) {
+    const sent = await call(ada.cookie, path, {
+      method: 'POST',
+      body: JSON.stringify({ body: `Message ${String(n)}` }),
+    });
+    statuses.push(sent.status);
+  }
+
+  /* A real exchange never reaches this; a script does immediately. */
+  expect(statuses.filter((status) => status === 429).length).toBeGreaterThan(0);
+  const refusedAt = statuses.indexOf(429);
+  expect(refusedAt).toBeGreaterThanOrEqual(25);
+
+  const refused = await call<{ retryAfterSeconds: number }>(ada.cookie, path, {
+    method: 'POST',
+    body: JSON.stringify({ body: 'One more' }),
+  });
+  expect(refused.status).toBe(429);
+  expect(refused.body.retryAfterSeconds).toBeGreaterThan(0);
+});
+
+/*
+ * Somebody to write to, made directly.
+ *
+ * Registering them over HTTP would meet the *registration* ceiling long before
+ * the messaging one, and this test is about the messaging one.
+ */
+function seedPerson(handle: string): string {
+  const id = randomUUID();
+  const at = new Date().toISOString();
+  store.db
+    .prepare(
+      `INSERT INTO users (id, accountType, email, emailVerifiedAt, createdAt)
+       VALUES (?, 'REGISTERED', ?, ?, ?)`,
+    )
+    .run(id, `${handle}@example.com`, at, at);
+  store.db
+    .prepare(
+      `INSERT INTO profiles (userId, handle, displayName, tagline, favouriteVerses, createdAt, updatedAt)
+       VALUES (?, ?, ?, '', '[]', ?, ?)`,
+    )
+    .run(id, handle, handle, at, at);
+  return handle;
+}
+
+test('reaching many strangers in a day is capped; returning to a thread is not', async () => {
+  const ada = await register('ada@example.com');
+
+  const statuses: number[] = [];
+  for (let n = 0; n < 12; n += 1) {
+    const handle = seedPerson(`stranger${String(n)}`);
+    const opened = await call(ada.cookie, '/api/messaging/open', {
+      method: 'POST',
+      body: JSON.stringify({ handle }),
+    });
+    statuses.push(opened.status);
+  }
+
+  /* Ten new conversations a day is generous for a person and mean for a spammer. */
+  expect(statuses.filter((status) => status === 201).length).toBe(10);
+  expect(statuses.filter((status) => status === 429).length).toBe(2);
+});
+
+test('reopening a conversation you already have does not spend the daily allowance', async () => {
+  const ada = await register('ada@example.com');
+  const bea = await register('bea@example.com');
+  const first = await call(ada.cookie, '/api/messaging/open', {
+    method: 'POST',
+    body: JSON.stringify({ handle: bea.handle }),
+  });
+  expect(first.status).toBe(201);
+
+  /*
+   * Opening an existing thread is navigation. Charging for it would put a
+   * daily cap on reading your own messages.
+   */
+  for (let n = 0; n < 15; n += 1) {
+    const again = await call(ada.cookie, '/api/messaging/open', {
+      method: 'POST',
+      body: JSON.stringify({ handle: bea.handle }),
+    });
+    expect(again.status).toBe(201);
+  }
+});
+
+test('messages sent in the same instant are all delivered, in order', async () => {
+  const ada = await register('ada@example.com');
+  const bea = await register('bea@example.com');
+  const opened = await call<{ thread: { id: string } }>(ada.cookie, '/api/messaging/open', {
+    method: 'POST',
+    body: JSON.stringify({ handle: bea.handle }),
+  });
+  const requests = await call<{ items: { id: string; threadId: string }[] }>(
+    bea.cookie,
+    '/api/messaging/requests',
+  );
+  await call(bea.cookie, `/api/messaging/requests/${requests.body.items[0]!.id}/accept`, {
+    method: 'POST',
+  });
+  const threadId = opened.body.thread.id;
+  const path = `/api/messaging/threads/${threadId}/messages`;
+
+  /*
+   * Fast enough to share a millisecond, which is ordinary in a conversation
+   * and constant on a machine like this one. Ordering used to fall back to
+   * comparing random UUIDs, so a message whose id happened to sort low was
+   * never returned by polling — permanently missing rather than late.
+   */
+  const sent: string[] = [];
+  for (const body of ['one', 'two', 'three', 'four', 'five']) {
+    const posted = await call<{ id: string }>(ada.cookie, path, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    });
+    sent.push(posted.body.id);
+  }
+
+  const all = await call<{ items: { id: string; body: string }[] }>(bea.cookie, path);
+  expect(all.body.items.map((item) => item.body)).toEqual(['one', 'two', 'three', 'four', 'five']);
+
+  /* And polling from each point returns everything after it, never a gap. */
+  for (let n = 0; n < sent.length - 1; n += 1) {
+    const rest = await call<{ items: { body: string }[] }>(bea.cookie, `${path}?after=${sent[n]!}`);
+    expect(rest.body.items.map((item) => item.body)).toEqual(
+      ['one', 'two', 'three', 'four', 'five'].slice(n + 1),
+    );
+  }
+
+  const unread = await call<{ items: { unreadCount: number }[] }>(bea.cookie, '/api/messaging/threads');
+  expect(unread.body.items[0]?.unreadCount).toBe(5);
 });

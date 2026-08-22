@@ -824,7 +824,12 @@ export function createApp(
   app.route(
     '/api/messaging',
     createMessagingRoutes({
-      currentUser: (c) => registeredUser(c),
+      /* Verification travels: sending asks for it, reading does not. */
+      currentUser: async (c) => {
+        const user = await currentUser(c);
+        if (user?.accountType !== ACCOUNT_TYPES.REGISTERED) return null;
+        return { id: user.id, emailVerified: user.emailVerified };
+      },
       store: messagingStore,
       profiles,
     }),
