@@ -21,7 +21,6 @@ import {
   validateChat,
   type AiAction,
   type AiCapabilities,
-  type AiGuidanceSection,
   type AuthorOrigin,
   type ChatFormat,
   type ValidationResult,
@@ -82,8 +81,8 @@ import {
   shareReflection,
   updateReflection,
 } from '../reflections/api.ts'
-import { assistMessage } from './ai-message.ts'
 import { useReflectionAssist } from './useReflectionAssist.ts'
+import { useReflectionChat } from './useReflectionChat.ts'
 import { ActionMenu, type ActionItem } from '../shared/ui/ActionMenu.tsx'
 import { AddToSectionSheet } from './ChatSheets.tsx'
 import styles from './ChatPage.module.css'
@@ -100,7 +99,6 @@ const SIDEBAR_KEY = 'chat.reflect.sidebar'
 const DISCLOSURE_KEY = 'chat.ai.disclosure'
 
 /** The four sections assistance understands. Heart, never a highlight. */
-const SECTION_FIELDS: AiGuidanceSection[] = ['content', 'heart', 'application', 'testimony']
 
 /** How long after the last keystroke the artifact writes itself down. */
 const AUTOSAVE_MS = 1200
@@ -159,16 +157,24 @@ export function ChatPage() {
    * section write the author makes by hand, and it only runs when they press
    * a button that says so.
    */
-  const [replying, setReplying] = useState(false)
-  const [chatError, setChatError] = useState<string | null>(null)
-  /* A message whose reply is waiting behind the disclosure. */
-  const [pendingChat, setPendingChat] = useState<
-    { id: string; message: string; chip?: Chip } | null
-  >(null)
-  /** The last reply request, so "Try again" repeats it without re-sending it. */
-  const [lastRequest, setLastRequest] = useState<
-    { conversationId: string; message: string; chip?: Chip } | null
-  >(null)
+  /*
+   * The reply thread. It is handed how to find the reflection on screen rather
+   * than the ref itself, because what it needs to know is "is this still the
+   * one they are looking at" at the moment a reply lands.
+   */
+  const {
+    replying,
+    chatError,
+    setChatError,
+    pendingChat,
+    setPendingChat,
+    requestReply,
+    retryLast,
+  } = useReflectionChat({
+    discussing,
+    openedId: () => openedRef.current,
+    reopen: (id) => openConversation(id, { continuing: true }),
+  })
 
   /*
    * Adding a draft into a section.
@@ -677,56 +683,6 @@ export function ChatPage() {
    * than read from state — the first message of a new reflection creates the
    * conversation, and `activeId` has not caught up by the time this runs.
    */
-  async function requestReply(conversationId: string, message: string, chip?: Chip) {
-    setReplying(true)
-    setChatError(null)
-    setLastRequest({ conversationId, message, ...(chip ? { chip } : {}) })
-    try {
-      await api('/ai/reflection-chat', {
-        method: 'POST',
-        body: JSON.stringify({
-          conversationId,
-          message,
-          /*
-           * An identifier from a fixed set, not prompt text. The server decides
-           * what it means and — crucially — whether this turn may produce a
-           * draft at all.
-           */
-          ...(chip ? { action: chip.action } : {}),
-          ...(chip?.section ? { section: chip.section } : {}),
-          /*
-           * Scoped mode travels as application state. The server validates it
-           * against the section enum anyway and uses it — not anything the
-           * model says — to decide where a draft would go.
-           */
-          ...(discussing && SECTION_FIELDS.includes(discussing as never)
-            ? { focusSection: discussing }
-            : {}),
-        }),
-      })
-      /*
-       * The reply was stored server-side; re-reading is what puts it on screen.
-       *
-       * Only if the author is still here, though. A reply takes seconds, and in
-       * those seconds they may have started a new reflection — at which point
-       * re-opening the old one drags them back to a reflection they left AND
-       * runs the switch reset over whatever they have begun typing in the new
-       * one. Nothing is lost by skipping it: the reply is stored, and it is
-       * there when they come back.
-       */
-      if (openedRef.current === conversationId) {
-        await openConversation(conversationId, { continuing: true })
-      }
-    } catch (caught: unknown) {
-      /*
-       * A failed reply is not a failed message. What they wrote is already
-       * saved, so this reports beside the thread and leaves it alone.
-       */
-      setChatError(assistMessage(caught))
-    } finally {
-      setReplying(false)
-    }
-  }
 
   async function sendMessage(event: FormEvent, override?: string) {
     event.preventDefault()
@@ -1016,10 +972,6 @@ export function ChatPage() {
    * tell the model what was wrong with the first attempt, so a second draft can
    * resemble the first — a known limitation rather than a surprise.
    */
-  function retryLast() {
-    if (!lastRequest || replying) return
-    void requestReply(lastRequest.conversationId, lastRequest.message, lastRequest.chip)
-  }
 
   /**
    * Invoke a structured action from a chip.
