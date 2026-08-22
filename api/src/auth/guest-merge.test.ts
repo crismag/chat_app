@@ -73,6 +73,7 @@ function seedOwnedRows(store: SqliteStore, userId: string, conversationId: strin
   const stamp = now();
   const communityId = randomUUID();
   const publicationId = randomUUID();
+  const noteId = randomUUID();
 
   db.prepare(
     `INSERT INTO communities (id, name, description, createdByUserId, createdAt)
@@ -110,11 +111,16 @@ function seedOwnedRows(store: SqliteStore, userId: string, conversationId: strin
   ).run(randomUUID(), userId, conversationId, Buffer.from([1]), stamp);
 
   db.prepare(
+    `INSERT INTO notes (id, userId, title, body, isPinned, isArchived, createdAt, updatedAt, deletedAt)
+     VALUES (?, ?, ?, ?, 0, 0, ?, ?, NULL)`,
+  ).run(noteId, userId, 'A private note', 'Written as a guest.', stamp, stamp);
+
+  db.prepare(
     `INSERT INTO profiles (userId, handle, displayName, tagline, favouriteVerses, createdAt, updatedAt)
      VALUES (?, ?, ?, '', '[]', ?, ?)`,
   ).run(userId, `handle-${userId.slice(0, 8)}`, 'A guest', stamp, stamp);
 
-  return { communityId, publicationId };
+  return { communityId, publicationId, noteId };
 }
 
 function ownerOf(store: SqliteStore, sql: string, ...params: unknown[]) {
@@ -148,7 +154,7 @@ describe('a guest signing into an account they already had', () => {
     const app = createApp(store);
 
     const target = await registerElsewhere(app, 'ada@example.com');
-    const { guest, conversationId, communityId, publicationId } = await guestWithEverything(
+    const { guest, conversationId, communityId, publicationId, noteId } = await guestWithEverything(
       app,
       store,
     );
@@ -191,6 +197,9 @@ describe('a guest signing into an account they already had', () => {
     expect(
       ownerOf(store, 'SELECT userId FROM studio_image_assets WHERE conversationId = ?', conversationId),
     ).toEqual({ userId: target.id });
+    expect(ownerOf(store, 'SELECT userId FROM notes WHERE id = ?', noteId)).toEqual({
+      userId: target.id,
+    });
 
     /* Nothing at all is still owned by the guest. */
     for (const [table, column] of [
@@ -202,6 +211,7 @@ describe('a guest signing into an account they already had', () => {
       ['publication_saves', 'userId'],
       ['share_events', 'userId'],
       ['studio_image_assets', 'userId'],
+      ['notes', 'userId'],
     ] as const) {
       const left = store.db
         .prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE ${column} = ?`)
