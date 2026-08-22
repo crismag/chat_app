@@ -56,13 +56,19 @@ function appWith(resolver: MailDomainResolver) {
   return { app, sent };
 }
 
-async function register(app: ReturnType<typeof createApp>, email: string) {
+async function register(
+  app: ReturnType<typeof createApp>,
+  email: string,
+  sent: { to: string }[],
+) {
   const response = await app.request('/api/auth/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password: 'secret12' }),
   });
   expect(response.status).toBe(201);
+  /* Registering sends a confirmation link; these tests are about the reset. */
+  sent.length = 0;
 }
 
 function forgot(app: ReturnType<typeof createApp>, email: string) {
@@ -75,7 +81,7 @@ function forgot(app: ReturnType<typeof createApp>, email: string) {
 
 test('a domain that takes mail is written to', async () => {
   const { app, sent } = appWith(RESOLVER);
-  await register(app, 'ada@has-mail.example');
+  await register(app, 'ada@has-mail.example', sent);
 
   const response = await forgot(app, 'ada@has-mail.example');
 
@@ -85,7 +91,7 @@ test('a domain that takes mail is written to', async () => {
 
 test('a domain that cannot receive is not written to, and is told the same thing', async () => {
   const { app, sent } = appWith(RESOLVER);
-  await register(app, 'ada@no-mail.example');
+  await register(app, 'ada@no-mail.example', sent);
 
   const refused = await forgot(app, 'ada@no-mail.example');
   const accepted = await forgot(app, 'ada@has-mail.example');
@@ -107,7 +113,7 @@ test('a resolver that cannot answer delays nobody', async () => {
       Promise.reject(Object.assign(new Error('timeout'), { code: 'EAI_AGAIN' })),
   };
   const { app, sent } = appWith(flaky);
-  await register(app, 'ada@has-mail.example');
+  await register(app, 'ada@has-mail.example', sent);
 
   await forgot(app, 'ada@has-mail.example');
 
@@ -124,7 +130,7 @@ test('nothing is looked up when no resolver is configured', async () => {
     },
   };
   const app = createApp(new SqliteStore(), {}, {}, undefined, { mailer });
-  await register(app, 'ada@has-mail.example');
+  await register(app, 'ada@has-mail.example', sent);
 
   await forgot(app, 'ada@has-mail.example');
 
@@ -133,8 +139,8 @@ test('nothing is looked up when no resolver is configured', async () => {
 
 test('the lookup happens once for a domain, not once per request', async () => {
   const resolveMx = vi.fn(RESOLVER.resolveMx);
-  const { app } = appWith({ ...RESOLVER, resolveMx });
-  await register(app, 'ada@has-mail.example');
+  const { app, sent } = appWith({ ...RESOLVER, resolveMx });
+  await register(app, 'ada@has-mail.example', sent);
 
   await forgot(app, 'ada@has-mail.example');
   await forgot(app, 'bob@has-mail.example');

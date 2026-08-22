@@ -42,6 +42,11 @@ const post = (path: string, body: unknown, cookie = '') =>
 async function register(email: string, password = 'first-password') {
   const response = await post('/api/auth/register', { email, password });
   expect(response.status).toBe(201);
+  /*
+   * Registering also sends a confirmation link. These tests are about the
+   * reset email, so the outbox starts empty for each of them.
+   */
+  outbox.sent.length = 0;
   return cookieHeader(response.headers.get('set-cookie'));
 }
 

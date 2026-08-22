@@ -6,12 +6,25 @@
  * nobody into anybody — which is the whole difference between this and signing
  * in by link.
  */
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 
 import { createApp } from '../app.ts';
 import { SqliteStore } from '../db.ts';
 import { cookieHeader } from '../http/set-cookie.ts';
 import type { Mailer, Message } from '../mail/mailer.ts';
+import { readMysqlConfig } from '../mysql/config.ts';
+import { migrate } from '../mysql/migrate.ts';
+import { MysqlPersistence } from '../mysql/persistence.ts';
+import { createMysqlPool, type MysqlPool } from '../mysql/pool.ts';
+import { MysqlAuthStore } from './store.ts';
+
+const mysql = (() => {
+  try {
+    return readMysqlConfig();
+  } catch {
+    return null;
+  }
+})();
 
 let previousOrigin: string | undefined;
 
@@ -71,8 +84,9 @@ function verify(app: ReturnType<typeof createApp>, token: string) {
 
 test('opening the link confirms the address and signs nobody in', async () => {
   const { app, outbox } = setup();
+  /* Registering sends the first link; nobody has to go and find a button. */
   const cookie = await register(app, 'ada@example.com');
-  await send(app, cookie);
+  expect(outbox).toHaveLength(1);
 
   const response = await verify(app, tokenFrom(outbox[0]));
 
@@ -90,8 +104,7 @@ test('opening the link confirms the address and signs nobody in', async () => {
 
 test('the stored row does not contain the token that was emailed', async () => {
   const { app, store, outbox } = setup();
-  const cookie = await register(app, 'ada@example.com');
-  await send(app, cookie);
+  await register(app, 'ada@example.com');
   const token = tokenFrom(outbox[0]);
 
   const rows = store.db.prepare('SELECT tokenHash FROM email_verifications').all() as {
@@ -107,7 +120,6 @@ test('a link works once, and asking again retires the one before it', async () =
   const { app, outbox } = setup();
   const cookie = await register(app, 'ada@example.com');
 
-  await send(app, cookie);
   const first = tokenFrom(outbox[0]);
   await send(app, cookie);
   const second = tokenFrom(outbox[1]);
@@ -121,8 +133,7 @@ test('a link works once, and asking again retires the one before it', async () =
 
 test('unknown, expired and already-spent are one answer', async () => {
   const { app, outbox } = setup();
-  const cookie = await register(app, 'ada@example.com');
-  await send(app, cookie);
+  await register(app, 'ada@example.com');
   const token = tokenFrom(outbox[0]);
   await verify(app, token);
 
@@ -152,11 +163,68 @@ test('asking for a link says the same thing to everybody', async () => {
 test('an already-confirmed account is not sent another link', async () => {
   const { app, outbox } = setup();
   const cookie = await register(app, 'ada@example.com');
-  await send(app, cookie);
   await verify(app, tokenFrom(outbox[0]));
 
   await send(app, cookie);
 
-  /* Nothing to prove, so nothing is sent — and the reply still does not say so. */
+  /* Nothing left to prove, so nothing is sent — and the reply still does not say so. */
   expect(outbox).toHaveLength(1);
+});
+
+/*
+ * The production combination: accounts in MariaDB, the pending proof in
+ * SQLite beside the content.
+ *
+ * The id that crosses between them is the account's public uuid, and
+ * confirming has to resolve it on the far side. Worth an actual test rather
+ * than an argument, because a mismatch here would fail silently — the link
+ * would report success and the account would stay unverified.
+ */
+describe.skipIf(!mysql)('confirming when accounts live in MariaDB', () => {
+  let pool: MysqlPool;
+  let db: MysqlPersistence;
+  const made: string[] = [];
+
+  beforeAll(async () => {
+    if (!mysql) return;
+    pool = createMysqlPool(mysql);
+    await migrate(pool);
+    db = new MysqlPersistence(pool);
+  });
+
+  afterAll(async () => {
+    for (const uuid of made) {
+      const user = await db.getUserByPublicUuid(uuid).catch(() => null);
+      if (user) await db.deleteUserGraph(user.id).catch(() => undefined);
+    }
+    await pool?.end();
+  });
+
+  test('the link confirms the account it belongs to, across the two stores', async () => {
+    const outbox: Message[] = [];
+    const mailer: Mailer = {
+      configured: true,
+      send: async (message) => {
+        outbox.push(message);
+      },
+    };
+    const app = createApp(new SqliteStore(), {}, {}, new MysqlAuthStore(db), { mailer });
+
+    const email = `verify-${crypto.randomUUID()}@example.com`;
+    const cookie = await register(app, email);
+    const me = (await (await app.request('/api/auth/me', { headers: { Cookie: cookie } })).json()) as {
+      id: string;
+      emailVerified: boolean;
+    };
+    made.push(me.id);
+    expect(me.emailVerified).toBe(false);
+
+    const response = await verify(app, tokenFrom(outbox[0]));
+    expect(response.status).toBe(200);
+
+    const after = (await (
+      await app.request('/api/auth/me', { headers: { Cookie: cookie } })
+    ).json()) as { emailVerified: boolean };
+    expect(after.emailVerified).toBe(true);
+  });
 });

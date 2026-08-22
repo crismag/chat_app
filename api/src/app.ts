@@ -849,19 +849,6 @@ export function createApp(
      */
     await beginSession(c, user, { installationId, persistent: true });
 
-    /*
-     * The link goes out now, so confirming is something they can do from the
-     * email already in their inbox rather than a thing they must first
-     * discover a button for.
-     *
-     * Never fatal, and never reported. Registration succeeded; a mail server
-     * refusing connections is not a reason to tell somebody their account was
-     * not created, and they can ask for another link at any time.
-     */
-    await sendVerificationLink(user).catch((error: unknown) =>
-      console.warn('verification mail failed:', error),
-    );
-
     return c.json(accountBody(user), 201);
   });
 
@@ -956,6 +943,19 @@ export function createApp(
       recognised?.installationId ??
       (await rememberInstallation(c, auth, user.id, PERSISTENCE_TYPES.REGISTERED_PERSISTENT));
     await beginSession(c, user, { installationId, persistent: true });
+
+    /*
+     * The link goes out now, so confirming is something they do from the email
+     * already in their inbox rather than a button they must go and find.
+     *
+     * Never fatal and never reported. The account was created; a mail server
+     * refusing connections is not a reason to say otherwise, and another link
+     * can be asked for at any time.
+     */
+    await sendVerificationLink(user).catch((error: unknown) =>
+      console.warn('verification mail failed:', error),
+    );
+
     return c.json(accountBody(user), 201);
   });
 
