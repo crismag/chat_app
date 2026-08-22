@@ -6,11 +6,11 @@ When a finding is done, set it to **done** and add the commit hash if you have o
 
 Do not mark done without tests named in the phase file.
 
-**2026-08-22, branch `agent/audit-p1`.** P0 was verified present in the working
-tree with green tests rather than re-implemented, per
-[`CODEREVIEWERASSIST.md`](CODEREVIEWERASSIST.md). P1 is finished. Nothing in
-this round is committed yet — see the report; `api/src/app.ts` carries three
-separate uncommitted bodies of work and cannot be staged cleanly per finding.
+**2026-08-22.** P0 was verified present in the working tree with green tests
+rather than re-implemented, per [`CODEREVIEWERASSIST.md`](CODEREVIEWERASSIST.md).
+P1–P4 are committed and merged to `main`; P5 is in progress on
+`agent/audit-p5`. The MariaDB suites were run against a real server (10.11
+locally; CI pins 11.8), so the durable tests that used to skip now pass.
 
 A CodeReviewerAssist pass on 2026-08-22, plus three specialized lens reviews, added S9–S11, O1–O3, M1–M2, B5–B6 and retargeted B4. Inspect the tree before ticking P0 — those items may already be in uncommitted code. See [`CODEREVIEWERASSIST.md`](CODEREVIEWERASSIST.md).
 
@@ -38,7 +38,7 @@ A CodeReviewerAssist pass on 2026-08-22, plus three specialized lens reviews, ad
 ## P2
 
 - [x] B3 Merge all SQLite owner-scoped tables — publications, communities, memberships, reactions, saves, hides, mutes, blocks, share events, reports, Studio assets and profiles, in the same transaction as the conversations; `api/src/auth/guest-merge.test.ts`
-- [x] Dual-store merge test (MysqlAuthStore + SqliteStore) — in `guest-merge.test.ts`, `skipIf` without `MYSQL_*`. **Not executed here: no MariaDB configured locally, so it skipped. CI must run it.**
+- [x] Dual-store merge test (MysqlAuthStore + SqliteStore) — **executed** against MariaDB 10.11 on 2026-08-22 and passing, with all 50 previously-skipped MariaDB tests (642 api tests green with `MYSQL_*` set). Note the local version is 10.11; CI pins 11.8.
 - [x] B4 Closed by evidence — `ChatPage.test.tsx` “the Send button path keeps a title typed during creation” passes; the free-typed Scripture field is retired (Bible selector), and `scripts/verify/reference-race.mjs` already targets the title. No code change.
 - [x] B5 `share_events` inside the publish transaction — written by `publish()` in the same `BEGIN`; `share-atomicity.test.ts`
 - [x] B6 Conversation delete in one SQLite transaction — publications, sections, messages and the conversation in one `BEGIN`; covered by the existing delete tests on both backings
@@ -61,10 +61,11 @@ A CodeReviewerAssist pass on 2026-08-22, plus three specialized lens reviews, ad
 
 ## P5
 
-- [ ] Not started (requires approval)
-- [ ] Schema decision recorded: live SQLite shape
-- [ ] Community columns missing from MariaDB `003` added
-- [ ] Routes flipped
+- [~] **In progress** (approved 2026-08-22). Schema is done and tested against a real MariaDB; the cutover itself — backfill, read flag, write flip, retirement — is not.
+- [x] Schema decision recorded: live SQLite shape — `007` mirrors SQLite *semantics* while keeping MariaDB conventions (BIGINT + `public_uuid`, snake_case). The unused `chat_content`/`reflection_revisions` model is untouched and is not the target.
+- [x] Community columns missing from MariaDB `003` added — migration `007`: community settings, `share_visibility`, `publication_hides`, `author_mutes`, `share_events`, the one-live-share rule and the feed index; `api/src/mysql/community-schema.test.ts` proves the rules against a real MariaDB
+- [~] Backfill written and tested — `api/src/mysql/backfill-content.ts` copies live SQLite content into MariaDB keyed by `public_uuid`: re-runnable, replaces sections and messages rather than merging, skips (never reassigns) a reflection whose owner has no MariaDB account, and never writes to the source.
+- [ ] Routes flipped — **not started.** Needs a content store on MariaDB, a backfill keyed by `public_uuid`, and a read flag defaulting off. Steps 4–5 (flip writes, retire SQLite) also need a production soak, so they cannot be closed from a development machine.
 - [ ] SQLite live path retired
 - [ ] API loopback bind in production (S9 — also listed under P6)
 - [ ] Restore drill documented for **both** SQLite content and MariaDB accounts (O3)
