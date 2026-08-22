@@ -82,7 +82,7 @@ A CodeReviewerAssist pass on 2026-08-22, plus three specialized lens reviews, ad
 - [ ] Public share single POST
 - [ ] S9 Loopback bind + XFF only from loopback
 - [ ] S10 Account export/delete (only if named)
-- [ ] O1 Readiness probe
+- [x] O1 Readiness probe — `GET /api/health/ready` pings content and, where accounts live across a network, MariaDB; `/api/health` is untouched liveness. `api/src/http/readiness.test.ts`
 - [ ] O2 PHP gateway timeout
 - [x] M1 Request IDs on generic HTTP — one middleware, echoed on every response, a client's own id honoured after being made safe to log; `api/src/http/request-id.test.ts`
 - [x] M2 `app.onError` JSON `{ error }` — uncaught throws answer JSON with the request id; the driver's message goes to the log and never to a browser
