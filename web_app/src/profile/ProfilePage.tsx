@@ -36,6 +36,7 @@ import type { ChatFormat, ChatSectionType } from '@chat/shared'
 import { ApiError, api } from '../shared/api/client.ts'
 import { ReflectionCard } from '../shared/ui/ReflectionCard.tsx'
 import { useAuth } from '../auth/useAuth.ts'
+import { ReportDialog } from '../shared/ui/ReportDialog.tsx'
 import { AvatarField } from './AvatarField.tsx'
 import { useHandleAvailability } from './useHandleAvailability.ts'
 import { CommunitiesPanel, EncouragedPanel } from './ProfilePanels.tsx'
@@ -321,98 +322,6 @@ function ProfileEditor({
 }
 
 /** Reporting a profile. Records a report; removes nothing for anyone. */
-function ReportForm({
-  handle,
-  reasons,
-  onDone,
-  onCancel,
-}: {
-  handle: string
-  reasons: { id: string; label: string }[]
-  onDone: (message: string) => void
-  onCancel: () => void
-}) {
-  const [reason, setReason] = useState('')
-  const [detail, setDetail] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [sending, setSending] = useState(false)
-  const ids = useId()
-
-  async function submit(event: React.FormEvent) {
-    event.preventDefault()
-    setSending(true)
-    setError(null)
-    try {
-      const result = await api<{ message: string }>(`/profiles/${handle}/report`, {
-        method: 'POST',
-        body: JSON.stringify({ reason, detail }),
-      })
-      onDone(result.message)
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'That report could not be sent.')
-    } finally {
-      setSending(false)
-    }
-  }
-
-  return (
-    <form className={styles.editor} onSubmit={(event) => void submit(event)}>
-      <h2 className={styles.editorTitle}>Report @{handle}</h2>
-      <p className="hint">
-        Reports are reviewed before any action is taken. Reporting does not remove anything for
-        other people.
-      </p>
-      {error ? (
-        <p className={styles.formError} role="alert">
-          {error}
-        </p>
-      ) : null}
-
-      <fieldset className={styles.fieldset}>
-        <legend className="label">Why are you reporting this profile?</legend>
-        <div className={styles.reasons}>
-          {reasons.map((option) => (
-            <label key={option.id} className={styles.reason} htmlFor={`${ids}-${option.id}`}>
-              <input
-                id={`${ids}-${option.id}`}
-                type="radio"
-                name={`${ids}-reason`}
-                value={option.id}
-                checked={reason === option.id}
-                onChange={() => setReason(option.id)}
-              />
-              <span>{option.label}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      <div className="field">
-        <label className="label" htmlFor={`${ids}-detail`}>
-          Anything else we should know? Optional.
-        </label>
-        <textarea
-          id={`${ids}-detail`}
-          className="textarea"
-          rows={3}
-          value={detail}
-          maxLength={500}
-          onChange={(event) => setDetail(event.target.value)}
-        />
-      </div>
-
-      <div className={styles.editorActions}>
-        <button type="submit" className="btn btn-primary" disabled={sending || reason === ''}>
-          {sending ? 'Sending…' : 'Send report'}
-        </button>
-        <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={sending}>
-          Cancel
-        </button>
-      </div>
-    </form>
-  )
-}
-
 /* ---------------------------------------------------------------- the page */
 
 type Panel = 'none' | 'edit' | 'report'
@@ -733,13 +642,32 @@ export function ProfilePage() {
       ) : null}
 
       {panel === 'report' ? (
-        <ReportForm
-          handle={profile.handle}
+        /*
+         * The same dialog Community reports a reflection through. Reporting
+         * somebody should not vary by where you happened to be standing, so
+         * only the words differ.
+         */
+        <ReportDialog
+          title={`Report @${profile.handle}`}
+          lead="Reports are read before anything happens — reporting does not remove anything for other people."
           reasons={profile.reportReasons}
-          onCancel={() => setPanel('none')}
-          onDone={(message) => {
-            setPanel('none')
-            setNotice(message)
+          notePlaceholder={(reason) =>
+            reason === 'other'
+              ? 'What is wrong with this profile?'
+              : 'Anything that would help somebody understand the problem.'
+          }
+          onClose={() => setPanel('none')}
+          onSubmit={async (reason, detail) => {
+            const result = await api<{ message: string }>(
+              `/profiles/${profile.handle}/report`,
+              { method: 'POST', body: JSON.stringify({ reason, detail }) },
+            )
+            /*
+             * Returned rather than pushed into the page's notice: the dialog
+             * shows the confirmation, and setting both said it twice — once on
+             * screen and once more to anybody listening to the live region.
+             */
+            return result.message
           }}
         />
       ) : null}
