@@ -71,6 +71,24 @@ export function markRead(threadId: string, lastReadMessageId: string) {
   })
 }
 
+/**
+ * People who can be written to, matching what was typed.
+ *
+ * The server decides who appears: never the person searching, nobody who has
+ * blocked them, and nobody who is not taking requests from strangers. So this
+ * is a list of conversations that can actually be started, not a directory
+ * with dead entries in it.
+ *
+ * Below two characters the server answers with nothing, so a caller may send
+ * every keystroke without deciding when a query has become a real one.
+ */
+export function findPeople(query: string, signal?: AbortSignal) {
+  return api<{ items: MessagingPerson[] }>(
+    `/messaging/people?q=${encodeURIComponent(query)}`,
+    signal ? { signal } : {},
+  );
+}
+
 export function openConversation(handle: string) {
   return api<{ thread: MessagingThread }>('/messaging/open', {
     method: 'POST',

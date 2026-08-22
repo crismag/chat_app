@@ -41,21 +41,41 @@ const profile = {
   ],
 }
 
-function mockFetch(overrides: Record<string, unknown> = {}) {
+/*
+ * The account and the profile are kept apart here on purpose.
+ *
+ * `emailVerified` belongs to `/auth/me` — the caller's own session — and is
+ * never in the `/profiles/:handle` payload. Letting it into `view` would make
+ * these tests pass against a server that had started publishing it, which is
+ * the one thing the notice must not depend on.
+ */
+function mockFetch(
+  overrides: Record<string, unknown> = {},
+  account: { accountType?: string; emailVerified?: boolean; email?: string | null } = {},
+) {
   const view = { ...profile, ...overrides }
+  const signedIn = account.accountType ?? overrides.accountType
   return vi.fn((input: RequestInfo, init?: RequestInit) => {
     const url = String(input)
     const method = init?.method ?? 'GET'
+    if (url.includes('/auth/send-verification') && method === 'POST') {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          message: 'If that address needs confirming, a link is on its way to it.',
+        }),
+      } as Response)
+    }
     if (url.includes('/auth/me')) {
-      if (overrides.accountType === 'REGISTERED') {
+      if (signedIn === 'REGISTERED') {
         return Promise.resolve({
           ok: true,
           json: async () => ({
             id: 'u-visitor',
             accountType: 'REGISTERED',
-            email: 'ada@example.com',
+            email: account.email === undefined ? 'ada@example.com' : account.email,
             guestName: null,
-            emailVerified: true,
+            emailVerified: account.emailVerified ?? true,
           }),
         } as Response)
       }
@@ -173,6 +193,69 @@ test("offers Report and Block on someone else's profile, and Edit on one's own",
   renderProfile()
   expect(await screen.findByRole('button', { name: 'Edit profile' })).toBeVisible()
   expect(screen.queryByRole('button', { name: 'Report profile' })).toBeNull()
+})
+
+test('an unconfirmed address is told so on its own profile, and can ask for the link again', async () => {
+  const fetcher = mockFetch(
+    { isOwner: true },
+    { accountType: 'REGISTERED', emailVerified: false, email: 'ada@example.com' },
+  )
+  vi.stubGlobal('fetch', fetcher)
+  renderProfile()
+
+  expect(
+    await screen.findByRole('heading', { name: 'Confirm your email address' }),
+  ).toBeVisible()
+  /* The address is shown, so a typo in it is something a person can notice. */
+  expect(screen.getByText('ada@example.com')).toBeVisible()
+  /* It says what is and is not affected, rather than only that something is wrong. */
+  expect(screen.getByText(/writing privately/i)).toBeVisible()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Send the link again' }))
+  await waitFor(() => expect(screen.getByText(/a link is on its way/i)).toBeVisible())
+
+  const asked = fetcher.mock.calls.find(([input]) =>
+    String(input).includes('/auth/send-verification'),
+  )
+  expect(asked).toBeDefined()
+  expect(asked?.[1]?.method).toBe('POST')
+})
+
+test('a confirmed address is not asked to confirm anything', async () => {
+  vi.stubGlobal(
+    'fetch',
+    mockFetch({ isOwner: true }, { accountType: 'REGISTERED', emailVerified: true }),
+  )
+  renderProfile()
+  await screen.findByRole('button', { name: 'Edit profile' })
+
+  expect(screen.queryByRole('heading', { name: 'Confirm your email address' })).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Send the link again' })).toBeNull()
+})
+
+test('a visitor is told nothing about whether this person confirmed their address', async () => {
+  /*
+   * The visitor is themselves unconfirmed, and looking at somebody else's
+   * page. Neither fact may put the notice on screen: it is about the reader's
+   * own account, and it belongs on their own profile only.
+   */
+  vi.stubGlobal(
+    'fetch',
+    mockFetch({ isOwner: false }, { accountType: 'REGISTERED', emailVerified: false }),
+  )
+  renderProfile()
+  await screen.findByRole('heading', { level: 1, name: 'Cris Magalang' })
+
+  expect(screen.queryByRole('heading', { name: 'Confirm your email address' })).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Send the link again' })).toBeNull()
+})
+
+test('a guest on their own page is not told to confirm an address they never gave', async () => {
+  vi.stubGlobal('fetch', mockFetch({ isOwner: true }))
+  renderProfile()
+  await screen.findByRole('button', { name: 'Edit profile' })
+
+  expect(screen.queryByRole('heading', { name: 'Confirm your email address' })).toBeNull()
 })
 
 test('a signed-in visitor can Message from a profile', async () => {

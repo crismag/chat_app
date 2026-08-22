@@ -26,7 +26,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { SlidingWindowRateLimiter } from '../ai/rate-limit.ts';
 import type { AuthUser } from '../auth/store.ts';
-import type { ProfileStore, StoredProfile } from '../profile/store.ts';
+import { MIN_SEARCH_LENGTH, type ProfileStore, type StoredProfile } from '../profile/store.ts';
 import { parseMessageBody } from './limits.ts';
 import { blockedEitherWay, canCreateMessageRequest } from './permissions.ts';
 import {
@@ -75,6 +75,34 @@ const CONFIRM_FIRST = {
  */
 const MESSAGES_PER_MINUTE = 30;
 const NEW_CONVERSATIONS_PER_DAY = 10;
+
+/*
+ * Finding somebody to write to.
+ *
+ * ── Why this route exists ──────────────────────────────────────────────────
+ *
+ * Messaging shipped with exactly one way to begin: the Message button on
+ * somebody's profile. Nothing in the application linked to another person's
+ * profile, so in practice a conversation could only be started by typing a
+ * handle into the address bar. This is the other half of the repair.
+ *
+ * ── What it is careful about ───────────────────────────────────────────────
+ *
+ * Every profile it can return is already readable by anyone at
+ * `/profile/<handle>`. What is new is not visibility but *enumerability*, and
+ * that is the thing worth bounding: two characters minimum so the query has to
+ * be about somebody, ten results so it is an answer rather than a page of a
+ * directory, and a per-caller ceiling so it cannot be walked. Somebody who has
+ * never opened a profile is not in it at all.
+ *
+ * A confirmed address is required, as sending is. Searching is only ever the
+ * first half of writing to a stranger, and an unconfirmed account harvesting
+ * names it is not allowed to write to is the shape of the abuse the
+ * confirmation rule exists to stop.
+ */
+const PEOPLE_LIMIT = 10;
+const SEARCHES_PER_MINUTE = 30;
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function avatarUrl(profile: StoredProfile): string | null {
@@ -99,6 +127,7 @@ export function createMessagingRoutes({ currentUser, store, profiles }: Messagin
   /* Per sender, not per address: an account is the person, and cannot be rotated. */
   const sendLimiter = new SlidingWindowRateLimiter(MESSAGES_PER_MINUTE);
   const openLimiter = new SlidingWindowRateLimiter(NEW_CONVERSATIONS_PER_DAY, Date.now, DAY_MS);
+  const searchLimiter = new SlidingWindowRateLimiter(SEARCHES_PER_MINUTE);
 
   const refused = (c: Context, retryAfterSeconds: number, error: string) => {
     c.header('Retry-After', String(retryAfterSeconds));
@@ -113,6 +142,51 @@ export function createMessagingRoutes({ currentUser, store, profiles }: Messagin
     const actor = await actorOf(c);
     if (!actor) return c.json(SIGN_IN, 401);
     return c.json({ items: store.listChats(actor.id, lookup) });
+  });
+
+  app.get('/people', async (c) => {
+    const actor = await actorOf(c);
+    if (!actor) return c.json(SIGN_IN, 401);
+    if (actor.emailVerified === false) return c.json(CONFIRM_FIRST, 403);
+
+    const query = (c.req.query('q') ?? '').trim();
+    /*
+     * Too short is an empty answer, not a refusal. The box is typed into one
+     * character at a time, and an error appearing on the first keystroke and
+     * vanishing on the second is noise about nothing.
+     */
+    if (query.length < MIN_SEARCH_LENGTH) return c.json({ items: [] });
+
+    const decision = searchLimiter.take(actor.id);
+    if (!decision.allowed) {
+      return refused(c, decision.retryAfterSeconds, 'You are searching very fast. Take a moment.');
+    }
+
+    /*
+     * Asked for more than are returned, because three kinds of match are
+     * dropped after the store has found them and the caller should still get a
+     * full page when there is one.
+     */
+    const found = profiles.search(query, PEOPLE_LIMIT * 4);
+    const items = found
+      .filter((profile) => profile.userId !== actor.id)
+      .filter((profile) => !blockedEitherWay(profiles, actor.id, profile.userId))
+      /*
+       * Somebody who is not taking requests from strangers is left out unless
+       * they are already a contact. Listing them would offer a person who
+       * cannot be written to — the refusal comes at `/open` either way, so
+       * this hides nothing that trying would not reveal, and it stops the
+       * search from being a list of doors that do not open.
+       */
+      .filter(
+        (profile) =>
+          store.areContacts(actor.id, profile.userId) ||
+          store.preferences(profile.userId).allowNonContactRequests,
+      )
+      .slice(0, PEOPLE_LIMIT)
+      .map((profile) => personFromProfile(profile, profile.userId));
+
+    return c.json({ items });
   });
 
   app.post('/open', async (c) => {

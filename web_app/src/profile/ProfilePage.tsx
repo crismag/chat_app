@@ -38,6 +38,7 @@ import { ReflectionCard } from '../shared/ui/ReflectionCard.tsx'
 import { useAuth } from '../auth/useAuth.ts'
 import { ReportDialog } from '../shared/ui/ReportDialog.tsx'
 import { AvatarField } from './AvatarField.tsx'
+import { ConfirmEmailNotice } from './ConfirmEmailNotice.tsx'
 import { useHandleAvailability } from './useHandleAvailability.ts'
 import { CommunitiesPanel, EncouragedPanel } from './ProfilePanels.tsx'
 import { ProfileTabs, isProfileTab, type ProfileTab } from './ProfileTabs.tsx'
@@ -631,6 +632,19 @@ export function ProfilePage() {
         <p className={styles.formError} role="alert">
           {error}
         </p>
+      ) : null}
+
+      {/*
+        Only the person themselves, and only while it is true.
+        `isOwner` says this page is theirs; the unverified fact comes from
+        their own session and is not in the profile payload at all, so there
+        is nothing here that could be shown to a visitor. The guest check is
+        not redundant: a guest has no address, so `emailVerified` is false for
+        them too, and they would otherwise be told to confirm one they never
+        gave.
+      */}
+      {profile.isOwner && user?.accountType === 'REGISTERED' && !user.emailVerified ? (
+        <ConfirmEmailNotice email={user.email} />
       ) : null}
 
       {panel === 'edit' && own ? (

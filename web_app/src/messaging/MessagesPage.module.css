@@ -171,3 +171,83 @@
   border: 1px dashed var(--line);
   border-radius: var(--radius-lg);
 }
+
+/* ------------------------------------------------------ finding somebody */
+
+.find {
+  display: grid;
+  gap: var(--space-1);
+  margin-block-start: var(--space-3);
+  position: relative;
+}
+
+.findLabel {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+/*
+ * Always present, so a result that arrives has somewhere to be announced from.
+ * A live region the browser first meets at the moment its text appears is one
+ * a screen reader can miss entirely.
+ */
+.findHint {
+  margin: 0;
+  min-block-size: 1.25rem;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.findResults {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-1);
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  /* A long list scrolls rather than pushing the conversations off screen. */
+  max-block-size: 16rem;
+  overflow-y: auto;
+}
+
+.findResult {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  inline-size: 100%;
+  min-block-size: var(--tap);
+  padding: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.findResult:hover {
+  background: var(--surface-2);
+}
+
+.findResult:focus-visible {
+  box-shadow: var(--ring);
+}
+
+.findWho {
+  display: grid;
+  gap: 1px;
+  min-inline-size: 0;
+}
+
+.findName {
+  font-weight: 600;
+}
+
+.findHandle {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}

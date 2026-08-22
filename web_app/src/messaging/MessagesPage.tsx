@@ -3,7 +3,7 @@
  * Two-pane on desktop, stacked list-then-thread on a phone.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useId, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { isGuest } from '@chat/shared'
 import { ApiError } from '../shared/api/client.ts'
@@ -17,6 +17,7 @@ import {
   acceptRequest,
   blockRequest,
   declineRequest,
+  findPeople,
   getPreferences,
   getThread,
   listChats,
@@ -26,6 +27,7 @@ import {
   personLabel,
   setAllowRequests,
   type MessagingContact,
+  type MessagingPerson,
   type MessagingRequest,
   type MessagingThread,
 } from './api.ts'
@@ -118,6 +120,14 @@ export function MessagesPage() {
         <header className={styles.header}>
           <h1 className={styles.title}>Messages</h1>
           <p className={styles.description}>Private text with people you know. Not a reflection, and not shared.</p>
+          {/*
+            Somewhere to start.
+            Messaging arrived with one way in — the Message button on somebody
+            else's profile — and nothing in the application links to another
+            person's profile. In practice a first conversation meant typing a
+            handle into the address bar, which is not a way in at all.
+          */}
+          {registered ? <FindSomeone onPick={(handle) => void startWith(handle)} /> : null}
         </header>
       )}
 
@@ -164,7 +174,7 @@ export function MessagesPage() {
                   <div className={styles.empty}>
                     <h2 className={styles.emptyHeading}>No conversations yet</h2>
                     <p className={styles.emptyBody}>
-                      Message someone from their profile. Their reply will appear here after they accept.
+                      Find somebody above, or message them from their profile. Their reply appears here once they accept.
                     </p>
                   </div>
                 ) : (
@@ -264,7 +274,7 @@ export function MessagesPage() {
                   {contacts.length === 0 ? (
                     <div className={styles.empty}>
                       <h2 className={styles.emptyHeading}>No contacts yet</h2>
-                      <p className={styles.emptyBody}>Accept a request, or message someone from their profile.</p>
+                      <p className={styles.emptyBody}>Accept a request, or find somebody to write to.</p>
                     </div>
                   ) : (
                     <ul className={styles.list}>
@@ -310,5 +320,114 @@ export function MessagesPage() {
         </div>
       )}
     </section>
+  )
+}
+
+/**
+ * Finding somebody to write to.
+ *
+ * The server decides who may appear — never you, nobody who has blocked you,
+ * nobody who is not taking requests from strangers — so every result here is a
+ * conversation that can actually be started rather than a door that will not
+ * open.
+ *
+ * Below two characters the server answers with nothing, so there is no rule
+ * here about when a query becomes real; there is one place that decides it and
+ * this is not it.
+ */
+function FindSomeone({ onPick }: { onPick: (handle: string) => void }) {
+  const [query, setQuery] = useState('')
+  const [people, setPeople] = useState<MessagingPerson[]>([])
+  const [searching, setSearching] = useState(false)
+  const listId = useId()
+
+  useEffect(() => {
+    const wanted = query.trim()
+    if (!wanted) {
+      setPeople([])
+      setSearching(false)
+      return
+    }
+
+    /*
+     * Debounced, and the request in flight is abandoned when the next
+     * keystroke arrives. Without the abort, answers can land out of order and
+     * a slow early request overwrites the results for what is now in the box.
+     */
+    const controller = new AbortController()
+    setSearching(true)
+    const timer = setTimeout(() => {
+      findPeople(wanted, controller.signal)
+        .then((answer) => setPeople(answer.items))
+        .catch(() => {
+          /* Including the abort. A superseded search has no result to report. */
+        })
+        .finally(() => setSearching(false))
+    }, 250)
+
+    return () => {
+      controller.abort()
+      clearTimeout(timer)
+    }
+  }, [query])
+
+  const tooShort = query.trim().length === 1
+
+  return (
+    <div className={styles.find}>
+      <label className={styles.findLabel} htmlFor={`${listId}-find`}>
+        Start a conversation
+      </label>
+      <input
+        id={`${listId}-find`}
+        className="input"
+        type="search"
+        value={query}
+        placeholder="Search by name or @handle"
+        autoComplete="off"
+        aria-describedby={`${listId}-hint`}
+        onChange={(event) => setQuery(event.target.value)}
+      />
+      <p className={styles.findHint} id={`${listId}-hint`} role="status">
+        {tooShort
+          ? 'Keep typing — two letters or more.'
+          : searching
+            ? 'Looking…'
+            : query.trim() && people.length === 0
+              ? 'Nobody by that name is taking messages.'
+              : ''}
+      </p>
+
+      {people.length > 0 ? (
+        <ul className={styles.findResults}>
+          {people.map((person) => (
+            <li key={person.id}>
+              <button
+                type="button"
+                className={styles.findResult}
+                onClick={() => {
+                  setQuery('')
+                  setPeople([])
+                  if (person.handle) onPick(person.handle)
+                }}
+              >
+                <Avatar
+                  name={person.displayName}
+                  identity={person.handle ?? person.id}
+                  src={person.avatarUrl}
+                  size="small"
+                />
+                <span className={styles.findWho}>
+                  <span className={styles.findName}>{person.displayName}</span>
+                  {person.handle ? (
+                    <span className={styles.findHandle}>@{person.handle}</span>
+                  ) : null}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   )
 }

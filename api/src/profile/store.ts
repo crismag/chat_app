@@ -97,6 +97,27 @@ export type ProfileReport = {
 export interface ProfileStore {
   byUserId(userId: string): StoredProfile | null;
   byHandle(handle: string): StoredProfile | null;
+  /**
+   * Profiles whose handle or display name contains `query`.
+   *
+   * ── What this does and does not expose ────────────────────────────────────
+   *
+   * Every profile it can return is already readable by anyone at
+   * `/profile/<handle>`, and its handle and display name are already printed
+   * beside every reflection its owner has published. So this changes how
+   * findable a public profile is, not whether it is public — a distinction
+   * worth stating plainly, because "already public" is not the same as
+   * "already easy to enumerate", and only the first is true before this.
+   *
+   * What keeps the second from becoming a directory dump lives at the route:
+   * a minimum query length, a per-caller ceiling, and a small cap on results.
+   * Somebody who has never opened a profile has no row here and cannot be
+   * found at all.
+   *
+   * Empty for a query shorter than `MIN_SEARCH_LENGTH`: a one-letter search
+   * is not a search, it is a page of the directory.
+   */
+  search(query: string, limit: number): StoredProfile[];
   /** True when some *other* account already holds this handle. */
   handleTaken(handle: string, exceptUserId: string): boolean;
   save(profile: StoredProfile): void;
@@ -256,6 +277,55 @@ const SELECT_PROFILE = `
     LEFT JOIN profile_avatars a ON a.userId = p.userId
 `;
 
+/** Below this a search is not a search; see `ProfileStore.search`. */
+export const MIN_SEARCH_LENGTH = 2;
+
+/**
+ * How many matches are looked at before the best few are chosen.
+ *
+ * A ceiling on the read, not on the answer: the caller asks for ten and gets
+ * ten, but a two-letter substring that matches half the table is examined this
+ * far and no further.
+ */
+const SEARCH_SCAN_LIMIT = 200;
+
+/**
+ * The typed text, as a LIKE pattern that means only itself.
+ *
+ * `%` and `_` are wildcards to LIKE and letters to the person typing. Somebody
+ * looking for `a_b` means those three characters, and without escaping they
+ * would match `aab` and every other three-letter run — a search that quietly
+ * answers a different question than the one asked.
+ */
+function likeFragment(needle: string): string {
+  return needle.replace(/[\\%_]/g, (character) => `\\${character}`);
+}
+
+/**
+ * How well a profile answers the query, lowest first.
+ *
+ * An exact handle is what somebody typing a handle wanted. A handle that
+ * starts with it comes next, then a name that starts with it, then everything
+ * that merely contains it — which is the order the matches stop being about
+ * what was typed and start being coincidence.
+ */
+function searchRank(profile: StoredProfile, needle: string): number {
+  const handle = profile.handle.toLowerCase();
+  const name = profile.displayName.toLowerCase();
+  if (handle === needle) return 0;
+  if (handle.startsWith(needle)) return 1;
+  if (name.startsWith(needle)) return 2;
+  return 3;
+}
+
+/** Rank, then the shortest handle, then alphabetical — so the order is stable. */
+function bySearchRank(needle: string) {
+  return (a: StoredProfile, b: StoredProfile): number =>
+    searchRank(a, needle) - searchRank(b, needle) ||
+    a.handle.length - b.handle.length ||
+    a.handle.localeCompare(b.handle);
+}
+
 class SqliteProfileStore implements ProfileStore {
   private readonly db: DatabaseSync;
 
@@ -276,6 +346,38 @@ class SqliteProfileStore implements ProfileStore {
       .prepare(`${SELECT_PROFILE} WHERE lower(p.handle) = ?`)
       .get(normaliseHandle(handle)) as Row | undefined;
     return row ? profileFromRow(row) : null;
+  }
+
+  search(query: string, limit: number): StoredProfile[] {
+    const needle = query.trim().toLowerCase();
+    if (needle.length < MIN_SEARCH_LENGTH || limit < 1) return [];
+    const pattern = `%${likeFragment(needle)}%`;
+    /*
+     * Two limits, and they are not the same limit.
+     *
+     * SQL takes a bounded window of candidates — that is what stops a common
+     * substring reading the whole table — and the ranking happens after, in
+     * one function the memory store uses too. Ranking in a CASE expression
+     * instead would put the same intent in two places, and applying the
+     * caller's small limit in SQL would be wrong outright: it would cut
+     * candidates before anything had judged them, so an exact handle match
+     * could be dropped in favour of a coincidence with a shorter handle.
+     *
+     * The honest consequence: past SEARCH_SCAN_LIMIT matches the ranking sees
+     * a window rather than the field, so a very common substring gives good
+     * answers but not provably the best ones. A search for two letters was
+     * never going to be precise, and the alternative is an unbounded read.
+     */
+    const rows = this.db
+      .prepare(
+        `${SELECT_PROFILE}
+          WHERE lower(p.handle) LIKE ? ESCAPE '\\'
+             OR lower(p.displayName) LIKE ? ESCAPE '\\'
+          ORDER BY length(p.handle), lower(p.handle)
+          LIMIT ?`,
+      )
+      .all(pattern, pattern, SEARCH_SCAN_LIMIT) as Row[];
+    return rows.map(profileFromRow).sort(bySearchRank(needle)).slice(0, limit);
   }
 
   handleTaken(handle: string, exceptUserId: string): boolean {
@@ -527,6 +629,20 @@ class MemoryProfileStore implements ProfileStore {
    */
   private stamped(profile: StoredProfile): StoredProfile {
     return { ...profile, avatarUpdatedAt: this.avatars.get(profile.userId)?.updatedAt ?? null };
+  }
+
+  search(query: string, limit: number): StoredProfile[] {
+    const needle = query.trim().toLowerCase();
+    if (needle.length < MIN_SEARCH_LENGTH || limit < 1) return [];
+    return [...this.profiles.values()]
+      .filter(
+        (profile) =>
+          profile.handle.toLowerCase().includes(needle) ||
+          profile.displayName.toLowerCase().includes(needle),
+      )
+      .sort(bySearchRank(needle))
+      .slice(0, limit)
+      .map((profile) => this.stamped(profile));
   }
 
   handleTaken(handle: string, exceptUserId: string): boolean {

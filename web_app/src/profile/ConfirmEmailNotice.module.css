@@ -1,0 +1,72 @@
+/*
+ * A note, not an alarm.
+ *
+ * The warn palette rather than the danger one: nothing has gone wrong and
+ * nothing is at risk, there is simply a step left. Danger colours here would
+ * make a person think they had lost something.
+ */
+.notice {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+  max-width: var(--measure);
+  /* The page is a grid with its own gap; a margin here would double it. */
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-md);
+  background: var(--warn-soft);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--warn);
+}
+
+.body {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: var(--leading-body);
+}
+
+/* The address reads as a value, so it is set apart from the sentence. */
+.address {
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+/*
+ * Empty until there is something to say. `:empty` keeps it out of the layout
+ * rather than reserving a blank line under the button.
+ */
+.result {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.result:empty {
+  display: none;
+}
+
+.failed {
+  margin: 0;
+  color: var(--danger);
+}
+
+@container profile (max-width: 480px) {
+  /* Buttons carry a global class, so the child selector is what reaches them. */
+  .actions > * {
+    flex: 1 1 auto;
+  }
+}

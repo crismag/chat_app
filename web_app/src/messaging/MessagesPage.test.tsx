@@ -37,6 +37,18 @@ function mockFetch() {
         }),
       })
     }
+    if (url.includes('/messaging/people')) {
+      const query = new URL(url, 'http://localhost').searchParams.get('q') ?? ''
+      /* The server answers nothing below two characters; the box does not decide. */
+      const items =
+        query.length >= 2 && 'grace hopper quietcedar'.includes(query.toLowerCase())
+          ? [{ id: 'u2', handle: 'quietcedar', displayName: 'Grace Hopper', avatarUrl: null }]
+          : []
+      return Promise.resolve({ ok: true, json: async () => ({ items }) })
+    }
+    if (url.includes('/messaging/open') && method === 'POST') {
+      return Promise.resolve({ ok: true, json: async () => ({ thread: { ...thread, id: 't1' } }) })
+    }
     if (url.includes('/messaging/threads/t1/messages')) {
       return Promise.resolve({ ok: true, json: async () => ({ items: [thread.lastMessage] }) })
     }
@@ -106,4 +118,56 @@ test('opening a chat shows the conversation', async () => {
   await waitFor(() => {
     expect(screen.getByRole('heading', { name: 'Bea' })).toBeInTheDocument()
   })
+})
+
+test('somebody can be found and written to without leaving the page', async () => {
+  const fetcher = mockFetch()
+  vi.stubGlobal('fetch', fetcher)
+  renderMessages()
+
+  const box = await screen.findByLabelText('Start a conversation')
+  fireEvent.change(box, { target: { value: 'grace' } })
+
+  /*
+   * Messaging arrived with one way in — a button on somebody else's profile —
+   * and nothing in the application links to another person's profile. This is
+   * the way in.
+   */
+  const result = await screen.findByRole('button', { name: /Grace Hopper/ })
+  fireEvent.click(result)
+
+  await waitFor(() =>
+    expect(
+      fetcher.mock.calls.some(
+        ([input, init]) =>
+          String(input).includes('/messaging/open') && (init?.method ?? '') === 'POST',
+      ),
+    ).toBe(true),
+  )
+})
+
+test('one letter asks for nothing and says so', async () => {
+  const fetcher = mockFetch()
+  vi.stubGlobal('fetch', fetcher)
+  renderMessages()
+
+  const box = await screen.findByLabelText('Start a conversation')
+  fireEvent.change(box, { target: { value: 'g' } })
+
+  expect(await screen.findByText(/two letters or more/i)).toBeVisible()
+  /* And nothing was asked of the server for a single character. */
+  await waitFor(() =>
+    expect(fetcher.mock.calls.filter(([input]) => String(input).includes('/messaging/people'))).toHaveLength(0),
+  )
+})
+
+test('a name nobody answers to says so, rather than showing an empty box', async () => {
+  vi.stubGlobal('fetch', mockFetch())
+  renderMessages()
+
+  fireEvent.change(await screen.findByLabelText('Start a conversation'), {
+    target: { value: 'nobodyhere' },
+  })
+
+  expect(await screen.findByText(/Nobody by that name is taking messages/i)).toBeVisible()
 })

@@ -410,7 +410,7 @@ test('sending very fast is refused, and says when to try again', async () => {
  * Registering them over HTTP would meet the *registration* ceiling long before
  * the messaging one, and this test is about the messaging one.
  */
-function seedPerson(handle: string): string {
+function seedPerson(handle: string, displayName: string = handle): string {
   const id = randomUUID();
   const at = new Date().toISOString();
   store.db
@@ -424,7 +424,7 @@ function seedPerson(handle: string): string {
       `INSERT INTO profiles (userId, handle, displayName, tagline, favouriteVerses, createdAt, updatedAt)
        VALUES (?, ?, ?, '', '[]', ?, ?)`,
     )
-    .run(id, handle, handle, at, at);
+    .run(id, handle, displayName, at, at);
   return handle;
 }
 
@@ -513,4 +513,142 @@ test('messages sent in the same instant are all delivered, in order', async () =
 
   const unread = await call<{ items: { unreadCount: number }[] }>(bea.cookie, '/api/messaging/threads');
   expect(unread.body.items[0]?.unreadCount).toBe(5);
+});
+
+describe('finding somebody to write to', () => {
+  test('finds a person by handle and by the name they are shown under', async () => {
+    const ada = await register('ada@example.com');
+    seedPerson('quietcedar', 'Grace Hopper');
+
+    const byHandle = await call<{ items: { handle: string }[] }>(
+      ada.cookie,
+      '/api/messaging/people?q=quietced',
+    );
+    const byName = await call<{ items: { handle: string }[] }>(
+      ada.cookie,
+      '/api/messaging/people?q=hopper',
+    );
+
+    expect(byHandle.body.items.map((item) => item.handle)).toEqual(['quietcedar']);
+    expect(byName.body.items.map((item) => item.handle)).toEqual(['quietcedar']);
+  });
+
+  test('a search never returns the person doing it', async () => {
+    const ada = await register('ada@example.com');
+
+    const found = await call<{ items: { handle: string }[] }>(
+      ada.cookie,
+      `/api/messaging/people?q=${ada.handle.slice(0, 4)}`,
+    );
+
+    /* Offering somebody themselves is an invitation to a conversation of one. */
+    expect(found.body.items.map((item) => item.handle)).not.toContain(ada.handle);
+  });
+
+  test('one letter is an empty answer, not a complaint', async () => {
+    const ada = await register('ada@example.com');
+    seedPerson('quietcedar', 'Grace Hopper');
+
+    const found = await call<{ items: unknown[] }>(ada.cookie, '/api/messaging/people?q=q');
+
+    /*
+     * The box is typed into one character at a time. An error that appears on
+     * the first keystroke and vanishes on the second is noise about nothing —
+     * and a one-letter search is a page of the directory, not a search.
+     */
+    expect(found.status).toBe(200);
+    expect(found.body.items).toEqual([]);
+  });
+
+  test('wildcards typed into the box mean themselves', async () => {
+    const ada = await register('ada@example.com');
+    seedPerson('axb', 'Someone Else');
+    seedPerson('a_b', 'Another Person');
+
+    const found = await call<{ items: { handle: string }[] }>(
+      ada.cookie,
+      '/api/messaging/people?q=a_b',
+    );
+
+    /*
+     * `_` is a wildcard to LIKE and a letter to the person typing. Unescaped,
+     * this search would quietly answer a different question than the one asked.
+     */
+    expect(found.body.items.map((item) => item.handle)).toEqual(['a_b']);
+  });
+
+  test('the answer is a handful, not a page of the directory', async () => {
+    const ada = await register('ada@example.com');
+    for (let n = 0; n < 25; n += 1) seedPerson(`seeker${String(n)}`, `Seeker ${String(n)}`);
+
+    const found = await call<{ items: unknown[] }>(ada.cookie, '/api/messaging/people?q=seeker');
+
+    expect(found.body.items).toHaveLength(10);
+  });
+
+  test('somebody who has never opened a profile cannot be found', async () => {
+    const ada = await register('ada@example.com');
+    /* A user row with no profile: nothing to search, and nothing to show. */
+    store.db
+      .prepare("INSERT INTO users (id, accountType, email, createdAt) VALUES (?, 'REGISTERED', ?, ?)")
+      .run(randomUUID(), 'invisible@example.com', new Date().toISOString());
+
+    const found = await call<{ items: unknown[] }>(ada.cookie, '/api/messaging/people?q=invisible');
+
+    expect(found.body.items).toEqual([]);
+  });
+
+  test('a person who blocked you is not offered to you', async () => {
+    const ada = await register('ada@example.com');
+    const bea = await register('bea@example.com');
+    await call(bea.cookie, `/api/profiles/${ada.handle}/block`, { method: 'POST' });
+
+    const found = await call<{ items: { handle: string }[] }>(
+      ada.cookie,
+      `/api/messaging/people?q=${bea.handle.slice(0, 4)}`,
+    );
+
+    expect(found.body.items.map((item) => item.handle)).not.toContain(bea.handle);
+  });
+
+  test('an unconfirmed address cannot search for people to write to', async () => {
+    const ada = await register('ada@example.com');
+    seedPerson('quietcedar', 'Grace Hopper');
+    store.db.prepare('UPDATE users SET emailVerifiedAt = NULL WHERE email = ?').run('ada@example.com');
+
+    const found = await call<{ needsEmailVerification: boolean }>(
+      ada.cookie,
+      '/api/messaging/people?q=quietced',
+    );
+
+    /*
+     * Searching is the first half of writing to a stranger. An account that
+     * may not send should not be harvesting names either.
+     */
+    expect(found.status).toBe(403);
+    expect(found.body.needsEmailVerification).toBe(true);
+  });
+
+  test('a visitor cannot use it to enumerate anybody', async () => {
+    seedPerson('quietcedar', 'Grace Hopper');
+
+    const found = await call(null, '/api/messaging/people?q=quietced');
+
+    expect(found.status).toBe(401);
+  });
+
+  test('searching very fast is refused', async () => {
+    const ada = await register('ada@example.com');
+    seedPerson('quietcedar', 'Grace Hopper');
+
+    const statuses: number[] = [];
+    for (let n = 0; n < 34; n += 1) {
+      const found = await call(ada.cookie, '/api/messaging/people?q=quietced');
+      statuses.push(found.status);
+    }
+
+    /* Bounded so the directory cannot be walked a page at a time. */
+    expect(statuses.filter((status) => status === 429).length).toBeGreaterThan(0);
+    expect(statuses.filter((status) => status === 200).length).toBe(30);
+  });
 });
