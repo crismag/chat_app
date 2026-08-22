@@ -49,15 +49,18 @@ export function NoteEditor({
   const savedSnap = useRef({ title: note.title, body: note.body })
   const latest = useRef({ title: note.title, body: note.body })
   const closeRef = useRef<() => Promise<void>>(async () => {})
+  const openedId = useRef(note.id)
   latest.current = { title, body }
 
   useEffect(() => {
+    if (openedId.current === note.id) return
+    openedId.current = note.id
     setTitle(note.title)
     setBody(note.body)
     savedSnap.current = { title: note.title, body: note.body }
     setStatus('idle')
     saveGen.current = 0
-  }, [note.id])
+  }, [note.id, note.title, note.body])
 
   useEffect(() => {
     titleRef.current?.focus()

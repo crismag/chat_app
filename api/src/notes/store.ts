@@ -284,7 +284,7 @@ class SqliteNotesStore implements NotesStore {
 
   list(query: NoteListQuery): PublicNote[] {
     const q = query.q?.trim() ?? '';
-    const params: unknown[] = [query.userId];
+    const params: (string | number)[] = [query.userId];
     let sql = `SELECT ${NOTE_COLUMNS} FROM notes WHERE userId = ?`;
 
     if (query.view === 'trash') {

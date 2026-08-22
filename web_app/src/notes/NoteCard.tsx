@@ -6,7 +6,7 @@ import styles from './NotesPage.module.css'
 
 const PREVIEW = 160
 
-export function previewOf(body: string): string {
+function previewOf(body: string): string {
   const compact = body.replace(/\s+/g, ' ').trim()
   if (!compact) return ''
   return compact.length > PREVIEW ? `${compact.slice(0, PREVIEW).trimEnd()}…` : compact
