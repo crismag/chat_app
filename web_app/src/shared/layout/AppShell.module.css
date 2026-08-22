@@ -196,7 +196,14 @@
   bottom: 0;
   z-index: 5;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /*
+   * As many equal columns as there are destinations, rather than a number
+   * written down here. Adding Notes to the nav made a fourth item wrap onto a
+   * second row, which cost a row of screen and left one destination looking
+   * like an afterthought below the others.
+   */
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   border-top: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   backdrop-filter: saturate(180%) blur(12px);
