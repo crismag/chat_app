@@ -104,9 +104,23 @@ export function ensureProfile(profiles: ProfileStore, user: ProfileUser): Stored
 }
 
 /** The owner's editable view. Carries the limits so the form cannot invent them. */
+/**
+ * A creation date, to the month.
+ *
+ * The exact day somebody joined is a fact about them that no part of this
+ * needs, and dates are one of the things that make a person identifiable
+ * across sites. The month is enough to say "has been here a while".
+ */
+function monthOf(timestamp: string): string | null {
+  const when = new Date(timestamp);
+  if (Number.isNaN(when.getTime())) return null;
+  return `${String(when.getUTCFullYear())}-${String(when.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
 function ownView(profile: StoredProfile, publicChatCount: number) {
   return {
     handle: profile.handle,
+    memberSince: monthOf(profile.createdAt),
     displayName: profile.displayName,
     tagline: profile.tagline,
     favouriteVerses: profile.favouriteVerses,
@@ -265,6 +279,15 @@ export function createProfileRoutes({ currentUser, profiles }: ProfileRouteOptio
        * says "and eleven more you may not see".
        */
       publicChatCount: shares.length,
+      /*
+       * When the profile was made, to the month.
+       *
+       * A date is a small thing to know about somebody and a useful one — it
+       * is the difference between an account that has been here a year and one
+       * opened this morning. To the month rather than the day, because the
+       * exact date is a fact about a person that nothing here needs.
+       */
+      memberSince: monthOf(subject.createdAt),
       isOwner,
       blocked: false,
       shares,

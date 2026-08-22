@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { accountLabel, isGuest, type Account } from '@chat/shared'
 import { CreateIcon, ProfileIcon, SignOutIcon } from './icons.tsx'
+import { Avatar } from './Avatar.tsx'
 import styles from './ProfileMenu.module.css'
 
 /*
@@ -43,11 +44,6 @@ export function ProfileMenu({
    */
   const guest = isGuest(account)
   const label = accountLabel(account)
-  // The initial is derived rather than stored; there are no avatars yet.
-  const initial = (guest ? (account.guestName ?? 'G') : (account.email ?? '?'))
-    .trim()
-    .charAt(0)
-    .toUpperCase() || '?'
 
   function close(returnFocus = true) {
     setOpen(false)
@@ -113,8 +109,13 @@ export function ProfileMenu({
           }
         }}
       >
-        <span className={styles.avatar} aria-hidden="true">
-          {initial}
+        {/*
+          The same face this person has everywhere else. Hidden from the
+          reader because the button beside it already names what it opens —
+          two announcements for one control is one too many.
+        */}
+        <span aria-hidden="true">
+          <Avatar name={label} identity={account.id} size="small" />
         </span>
         <span className="sr-only">Account menu for {label}</span>
       </button>

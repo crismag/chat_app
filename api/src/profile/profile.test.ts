@@ -192,6 +192,20 @@ for (const backing of backings) {
   });
 
   describe(`profile editing (${backing.name})`, () => {
+    test('a profile says which month it was made, and not which day', async () => {
+      const app = createApp(backing.make());
+      const cookie = await register(app, 'member@example.com');
+      const mine = await send(app, '/api/profiles/me', cookie);
+      const body = (await mine.json()) as { memberSince: string | null };
+
+      /*
+       * To the month. The exact day somebody joined is a fact about them that
+       * nothing here needs, and precise dates are one of the things that make
+       * a person identifiable across sites.
+       */
+      expect(body.memberSince).toMatch(/^\d{4}-\d{2}$/);
+    });
+
     test('accepts an edit within the limits', async () => {
       const app = createApp(backing.make());
       const cookie = await register(app, 'ada@example.com');

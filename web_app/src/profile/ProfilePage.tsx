@@ -34,6 +34,7 @@ import { useNavigate, useParams } from 'react-router'
 import type { ChatFormat, ChatSectionType } from '@chat/shared'
 import { ApiError, api } from '../shared/api/client.ts'
 import { ReflectionCard } from '../shared/ui/ReflectionCard.tsx'
+import { Avatar } from '../shared/ui/Avatar.tsx'
 import styles from './ProfilePage.module.css'
 
 /* ------------------------------------------------------------------- types */
@@ -77,15 +78,6 @@ type OwnProfile = {
 }
 
 /* ------------------------------------------------------------ small pieces */
-
-function Avatar({ name }: { name: string }) {
-  const initial = name.trim().charAt(0).toUpperCase() || '?'
-  return (
-    <span className={styles.avatar} aria-hidden="true">
-      {initial}
-    </span>
-  )
-}
 
 /**
  * The editor for one's own profile.

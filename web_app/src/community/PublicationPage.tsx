@@ -22,6 +22,7 @@ import { shareWithPlatform } from '../shared/native/share.ts'
 import { SECTIONS } from '../shared/ui/ReflectionCard.tsx'
 import { fetchPublication, setEncouraged, setSaved, type Publication } from './api.ts'
 import styles from './CommunityPage.module.css'
+import { Avatar } from '../shared/ui/Avatar.tsx'
 
 const SECTION_LABEL = new Map(SECTIONS.map((section) => [section.type as string, section]))
 
@@ -98,9 +99,11 @@ export function PublicationPage() {
 
       <p className={styles.detailMeta}>
         <span className={styles.author}>
-          <span className={styles.avatar} aria-hidden="true">
-            {publication.author.displayName.trim().charAt(0).toUpperCase() || '?'}
-          </span>
+          <Avatar
+            name={publication.author.displayName}
+            identity={publication.author.handle}
+            size="small"
+          />
           {publication.author.displayName}
         </span>
         <span aria-hidden="true">·</span>
