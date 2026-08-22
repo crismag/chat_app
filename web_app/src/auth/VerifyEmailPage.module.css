@@ -1,0 +1,29 @@
+.page {
+  display: grid;
+  place-items: center;
+  min-block-size: 100svh;
+  padding: var(--space-5) var(--edge);
+  background: var(--paper);
+}
+
+.card {
+  display: grid;
+  gap: var(--space-3);
+  inline-size: min(30rem, 100%);
+  padding: var(--space-6) var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  text-align: center;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--text-xl);
+}
+
+.body {
+  margin: 0;
+  color: var(--muted);
+  line-height: var(--leading-body);
+}

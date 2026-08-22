@@ -11,7 +11,8 @@
     "test": "vitest run",
     "db:migrate": "tsx --env-file-if-exists=../.env src/mysql/cli.ts",
     "lint": "oxlint src",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "email:update-registry": "tsx --env-file-if-exists=../.env src/auth/update-registry-cli.ts"
   },
   "dependencies": {
     "@chat/shared": "*",

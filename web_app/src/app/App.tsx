@@ -3,6 +3,7 @@ import { AuthProvider } from '../auth/AuthContext.tsx'
 import { ThemeProvider } from '../shared/theme/ThemeProvider.tsx'
 import { AuthPage } from '../auth/AuthPage.tsx'
 import { PasswordResetPage } from '../auth/PasswordResetPage.tsx'
+import { VerifyEmailPage } from '../auth/VerifyEmailPage.tsx'
 import { AppShell } from '../shared/layout/AppShell.tsx'
 import { ChatPage } from '../chat/ChatPage.tsx'
 import { ReflectionsPage } from '../reflections/ReflectionsPage.tsx'
@@ -52,6 +53,13 @@ export function App() {
         */}
           <Route path="/forgot-password" element={<PasswordResetPage />} />
           <Route path="/reset-password" element={<PasswordResetPage />} />
+          {/*
+            Where a confirmation link lands. Outside the shell, like the reset
+            pages: somebody opening it from their email may not be signed in on
+            this device, and confirming an address does not require that they
+            are.
+          */}
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="/open-source-licenses" element={<OpenSourceLicencesPage />} />
           {/*
           About and the documents it links to sit outside the shell.

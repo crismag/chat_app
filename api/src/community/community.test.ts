@@ -52,6 +52,30 @@ async function register(email: string): Promise<string> {
     body: JSON.stringify({ email, password: 'secret12' }),
   });
   expect(response.status).toBe(201);
+  /*
+   * Confirmed, because publishing asks for it and these tests are about what
+   * happens after that point. The gate itself has its own test below; here it
+   * would only be noise in front of every other rule.
+   */
+  verifyEmail(email);
+  return cookieHeader(response.headers.get('set-cookie'));
+}
+
+/** What opening the link does, without sending one. */
+function verifyEmail(email: string): void {
+  store.db
+    .prepare('UPDATE users SET emailVerifiedAt = ? WHERE email = ?')
+    .run(new Date().toISOString(), email);
+}
+
+/** An account that has not confirmed its address yet. */
+async function registerUnverified(email: string): Promise<string> {
+  const response = await app.request('/api/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password: 'secret12' }),
+  });
+  expect(response.status).toBe(201);
   return cookieHeader(response.headers.get('set-cookie'));
 }
 
@@ -330,6 +354,52 @@ describe('publishing', () => {
       'Caption for the third.',
     ]);
     expect(published).toHaveLength(3);
+  });
+
+  test('an unconfirmed address may write, but may not put words in front of anybody', async () => {
+    const unverified = await registerUnverified('unconfirmed@example.com');
+    const reflection = await writeReflection(unverified, 'Written before confirming');
+
+    const refused = await call<{ error: string; needsEmailVerification: boolean }>(
+      unverified,
+      '/api/publications',
+      {
+        method: 'POST',
+        body: JSON.stringify({ conversationId: reflection, audience: AUDIENCES.PUBLIC }),
+      },
+    );
+
+    expect(refused.status).toBe(403);
+    expect(refused.body.needsEmailVerification).toBe(true);
+    /* Said as a next step, not as a wall: it tells them what to do about it. */
+    expect(refused.body.error).toMatch(/confirm your email/i);
+  });
+
+  test('writing privately is untouched by confirmation', async () => {
+    const unverified = await registerUnverified('still-writing@example.com');
+
+    /*
+     * The whole point of the rule. An account opened with a mailbox nobody can
+     * reach can still be written in, forever; it simply cannot publish.
+     */
+    const reflection = await writeReflection(unverified, 'A private ache');
+    expect(reflection).toBeTruthy();
+
+    const read = await call(unverified, '/api/publications?scope=public');
+    expect(read.status).toBe(200);
+  });
+
+  test('confirming the address is what lifts it', async () => {
+    const person = await registerUnverified('confirms-later@example.com');
+    const reflection = await writeReflection(person, 'Ready to share');
+
+    verifyEmail('confirms-later@example.com');
+
+    const published = await call<{ id: string }>(person, '/api/publications', {
+      method: 'POST',
+      body: JSON.stringify({ conversationId: reflection, audience: AUDIENCES.PUBLIC }),
+    });
+    expect(published.status).toBe(201);
   });
 
   test('publishing copies the reflection and never mutates it', async () => {

@@ -80,6 +80,22 @@ import { readStudioCreation } from './create/validation.ts';
 import { createStudioImageRoutes } from './create/image-routes.ts';
 import { createStudioImageAssetStore } from './create/image-store.ts';
 import type { StudioImageProvider } from './create/image-provider.ts';
+import {
+  EMPTY_LISTS,
+  type DomainListSnapshot,
+  classifyDomain,
+  loadDomainLists,
+} from './auth/email-domains.ts';
+import {
+  VERIFICATION_SENT_MESSAGE,
+  VERIFICATION_SPENT_MESSAGE,
+  VERIFICATION_TTL_MS,
+  hashVerificationToken,
+  newVerificationToken,
+  verificationEmail,
+  verificationUrl,
+} from './auth/email-verification.ts';
+import { MailDomainCheck, type MailDomainResolver } from './auth/mail-domain.ts';
 import { SqliteStore } from './db.ts';
 import { onError } from './http/errors.ts';
 import { requestId } from './http/request-id.ts';
@@ -181,6 +197,8 @@ export function createApp(
    */
   options: {
     mailer?: Mailer;
+    /** Injected so the suite never performs a DNS lookup. */
+    mailDomainResolver?: MailDomainResolver;
     googleVerifier?: GoogleVerifier;
     loginEmailLimiter?: SlidingWindowRateLimiter;
     loginAddressLimiter?: SlidingWindowRateLimiter;
@@ -214,7 +232,46 @@ export function createApp(
    * this route cannot be used to post mail at somebody.
    */
   const resetLimiter = new SlidingWindowRateLimiter(5, Date.now, 60 * 60 * 1000);
+  /* Same reasoning as the reset limiter: this route also puts mail in the world. */
+  const verificationLimiter = new SlidingWindowRateLimiter(5, Date.now, 60 * 60 * 1000);
   const mailer = options.mailer ?? createMailer();
+
+  /*
+   * Whether a domain can receive mail at all.
+   *
+   * A resolver is injected in tests, which is what keeps the suite off the
+   * network: nothing here performs a lookup unless a real one is configured.
+   * Without one this answers "unavailable" for everything, which means nothing
+   * is ever refused for it — the safe direction.
+   */
+  /*
+   * The domain lists, read once on first use and then held.
+   *
+   * Membership is asked on every registration, so it is a hash lookup against
+   * memory rather than a scan of a file with tens of thousands of lines in it.
+   * Nothing here reaches the network: the registry is a local cache that a
+   * separate updater refreshes, because signing up has to keep working when
+   * GitHub does not.
+   *
+   * Unset means no lists, which means every domain is unknown and nothing is
+   * refused for it. A deployment that has not configured this is not thereby
+   * turning people away.
+   */
+  const listDirectory = process.env['EMAIL_DOMAIN_LIST_DIR']?.trim();
+  let loadedLists: Promise<DomainListSnapshot> | null = null;
+  const domainLists = () => {
+    loadedLists ??= listDirectory
+      ? loadDomainLists(listDirectory).catch(() => EMPTY_LISTS)
+      : Promise.resolve(EMPTY_LISTS);
+    return loadedLists;
+  };
+
+  const mailDomains = new MailDomainCheck(
+    options.mailDomainResolver ?? {
+      resolveMx: () => Promise.reject(new Error('EAI_AGAIN')),
+      resolveAddress: () => Promise.reject(new Error('EAI_AGAIN')),
+    },
+  );
 
   const refused = (c: Context, decision: RateLimitDecision, message: string) => {
     c.header('Retry-After', String(decision.retryAfterSeconds));
@@ -701,7 +758,17 @@ export function createApp(
   app.route(
     '/api',
     createCommunityRoutes({
-      currentUser: (c) => registeredUser(c),
+      currentUser: async (c) => {
+        const user = await currentUser(c);
+        if (user?.accountType !== ACCOUNT_TYPES.REGISTERED) return null;
+        return {
+          id: user.id,
+          email: user.email ?? '',
+          createdAt: user.createdAt,
+          /* Publishing asks; nothing else here does. */
+          emailVerified: user.emailVerified,
+        };
+      },
       /*
        * Anybody with a session, guest included. A guest has no email, so they
        * are given one that is plainly not an address — the community store
@@ -781,6 +848,7 @@ export function createApp(
      * the next thirty seconds, and neither substitutes for the other.
      */
     await beginSession(c, user, { installationId, persistent: true });
+
     return c.json(accountBody(user), 201);
   });
 
@@ -804,6 +872,34 @@ export function createApp(
     if (!email || password.length < 8) {
       return c.json({ error: 'Email and a password of at least 8 characters are required.' }, 400);
     }
+
+    /*
+     * A domain worth sending a link to.
+     *
+     * Deny-based, never a list of approved providers: a whitelist of the big
+     * four turns away the pastor at a church domain, the student at a
+     * university and everybody who runs their own — a large share of the
+     * people this is for. The question is not "have we heard of this
+     * provider", it is "will this mailbox still exist tomorrow".
+     *
+     * This may be specific about why, unlike the sign-in and reset replies. It
+     * discloses nothing about who has an account, and telling somebody their
+     * throwaway address was refused is the only way they can use a real one.
+     * It does not say *which* list caught it, because that would tell somebody
+     * probing exactly which one to try next.
+     */
+    const domain = email.slice(email.lastIndexOf('@') + 1);
+    const verdict = classifyDomain(domain, await domainLists());
+    if (verdict === 'disposable' || verdict === 'blocked') {
+      return c.json(
+        {
+          error:
+            'That email provider cannot be used here. Please use an address you will still have next month.',
+        },
+        400,
+      );
+    }
+
     /*
      * A guest registering claims the account they already have.
      *
@@ -847,6 +943,19 @@ export function createApp(
       recognised?.installationId ??
       (await rememberInstallation(c, auth, user.id, PERSISTENCE_TYPES.REGISTERED_PERSISTENT));
     await beginSession(c, user, { installationId, persistent: true });
+
+    /*
+     * The link goes out now, so confirming is something they do from the email
+     * already in their inbox rather than a button they must go and find.
+     *
+     * Never fatal and never reported. The account was created; a mail server
+     * refusing connections is not a reason to say otherwise, and another link
+     * can be asked for at any time.
+     */
+    await sendVerificationLink(user).catch((error: unknown) =>
+      console.warn('verification mail failed:', error),
+    );
+
     return c.json(accountBody(user), 201);
   });
 
@@ -1061,6 +1170,84 @@ export function createApp(
    * account, a guest with no password, mail that is not configured. None of
    * them may be visible from outside.
    */
+  /*
+   * ── Confirming an address ────────────────────────────────────────────────
+   *
+   * Two routes, and neither of them signs anybody in. Opening the link proves
+   * the mailbox is real and reachable and does exactly that; it creates no
+   * session and grants no access by itself. A link found in a forwarded email
+   * makes nobody into anybody.
+   */
+  /*
+   * Mint a proof and post it. One implementation, because registration and the
+   * resend button must send the same link with the same lifetime — two would
+   * be two chances to get the token handling wrong.
+   */
+  const sendVerificationLink = async (account: AuthUser): Promise<void> => {
+    const origin = publicWebOrigin();
+    if (!origin || !account.email || account.emailVerified) return;
+
+    const token = newVerificationToken();
+    store.emailVerifications.create(
+      account.id,
+      hashVerificationToken(token),
+      Date.now() + VERIFICATION_TTL_MS,
+    );
+    const message = verificationEmail(verificationUrl(origin, token));
+    await mailer.send({ to: account.email, ...message });
+  };
+
+  app.post('/api/auth/send-verification', async (c) => {
+    const account = await currentAccount(c);
+
+    /*
+     * The reply is the same whether or not there was anything to send: signed
+     * out, already verified, a guest, or a link genuinely on its way. This
+     * route is reachable without an account, so an answer that varied would be
+     * a way to ask whether an address is verified here.
+     */
+    const sendable =
+      account !== null &&
+      account.accountType === ACCOUNT_TYPES.REGISTERED &&
+      !account.emailVerified &&
+      Boolean(account.email);
+
+    const limited = verificationLimiter.take(addressOf(c));
+    if (sendable && limited.allowed && account) {
+      await sendVerificationLink(account).catch((error: unknown) =>
+        console.warn('verification mail failed:', error),
+      );
+    }
+
+    return c.json({ message: VERIFICATION_SENT_MESSAGE });
+  });
+
+  app.post('/api/auth/verify-email', async (c) => {
+    const body = await c.req.json<{ token?: string }>().catch(() => ({}) as { token?: string });
+    const token = body.token?.trim() ?? '';
+
+    const pending = token ? store.emailVerifications?.live(hashVerificationToken(token)) : undefined;
+    if (!pending) {
+      /*
+       * Unknown, expired and already-spent are one answer. Telling them apart
+       * would say whether a token was ever real, which is the only thing an
+       * attacker holding a guess wants to know.
+       */
+      return c.json({ error: VERIFICATION_SPENT_MESSAGE }, 400);
+    }
+
+    /* Spent first: a replayed link must not be able to be spent twice. */
+    store.emailVerifications?.use(pending.id);
+    await auth.markEmailVerified(pending.userId);
+
+    /*
+     * No session. Whoever opened the link has proved the mailbox, not proved
+     * they are its owner sitting at a browser — those are different claims and
+     * only one of them was made.
+     */
+    return c.json({ verified: true, message: 'Your email address is confirmed.' });
+  });
+
   app.post('/api/auth/forgot-password', async (c) => {
     const body = await c.req
       .json<{ email?: string }>()
@@ -1074,8 +1261,27 @@ export function createApp(
      */
     const limited = resetLimiter.take(addressOf(c));
     if (limited.allowed && email.includes('@')) {
+      /*
+       * Does this domain take mail at all?
+       *
+       * Asked before anything is sent, because every message to a domain that
+       * cannot receive one is a bounce, and enough bounces are what stop the
+       * real messages arriving. It costs a cached DNS lookup and it protects
+       * the thing every other email in this product depends on.
+       *
+       * Only a definite "no" stops it. A resolver that could not answer is
+       * weather, not a decision, and delaying somebody's reset because DNS
+       * hiccupped is the wrong way to be wrong.
+       *
+       * The reply below does not change either way. Whether the domain can
+       * receive mail is not a fact about whether the address has an account.
+       */
+      const deliverable =
+        (await mailDomains.check(email.slice(email.lastIndexOf('@') + 1))) !== 'undeliverable';
+
       const origin = publicWebOrigin();
-      const started = origin ? await auth.startPasswordReset(email).catch(() => null) : null;
+      const started =
+        origin && deliverable ? await auth.startPasswordReset(email).catch(() => null) : null;
       if (started && origin) {
         const link = resetUrl(origin, started.token);
         const message = resetEmail(link);
