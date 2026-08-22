@@ -134,6 +134,27 @@ function migrate(db: DatabaseSync): void {
      * distinguishable from one that never existed -- the first deserves
      * "that link has been used", the second deserves nothing at all.
      */
+    /*
+     * Pending proofs that somebody can read the address they registered with.
+     *
+     * Its own table rather than a flag on password_resets: a token that could
+     * do both would let a link sent to prove an address also change the
+     * password on it, which is a different and much larger permission than the
+     * one the person was asked to exercise.
+     *
+     * Only the hash is stored, for the same reason resets store only a hash. A
+     * database that leaked would otherwise contain a working proof for every
+     * pending verification.
+     */
+    CREATE TABLE IF NOT EXISTS email_verifications (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      tokenHash TEXT NOT NULL UNIQUE,
+      expiresAt INTEGER NOT NULL,
+      usedAt TEXT,
+      createdAt TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS password_resets (
       id TEXT PRIMARY KEY,
       userId TEXT NOT NULL,
@@ -1077,6 +1098,49 @@ class IdentityTable {
   }
 }
 
+/*
+ * Pending proofs of address, with the same shape as a password reset and
+ * deliberately not the same table.
+ */
+class EmailVerificationTable {
+  private readonly db: DatabaseSync;
+
+  constructor(db: DatabaseSync) {
+    this.db = db;
+  }
+
+  create(userId: string, tokenHash: string, expiresAt: number): void {
+    /*
+     * Asking again supersedes the last one, so somebody who pressed the button
+     * twice never holds two live keys to their own account.
+     */
+    this.db.prepare('DELETE FROM email_verifications WHERE userId = ? AND usedAt IS NULL').run(userId);
+    this.db
+      .prepare(
+        `INSERT INTO email_verifications (id, userId, tokenHash, expiresAt, usedAt, createdAt)
+         VALUES (?, ?, ?, ?, NULL, ?)`,
+      )
+      .run(randomUUID(), userId, tokenHash, expiresAt, new Date().toISOString());
+  }
+
+  /** Live means unused and unexpired. Anything else is not found. */
+  live(tokenHash: string): { id: string; userId: string } | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT id, userId FROM email_verifications
+          WHERE tokenHash = ? AND usedAt IS NULL AND expiresAt > ?`,
+      )
+      .get(tokenHash, Date.now()) as Row | undefined;
+    return row ? { id: String(row['id']), userId: String(row['userId']) } : undefined;
+  }
+
+  use(id: string): void {
+    this.db
+      .prepare('UPDATE email_verifications SET usedAt = ? WHERE id = ?')
+      .run(new Date().toISOString(), id);
+  }
+}
+
 class PasswordResetTable {
   private readonly db: DatabaseSync;
 
@@ -1597,6 +1661,7 @@ export class SqliteStore {
   readonly installations: InstallationTable;
   readonly identities: IdentityTable;
   readonly passwordResets: PasswordResetTable;
+  readonly emailVerifications: EmailVerificationTable;
   readonly sessions: SessionTable;
   readonly conversations: ConversationTable;
   readonly messages: MessageTable;
@@ -1609,6 +1674,7 @@ export class SqliteStore {
     this.installations = new InstallationTable(this.db);
     this.identities = new IdentityTable(this.db);
     this.passwordResets = new PasswordResetTable(this.db);
+    this.emailVerifications = new EmailVerificationTable(this.db);
     this.sessions = new SessionTable(this.db);
     this.conversations = new ConversationTable(this.db);
     this.messages = new MessageTable(this.db);

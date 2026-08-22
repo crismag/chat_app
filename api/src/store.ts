@@ -449,6 +449,36 @@ export class MemoryPasswordResetTable {
   }
 }
 
+/**
+ * The in-memory twin of the verifications table.
+ *
+ * Separate from the reset table for the same reason it is separate in SQLite:
+ * a token that could do both would let a link sent to prove an address also
+ * change the password on it.
+ */
+export class MemoryEmailVerificationTable {
+  private readonly rows = new Map<
+    string,
+    { id: string; userId: string; expiresAt: number; used: boolean }
+  >();
+
+  create(userId: string, tokenHash: string, expiresAt: number): void {
+    /* Asking again supersedes the last one; nobody holds two live keys. */
+    for (const row of this.rows.values()) if (row.userId === userId) row.used = true;
+    this.rows.set(tokenHash, { id: randomUUID(), userId, expiresAt, used: false });
+  }
+
+  live(tokenHash: string): { id: string; userId: string } | undefined {
+    const row = this.rows.get(tokenHash);
+    if (!row || row.used || row.expiresAt <= Date.now()) return undefined;
+    return { id: row.id, userId: row.userId };
+  }
+
+  use(id: string): void {
+    for (const row of this.rows.values()) if (row.id === id) row.used = true;
+  }
+}
+
 /** The in-memory twin of the SQLite identity table; see db.ts for the rules. */
 export class MemoryIdentityTable {
   private readonly rows = new Map<string, { userId: string; email: string | null }>();
@@ -485,6 +515,7 @@ export class MemoryStore {
   identities = new MemoryIdentityTable();
   sessions = new MemorySessionTable();
   passwordResets = new MemoryPasswordResetTable();
+  emailVerifications = new MemoryEmailVerificationTable();
   conversations = new Map<string, StoredConversation>();
   messages = new MemoryMessageTable();
   sections = new MemorySectionTable();

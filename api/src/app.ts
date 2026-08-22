@@ -86,6 +86,15 @@ import {
   classifyDomain,
   loadDomainLists,
 } from './auth/email-domains.ts';
+import {
+  VERIFICATION_SENT_MESSAGE,
+  VERIFICATION_SPENT_MESSAGE,
+  VERIFICATION_TTL_MS,
+  hashVerificationToken,
+  newVerificationToken,
+  verificationEmail,
+  verificationUrl,
+} from './auth/email-verification.ts';
 import { MailDomainCheck, type MailDomainResolver } from './auth/mail-domain.ts';
 import { SqliteStore } from './db.ts';
 import { onError } from './http/errors.ts';
@@ -223,6 +232,8 @@ export function createApp(
    * this route cannot be used to post mail at somebody.
    */
   const resetLimiter = new SlidingWindowRateLimiter(5, Date.now, 60 * 60 * 1000);
+  /* Same reasoning as the reset limiter: this route also puts mail in the world. */
+  const verificationLimiter = new SlidingWindowRateLimiter(5, Date.now, 60 * 60 * 1000);
   const mailer = options.mailer ?? createMailer();
 
   /*
@@ -747,7 +758,17 @@ export function createApp(
   app.route(
     '/api',
     createCommunityRoutes({
-      currentUser: (c) => registeredUser(c),
+      currentUser: async (c) => {
+        const user = await currentUser(c);
+        if (user?.accountType !== ACCOUNT_TYPES.REGISTERED) return null;
+        return {
+          id: user.id,
+          email: user.email ?? '',
+          createdAt: user.createdAt,
+          /* Publishing asks; nothing else here does. */
+          emailVerified: user.emailVerified,
+        };
+      },
       /*
        * Anybody with a session, guest included. A guest has no email, so they
        * are given one that is plainly not an address — the community store
@@ -827,6 +848,20 @@ export function createApp(
      * the next thirty seconds, and neither substitutes for the other.
      */
     await beginSession(c, user, { installationId, persistent: true });
+
+    /*
+     * The link goes out now, so confirming is something they can do from the
+     * email already in their inbox rather than a thing they must first
+     * discover a button for.
+     *
+     * Never fatal, and never reported. Registration succeeded; a mail server
+     * refusing connections is not a reason to tell somebody their account was
+     * not created, and they can ask for another link at any time.
+     */
+    await sendVerificationLink(user).catch((error: unknown) =>
+      console.warn('verification mail failed:', error),
+    );
+
     return c.json(accountBody(user), 201);
   });
 
@@ -1135,6 +1170,84 @@ export function createApp(
    * account, a guest with no password, mail that is not configured. None of
    * them may be visible from outside.
    */
+  /*
+   * ── Confirming an address ────────────────────────────────────────────────
+   *
+   * Two routes, and neither of them signs anybody in. Opening the link proves
+   * the mailbox is real and reachable and does exactly that; it creates no
+   * session and grants no access by itself. A link found in a forwarded email
+   * makes nobody into anybody.
+   */
+  /*
+   * Mint a proof and post it. One implementation, because registration and the
+   * resend button must send the same link with the same lifetime — two would
+   * be two chances to get the token handling wrong.
+   */
+  const sendVerificationLink = async (account: AuthUser): Promise<void> => {
+    const origin = publicWebOrigin();
+    if (!origin || !account.email || account.emailVerified) return;
+
+    const token = newVerificationToken();
+    store.emailVerifications.create(
+      account.id,
+      hashVerificationToken(token),
+      Date.now() + VERIFICATION_TTL_MS,
+    );
+    const message = verificationEmail(verificationUrl(origin, token));
+    await mailer.send({ to: account.email, ...message });
+  };
+
+  app.post('/api/auth/send-verification', async (c) => {
+    const account = await currentAccount(c);
+
+    /*
+     * The reply is the same whether or not there was anything to send: signed
+     * out, already verified, a guest, or a link genuinely on its way. This
+     * route is reachable without an account, so an answer that varied would be
+     * a way to ask whether an address is verified here.
+     */
+    const sendable =
+      account !== null &&
+      account.accountType === ACCOUNT_TYPES.REGISTERED &&
+      !account.emailVerified &&
+      Boolean(account.email);
+
+    const limited = verificationLimiter.take(addressOf(c));
+    if (sendable && limited.allowed && account) {
+      await sendVerificationLink(account).catch((error: unknown) =>
+        console.warn('verification mail failed:', error),
+      );
+    }
+
+    return c.json({ message: VERIFICATION_SENT_MESSAGE });
+  });
+
+  app.post('/api/auth/verify-email', async (c) => {
+    const body = await c.req.json<{ token?: string }>().catch(() => ({}) as { token?: string });
+    const token = body.token?.trim() ?? '';
+
+    const pending = token ? store.emailVerifications?.live(hashVerificationToken(token)) : undefined;
+    if (!pending) {
+      /*
+       * Unknown, expired and already-spent are one answer. Telling them apart
+       * would say whether a token was ever real, which is the only thing an
+       * attacker holding a guess wants to know.
+       */
+      return c.json({ error: VERIFICATION_SPENT_MESSAGE }, 400);
+    }
+
+    /* Spent first: a replayed link must not be able to be spent twice. */
+    store.emailVerifications?.use(pending.id);
+    await auth.markEmailVerified(pending.userId);
+
+    /*
+     * No session. Whoever opened the link has proved the mailbox, not proved
+     * they are its owner sitting at a browser — those are different claims and
+     * only one of them was made.
+     */
+    return c.json({ verified: true, message: 'Your email address is confirmed.' });
+  });
+
   app.post('/api/auth/forgot-password', async (c) => {
     const body = await c.req
       .json<{ email?: string }>()

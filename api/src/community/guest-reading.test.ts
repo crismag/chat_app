@@ -41,6 +41,10 @@ async function register(email: string): Promise<string> {
     body: JSON.stringify({ email, password: 'secret12' }),
   });
   expect(response.status).toBe(201);
+  /* Publishing asks for a confirmed address; these tests are about reading. */
+  store.db
+    .prepare('UPDATE users SET emailVerifiedAt = ? WHERE email = ?')
+    .run(new Date().toISOString(), email);
   return cookieHeader(response.headers.get('set-cookie'));
 }
 

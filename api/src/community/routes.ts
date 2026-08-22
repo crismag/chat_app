@@ -90,6 +90,14 @@ export type CommunityUser = {
   email: string;
   /** When the account was made, so a brand-new one is held to less. */
   createdAt?: string | null;
+  /**
+   * Whether they have proved they can read the address they registered with.
+   *
+   * Publishing is the one action where somebody else sees a name beside the
+   * words, so it is the one that asks. Reading, writing privately and
+   * everything else here does not.
+   */
+  emailVerified?: boolean;
 };
 
 /**
@@ -950,6 +958,28 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
   app.post('/publications', async (c) => {
     const { user, store: db, response } = await guard(c);
     if (!user || !db) return response;
+
+    /*
+     * Publishing is where a name goes beside the words, in front of people who
+     * did not choose to read them. That is the point at which an address is
+     * worth having proved: an account opened with a mailbox nobody can reach
+     * can still be written in, privately, forever — it simply cannot put
+     * anything in front of anybody else.
+     *
+     * `false` and absent are different. Absent means a caller that predates
+     * this and does not report verification, and refusing those would break
+     * every such path; only an explicit false is a refusal.
+     */
+    if (user.emailVerified === false) {
+      return c.json(
+        {
+          error:
+            'Confirm your email address before sharing. We have sent a link to it; ask for another from your account if it has expired.',
+          needsEmailVerification: true,
+        },
+        403,
+      );
+    }
 
     type PublishBody = {
       conversationId?: string;
