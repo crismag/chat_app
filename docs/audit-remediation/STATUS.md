@@ -57,7 +57,7 @@ A CodeReviewerAssist pass on 2026-08-22, plus three specialized lens reviews, ad
 - [ ] Chat sheets use shared `Sheet`
 - [ ] `web_app/src/reflections/api.ts` (or equivalent) exists; pages stop scattering paths
 - [ ] One report dialog
-- [ ] `MoreMenu` removed
+- [x] `MoreMenu` removed — ActionMenu called at the site; ChatPage tests unchanged
 
 ## P5
 

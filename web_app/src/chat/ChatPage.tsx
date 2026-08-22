@@ -44,7 +44,6 @@ import {
 } from '../shared/ui/icons.tsx'
 import { shareWithPlatform } from '../shared/native/share.ts'
 import { ChatArtifact } from './ChatArtifact.tsx'
-import { MoreMenu, type MoreMenuItem } from './MoreMenu.tsx'
 import { Recoverable } from '../shared/ui/Recoverable.tsx'
 import { NARROW_QUERY, useMediaQuery } from '../shared/ui/useMediaQuery.ts'
 import { useMobileBar } from '../shared/mobile/MobileBar.tsx'
@@ -78,6 +77,7 @@ import type {
   Summary,
 } from './types.ts'
 import { fetchCommunities } from '../community/api.ts'
+import { ActionMenu, type ActionItem } from '../shared/ui/ActionMenu.tsx'
 import { AddToSectionSheet } from './ChatSheets.tsx'
 import styles from './ChatPage.module.css'
 
@@ -1581,7 +1581,7 @@ export function ChatPage() {
    * a screen reader to announce and one of them is always the wrong one.
    */
   /* One list of secondary actions, offered from the phone's bar and the desktop head. */
-  const moreItems: MoreMenuItem[] = [
+  const moreItems: ActionItem[] = [
           {
             label: 'Suggest a title',
             reason: suggestTitleReason ?? (suggesting ? 'Thinking…' : null),
@@ -1886,9 +1886,17 @@ export function ChatPage() {
               Share
             </button>
 
-            {/* Everything else that can be done to a reflection, behind one press. */}
-            <MoreMenu
+            {/*
+              Everything else that can be done to a reflection, behind one
+              press. ActionMenu decides whether that is a popover or a sheet
+              from the bottom of the screen; on a phone this control sits near
+              the left edge, and a popover growing leftwards from it put its
+              own labels off screen.
+            */}
+            <ActionMenu
               label="More actions for this reflection"
+              triggerClassName={styles.iconButton}
+              trigger={<span aria-hidden="true">⋯</span>}
               items={moreItems}
             />
 
