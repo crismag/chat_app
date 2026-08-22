@@ -399,3 +399,39 @@ test('the passage connector opens in a sheet, and closing it leaves C.H.A.T. wri
     'The vine is the source.',
   )
 })
+
+test('opening Reflect does not ask which communities you are in', async () => {
+  const fetcher = mockServer(server)
+  vi.stubGlobal('fetch', fetcher)
+  renderPage()
+
+  await screen.findByLabelText('Write your reflection')
+
+  /*
+   * Most visits are somebody writing, and writing needs no community list.
+   * It is fetched when the share sheet opens, which is the first moment the
+   * answer is used.
+   */
+  const asked = fetcher.mock.calls.filter(([input]) => String(input).includes('/communities'))
+  expect(asked).toHaveLength(0)
+})
+
+test('opening the share sheet is when the community list is fetched', async () => {
+  const fetcher = mockServer(server)
+  vi.stubGlobal('fetch', fetcher)
+
+  /* `?share=1` is the app's own way in to the sheet, used by shared links. */
+  render(
+    <MemoryRouter initialEntries={['/?c=c1&share=1']}>
+      <AuthProvider>
+        <ChatPage />
+      </AuthProvider>
+    </MemoryRouter>,
+  )
+
+  await waitFor(() =>
+    expect(
+      fetcher.mock.calls.filter(([input]) => String(input).includes('/communities')).length,
+    ).toBeGreaterThan(0),
+  )
+})

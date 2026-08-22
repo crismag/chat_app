@@ -49,7 +49,7 @@ A CodeReviewerAssist pass on 2026-08-22, plus three specialized lens reviews, ad
 - [x] ReflectionsPage no longer N+1 fetches details — the card reads the payload; only `full` density still fetches, and a test asserts a page makes no per-card request
 - [x] `GET /api/reflections` queries by `userId` (no full-table scan) — `ConversationTable.byUser`, served by the existing `idx_conversations_user`; `api/src/reflections/list-scope.test.ts`
 - [x] Community hydrate batched — one sections query, one tags query and one membership query per page instead of three per row; `community.test.ts` payloads unchanged plus a crossed-sections test
-- [ ] ChatPage loads communities when Share opens, not on every mount
+- [x] ChatPage loads communities when Share opens, not on every mount — via `fetchCommunities`; tests assert mount makes no request and `?share=1` does
 
 ## P4
 
