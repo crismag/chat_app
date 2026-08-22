@@ -81,6 +81,8 @@ import { createStudioImageRoutes } from './create/image-routes.ts';
 import { createStudioImageAssetStore } from './create/image-store.ts';
 import type { StudioImageProvider } from './create/image-provider.ts';
 import { SqliteStore } from './db.ts';
+import { onError } from './http/errors.ts';
+import { requestId } from './http/request-id.ts';
 import { hashSessionToken } from './mysql/tokens.ts';
 import { MemoryStore, type StoredConversation } from './store.ts';
 import { BOOKS } from './bible/books.ts';
@@ -254,6 +256,14 @@ export function createApp(
       testimony: sections.testimony.content,
     };
   };
+
+  /*
+   * Before anything else, so a request that fails inside CORS or auth still
+   * has an identifier to be reported by.
+   */
+  app.use('/api/*', requestId());
+
+  app.onError(onError);
 
   app.use(
     '/api/*',

@@ -72,7 +72,7 @@ A CodeReviewerAssist pass on 2026-08-22, plus three specialized lens reviews, ad
 
 ## P6
 
-- [ ] Not started (item-by-item approval)
+- [~] **In progress** (approved 2026-08-22). Items below are ticked as they land; the ones still open are open on purpose — see the report.
 - [ ] S6 CSRF/header
 - [ ] S8 verification / disposable wiring
 - [ ] AI route family merge
@@ -84,6 +84,6 @@ A CodeReviewerAssist pass on 2026-08-22, plus three specialized lens reviews, ad
 - [ ] S10 Account export/delete (only if named)
 - [ ] O1 Readiness probe
 - [ ] O2 PHP gateway timeout
-- [ ] M1 Request IDs on generic HTTP
-- [ ] M2 `app.onError` JSON `{ error }`
+- [x] M1 Request IDs on generic HTTP — one middleware, echoed on every response, a client's own id honoured after being made safe to log; `api/src/http/request-id.test.ts`
+- [x] M2 `app.onError` JSON `{ error }` — uncaught throws answer JSON with the request id; the driver's message goes to the log and never to a browser
 - [ ] S11 Studio image generate rate limit
