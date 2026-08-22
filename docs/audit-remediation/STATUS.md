@@ -47,7 +47,7 @@ A CodeReviewerAssist pass on 2026-08-22, plus three specialized lens reviews, ad
 
 - [ ] Reflections list includes excerpt/preview/written
 - [ ] ReflectionsPage no longer N+1 fetches details
-- [ ] `GET /api/reflections` queries by `userId` (no full-table scan)
+- [x] `GET /api/reflections` queries by `userId` (no full-table scan) — `ConversationTable.byUser`, served by the existing `idx_conversations_user`; `api/src/reflections/list-scope.test.ts`
 - [ ] Community hydrate batched
 - [ ] ChatPage loads communities when Share opens, not on every mount
 

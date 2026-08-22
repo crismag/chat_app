@@ -1781,11 +1781,22 @@ export function createApp(
       return c.json({ error: parsed.error }, 400);
     }
 
-    const mine = owner
-      ? [...store.conversations.values()].filter(
+    /*
+     * Asked for by owner, rather than read whole and sifted.
+     *
+     * SQLite answers this from idx_conversations_user. The in-memory store has
+     * no index and no query language, so it filters -- it backs unit tests,
+     * not a database with everybody's writing in it.
+     */
+    const table = store.conversations as {
+      byUser?: (userId: string) => StoredConversation[];
+    };
+    const mine = !owner
+      ? []
+      : (table.byUser?.(owner.id) ??
+        [...store.conversations.values()].filter(
           (conversation) => conversation.userId === owner.id,
-        )
-      : [];
+        ));
 
     const items = mine.filter((conversation) => {
       /*
