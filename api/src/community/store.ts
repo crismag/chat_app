@@ -1243,7 +1243,7 @@ export class CommunityStore {
       )
       .all(params as never) as Row[];
 
-    return rows.map((row) => this.hydrate(viewerUserId, row));
+    return this.hydrateAll(viewerUserId, rows);
   }
 
   /**
@@ -1330,7 +1330,7 @@ export class CommunityStore {
           ORDER BY p.createdAt DESC LIMIT 100`,
       )
       .all({ viewer: viewerUserId }) as Row[];
-    return rows.map((row) => this.hydrate(viewerUserId, row));
+    return this.hydrateAll(viewerUserId, rows);
   }
 
   /**
@@ -1355,7 +1355,7 @@ export class CommunityStore {
           ORDER BY p.createdAt DESC LIMIT 100`,
       )
       .all({ viewer: viewerUserId }) as Row[];
-    return rows.map((row) => this.hydrate(viewerUserId, row));
+    return this.hydrateAll(viewerUserId, rows);
   }
 
   /* -------------------------------------------------------- moderation */
@@ -1459,23 +1459,101 @@ export class CommunityStore {
    * fetched by publication id, and the only ids reaching this point are ones
    * the predicate admitted.
    */
-  private hydrate(viewerUserId: string, row: Row): PublicationView {
-    const id = String(row['id']);
-    const sections = this.db
+  /**
+   * A page of publications, in a fixed number of queries.
+   *
+   * Hydrating row by row ran three queries per publication — sections, tags,
+   * and the viewer's membership — so a feed of twenty cost sixty round trips
+   * to the database to answer one request, and the cost grew with the page.
+   * This asks once for each of those things, for exactly the rows it was
+   * given.
+   *
+   * The rows handed in are the ones `SELECT_PUBLICATION` already returned,
+   * which is where `VISIBLE_TO` lives. That ordering is the point and must
+   * stay: nothing here widens what may be read, and no section is fetched for
+   * a publication the predicate refused. This is a batching change, not an
+   * authorization one.
+   */
+  private hydrateAll(viewerUserId: string, rows: Row[]): PublicationView[] {
+    if (rows.length === 0) return [];
+
+    const ids = rows.map((row) => String(row['id']));
+    const holes = ids.map(() => '?').join(', ');
+
+    const sections = new Map<string, PublicationSection[]>();
+    for (const row of this.db
       .prepare(
-        `SELECT type, content, authorOrigin FROM publication_sections
-          WHERE publicationId = ? ORDER BY position`,
+        `SELECT publicationId, type, content, authorOrigin FROM publication_sections
+          WHERE publicationId IN (${holes}) ORDER BY publicationId, position`,
       )
-      .all(id) as unknown as PublicationSection[];
-    const hashtags = this.db
-      .prepare('SELECT tag, label FROM publication_tags WHERE publicationId = ? ORDER BY tag')
-      .all(id) as unknown as PublicationHashtag[];
+      .all(...(ids as never[])) as Row[]) {
+      const key = String(row['publicationId']);
+      const list = sections.get(key) ?? [];
+      list.push({
+        type: String(row['type']),
+        content: String(row['content']),
+        authorOrigin: String(row['authorOrigin']),
+      } as unknown as PublicationSection);
+      sections.set(key, list);
+    }
+
+    const hashtags = new Map<string, PublicationHashtag[]>();
+    for (const row of this.db
+      .prepare(
+        `SELECT publicationId, tag, label FROM publication_tags
+          WHERE publicationId IN (${holes}) ORDER BY publicationId, tag`,
+      )
+      .all(...(ids as never[])) as Row[]) {
+      const key = String(row['publicationId']);
+      const list = hashtags.get(key) ?? [];
+      list.push({ tag: String(row['tag']), label: String(row['label']) } as PublicationHashtag);
+      hashtags.set(key, list);
+    }
+
+    /* One row per community this page touches, not one per publication. */
+    const communityIds = [
+      ...new Set(rows.map((row) => row['communityId']).filter(Boolean).map(String)),
+    ];
+    const roles = new Map<string, string | null>();
+    if (communityIds.length > 0) {
+      const communityHoles = communityIds.map(() => '?').join(', ');
+      for (const row of this.db
+        .prepare(
+          `SELECT communityId, role FROM community_members
+            WHERE userId = ? AND communityId IN (${communityHoles})`,
+        )
+        .all(viewerUserId, ...(communityIds as never[])) as Row[]) {
+        roles.set(String(row['communityId']), row['role'] == null ? null : String(row['role']));
+      }
+    }
+
+    return rows.map((row) =>
+      this.viewOf(viewerUserId, row, {
+        sections: sections.get(String(row['id'])) ?? [],
+        hashtags: hashtags.get(String(row['id'])) ?? [],
+        viewerRole: row['communityId'] ? (roles.get(String(row['communityId'])) ?? null) : null,
+      }),
+    );
+  }
+
+  private hydrate(viewerUserId: string, row: Row): PublicationView {
+    return this.hydrateAll(viewerUserId, [row])[0] as PublicationView;
+  }
+
+  private viewOf(
+    viewerUserId: string,
+    row: Row,
+    loaded: {
+      sections: PublicationSection[];
+      hashtags: PublicationHashtag[];
+      viewerRole: string | null;
+    },
+  ): PublicationView {
+    const id = String(row['id']);
+    const { sections, hashtags, viewerRole } = loaded;
 
     const isAuthor = String(row['authorUserId']) === viewerUserId;
     const communityId = row['communityId'] ? String(row['communityId']) : null;
-    const viewerRole = communityId
-      ? (this.membership(communityId, viewerUserId)?.role ?? null)
-      : null;
 
     return {
       id,
