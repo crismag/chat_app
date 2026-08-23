@@ -1140,3 +1140,42 @@ describe('writing as a guest', () => {
     });
   });
 });
+
+/*
+ * CORS preflight, checked as the browser checks it.
+ *
+ * Nothing here exercised the OPTIONS response before this, so the CORS
+ * middleware's method list drifting out of sync with the routes went
+ * unnoticed until someone's browser refused to send a PUT it had every right
+ * to send. `allowMethods` is Hono's own list; a route added without a matching
+ * entry here fails silently in the browser, cross-origin, and nowhere else —
+ * same-origin requests and every test that calls `app.request()` directly
+ * skip the browser's preflight entirely and would still pass.
+ */
+describe('CORS preflight', () => {
+  const ORIGIN = 'http://localhost:5173'
+
+  async function preflight(app: ReturnType<typeof createApp>, path: string, method: string) {
+    return app.request(path, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: ORIGIN,
+        'Access-Control-Request-Method': method,
+        'Access-Control-Request-Headers': 'content-type',
+      },
+    })
+  }
+
+  test.each([
+    ['/api/profiles/me/avatar', 'PUT'],
+    ['/api/reflections/some-id/passage', 'PUT'],
+    ['/api/studio-creations/some-id', 'PUT'],
+  ])('the browser is allowed to send %s %s cross-origin', async (path, method) => {
+    const app = createApp(new MemoryStore())
+    const response = await preflight(app, path, method)
+
+    expect(response.status).toBe(204)
+    expect(response.headers.get('access-control-allow-origin')).toBe(ORIGIN)
+    expect(response.headers.get('access-control-allow-methods')?.split(',')).toContain(method)
+  })
+})

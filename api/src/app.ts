@@ -330,7 +330,18 @@ export function createApp(
     '/api/*',
     cors({
       origin: webOrigins(),
-      allowMethods: ['GET', 'HEAD', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+      /*
+       * PUT is here for the same reason PATCH and DELETE are: something in
+       * the application sends one. Three routes do — the avatar upload, a
+       * Bible passage save and a Studio creation save — and every one of them
+       * is unreachable cross-origin without it. The browser's own preflight
+       * is what enforces this list, not this server: a PUT missing from here
+       * fails silently in the browser, before the request the API would have
+       * happily served is ever sent. Reported to whoever clicked "Add a
+       * picture" as "Load failed", which named the browser's fetch failure
+       * and nothing about CORS.
+       */
+      allowMethods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       credentials: true,
     }),
   );
