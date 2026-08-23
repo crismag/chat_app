@@ -106,7 +106,9 @@ import { MemoryStore, type StoredConversation } from './store.ts';
 import { BOOKS } from './bible/books.ts';
 import { matchesReflection, readReflectionFilters } from './reflections/query.ts';
 import { parseScriptureQuery } from './reflections/scripture-query.ts';
-import { readStoredTags } from './reflections/tags.ts';
+import { createTagRegistry } from './tags/store.ts';
+import { createTagRoutes } from './tags/routes.ts';
+import { rawTagStrings, refusalMessage, validateTags } from './tags/validate.ts';
 
 const SESSION_COOKIE = 'chat_session';
 
@@ -717,6 +719,13 @@ export function createApp(
    */
   const communityStore = createCommunityStore(store);
   const notesStore = createNotesStore(store);
+
+  /*
+   * The tag registry. Constructed here, beside the other feature stores, and
+   * written by the handlers that save tagged content rather than by an endpoint
+   * of its own — a tag exists because something was tagged.
+   */
+  const tagRegistry = createTagRegistry(store);
   const messagingStore = createMessagingStore(store);
 
   /*
@@ -784,6 +793,11 @@ export function createApp(
         return { id: user.id, email: user.email ?? '', createdAt: user.createdAt };
       },
       store: communityStore,
+      /* The registry, injected — the community module owns no tag storage. */
+      tags: {
+        validate: (raw) => validateTags(raw),
+        record: (input) => tagRegistry.record(input),
+      },
       reflection: (userId, conversationId) => {
         const conversation = store.conversations.get(conversationId);
         if (!conversation || !userOwnsConversation(userId, conversation.id)) return null;
@@ -808,6 +822,19 @@ export function createApp(
    * owns its table and its queries, and the owner is whoever currentAccount
    * already is — session or recognised guest — never a client-supplied id.
    */
+  /*
+   * Tag suggestions. Read-only, and open to a visitor: somebody writing before
+   * they have an account still deserves to be offered the word other people
+   * already use, and the ranking's global fallback is exactly that case.
+   */
+  app.route(
+    '/api/tags',
+    createTagRoutes({
+      currentOwner: (c) => currentAccount(c),
+      registry: tagRegistry,
+    }),
+  );
+
   app.route(
     '/api/notes',
     createNotesRoutes({
@@ -1687,14 +1714,44 @@ export function createApp(
     conversation.title = proposedTitle;
     conversation.scriptureReference = proposedReference;
     conversation.format = format;
+    /*
+     * Tags pass the gate before they are stored, and a refused one does not
+     * cost the rest of the save. Four good tags and one refused word leaves the
+     * four on the reflection, the reflection saved, and one sentence back about
+     * the one — losing somebody's other work to a word is not a proportionate
+     * response to a word.
+     *
+     * `refusedTags` is only present when something was refused, so a client can
+     * treat its absence as "nothing to say" rather than an empty-array check.
+     */
+    let refusedTags: { input: string; refusal: string }[] = [];
     if (body.tags !== undefined) {
-      conversation.tags = readStoredTags(body.tags);
+      const verdict = validateTags(rawTagStrings(body.tags));
+      conversation.tags = verdict.accepted;
+      refusedTags = verdict.refused;
+      if (verdict.accepted.length > 0) {
+        /*
+         * Recorded as published only when this reflection actually is. A
+         * private reflection's tags still become the author's own suggestions;
+         * they gain no standing with anybody else until it is shared.
+         */
+        tagRegistry.record({
+          userId: conversation.userId,
+          tags: verdict.accepted,
+          published: conversation.visibility !== VISIBILITY.PRIVATE,
+        });
+      }
     } else {
       conversation.tags = conversation.tags ?? [];
     }
     conversation.updatedAt = nowIso();
     store.conversations.set(conversation.id, conversation);
-    return c.json(summaryOf(conversation));
+    return c.json({
+      ...summaryOf(conversation),
+      ...(refusedTags.length > 0
+        ? { refusedTags, tagError: refusalMessage() }
+        : {}),
+    });
   });
 
   /**
@@ -1807,6 +1864,21 @@ export function createApp(
     conversation.visibility = VISIBILITY.SHARED;
     conversation.updatedAt = nowIso();
     store.conversations.set(conversation.id, conversation);
+    /*
+     * Sharing is the moment this reflection's tags gain standing with anybody
+     * else. Until now they ranked for their author alone; they were already in
+     * the registry, and this is the count that makes them suggestable to a
+     * stranger. Re-validated rather than trusted from storage, because rows
+     * written before the gate existed have never been through it.
+     */
+    const shared = validateTags(rawTagStrings(conversation.tags ?? []));
+    if (shared.accepted.length > 0) {
+      tagRegistry.record({
+        userId: conversation.userId,
+        tags: shared.accepted,
+        published: true,
+      });
+    }
     return c.json(summaryOf(conversation));
   });
 

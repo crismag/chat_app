@@ -34,6 +34,31 @@ for (const item of appPackages) {
   })
 }
 
+/*
+ * Data, not software, and the one entry here that is not an npm package.
+ *
+ * The banned-word list in api/moderation-lists/ is CC-BY-4.0, and attribution
+ * is a condition of that licence rather than a courtesy. It ships inside the
+ * application, so it is named where the other notices are named. Its details
+ * live in api/moderation-lists/sources.json; this is the same facts, in the
+ * shape the licences page reads.
+ */
+packages.push({
+  packageName: 'LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words',
+  name: 'List of Dirty, Naughty, Obscene and Otherwise Bad Words',
+  repository: 'https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words',
+  version: '4638b970cb8d9d82789564fcba1f4a1eb508ff1a',
+  license: 'CC-BY-4.0',
+  copyright: ['Copyright Shutterstock, Inc.'],
+  licenseText: [
+    'Licensed under the Creative Commons Attribution 4.0 International License',
+    '(CC BY 4.0): https://creativecommons.org/licenses/by/4.0/',
+    '',
+    'Used as word data for tag moderation. The file is included unmodified.',
+  ].join('\n'),
+  status: 'bundled-data',
+})
+
 const structured = `${JSON.stringify({ schemaVersion: 1, packages }, null, 2)}\n`
 const markdown = `# Third-party notices
 

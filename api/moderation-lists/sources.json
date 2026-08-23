@@ -1,0 +1,19 @@
+{
+  "lists": [
+    {
+      "file": "banned-words.txt",
+      "name": "List of Dirty, Naughty, Obscene and Otherwise Bad Words",
+      "upstream": "https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words",
+      "sourceFile": "en",
+      "sourceUrl": "https://raw.githubusercontent.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words/master/en",
+      "language": "en",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "attribution": "Shutterstock, Inc. — List of Dirty, Naughty, Obscene, and Otherwise Bad Words",
+      "commit": "4638b970cb8d9d82789564fcba1f4a1eb508ff1a",
+      "commitDate": "2020-07-13",
+      "retrieved": "2026-08-23",
+      "entries": 403
+    }
+  ]
+}
