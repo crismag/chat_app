@@ -1,13 +1,22 @@
 import { ActionMenu } from '../shared/ui/ActionMenu.tsx'
 import { MoreIcon } from '../shared/ui/icons.tsx'
+import { plainPreview } from './format.ts'
 import { ArchiveIcon, PinIcon, RestoreIcon, TrashIcon } from './icons.tsx'
 import type { Note, NoteView } from './api.ts'
 import styles from './NotesPage.module.css'
 
 const PREVIEW = 160
 
+/*
+ * One line of the note, with its formatting taken off.
+ *
+ * A card is a glance, and `**Groceries**` at a glance is worse than
+ * `Groceries` — the syntax is noise exactly where there is least room for it.
+ * `plainPreview` keeps a ✓ on finished tasks, which is the one piece of
+ * formatting worth carrying into a line this short.
+ */
 function previewOf(body: string): string {
-  const compact = body.replace(/\s+/g, ' ').trim()
+  const compact = plainPreview(body)
   if (!compact) return ''
   return compact.length > PREVIEW ? `${compact.slice(0, PREVIEW).trimEnd()}…` : compact
 }

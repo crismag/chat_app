@@ -140,3 +140,17 @@
   white-space: nowrap;
   border: 0;
 }
+
+/*
+ * The rendered note, occupying exactly the space the textarea did.
+ *
+ * Same box, so switching between writing and previewing does not resize the
+ * editor or move the buttons above it — a toggle that reflows the page is a
+ * toggle people stop pressing.
+ */
+.preview {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  padding-block: var(--space-2);
+  overflow-y: auto;
+}

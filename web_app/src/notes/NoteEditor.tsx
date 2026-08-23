@@ -2,6 +2,9 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { NARROW_QUERY, useMediaQuery } from '../shared/ui/useMediaQuery.ts'
 import { ArchiveIcon, CloseIcon, PinIcon, RestoreIcon, TrashIcon } from './icons.tsx'
 import { updateNote, type Note, type NoteView } from './api.ts'
+import { FormatBar, formatShortcut } from './FormatBar.tsx'
+import { NoteMarkdown } from './NoteMarkdown.tsx'
+import { toggleTaskAt } from './format.ts'
 import styles from './NoteEditor.module.css'
 
 const SAVE_DEBOUNCE_MS = 600
@@ -44,6 +47,13 @@ export function NoteEditor({
   const titleId = useId()
   const bodyId = useId()
   const titleRef = useRef<HTMLInputElement>(null)
+  const bodyRef = useRef<HTMLTextAreaElement>(null)
+  /*
+   * Preview is where task lists can be ticked, so it is per-note rather than
+   * sticky: opening a different note starts in the text, which is where the
+   * caret belongs when somebody has just chosen something to write in.
+   */
+  const [preview, setPreview] = useState(false)
   const saveGen = useRef(0)
   const timer = useRef(0)
   const savedSnap = useRef({ title: note.title, body: note.body })
@@ -57,6 +67,7 @@ export function NoteEditor({
     openedId.current = note.id
     setTitle(note.title)
     setBody(note.body)
+    setPreview(false)
     savedSnap.current = { title: note.title, body: note.body }
     setStatus('idle')
     saveGen.current = 0
@@ -188,17 +199,41 @@ export function NoteEditor({
           onChange={(event) => setTitle(event.target.value)}
         />
 
+        <FormatBar
+          field={bodyRef}
+          onChange={setBody}
+          preview={preview}
+          onTogglePreview={() => setPreview((on) => !on)}
+        />
+
         <label className={styles.srOnly} htmlFor={bodyId}>
           Note
         </label>
-        <textarea
-          id={bodyId}
-          className={styles.body}
-          value={body}
-          maxLength={BODY_MAX}
-          placeholder="Write a note…"
-          onChange={(event) => setBody(event.target.value)}
-        />
+        {preview ? (
+          /*
+           * The same text, rendered — and the only place a task can be ticked.
+           * Ticking edits the note's own text, so the tick is saved by the
+           * ordinary debounce rather than by a second path that could disagree
+           * with what is in the box.
+           */
+          <div className={styles.preview}>
+            <NoteMarkdown
+              markdown={body}
+              onToggleTask={(index) => setBody((current) => toggleTaskAt(current, index))}
+            />
+          </div>
+        ) : (
+          <textarea
+            ref={bodyRef}
+            id={bodyId}
+            className={styles.body}
+            value={body}
+            maxLength={BODY_MAX}
+            placeholder="Write a note…"
+            onChange={(event) => setBody(event.target.value)}
+            onKeyDown={(event) => formatShortcut(event, setBody)}
+          />
+        )}
       </div>
     </div>
   )

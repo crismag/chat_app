@@ -1,0 +1,108 @@
+/*
+ * A rendered note.
+ *
+ * Reading type, not interface type: a note is prose somebody wrote and its
+ * measure and leading follow the reading tokens rather than the compact ones
+ * the surrounding controls use.
+ */
+.note {
+  display: grid;
+  gap: var(--space-3);
+  color: var(--ink);
+  font-size: var(--text-base);
+  line-height: var(--leading-body, 1.6);
+  overflow-wrap: anywhere;
+}
+
+.empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.paragraph {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--text-lg, 1.15rem);
+  line-height: var(--leading-snug, 1.3);
+}
+
+.bullets,
+.numbers {
+  display: grid;
+  gap: var(--space-1, 0.25rem);
+  margin: 0;
+  padding-inline-start: 1.25rem;
+}
+
+/* The task list carries its own markers, so it takes none from the browser. */
+.tasks {
+  display: grid;
+  gap: var(--space-1, 0.25rem);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task {
+  min-inline-size: 0;
+}
+
+/*
+ * The whole row is the label, so the text is part of the tap target.
+ * A 14px checkbox alone is well under the minimum on a phone, and a task list
+ * is the one thing in a note somebody taps repeatedly.
+ */
+.taskLabel {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-block-size: var(--tap, 2.75rem);
+  padding-block: 0.15rem;
+  cursor: pointer;
+}
+
+.checkbox {
+  flex: none;
+  inline-size: 1.05rem;
+  block-size: 1.05rem;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.checkbox:disabled {
+  cursor: default;
+}
+
+/*
+ * Done is struck through *and* dimmed. Strike-through alone is colour-free but
+ * weak at this size; the pair reads as finished in all eleven themes without
+ * either signal carrying the meaning by itself.
+ */
+.taskText[data-done='true'] {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.quote {
+  margin: 0;
+  padding-inline-start: var(--space-3);
+  border-inline-start: 3px solid var(--line);
+  color: var(--ink-soft, var(--ink));
+}
+
+.quote p {
+  margin: 0;
+}
+
+/*
+ * Underline is `++text++`, which Markdown does not have. Given a colour of its
+ * own it would read as a link; left plain it reads as what it is.
+ */
+.underline {
+  text-underline-offset: 0.15em;
+}

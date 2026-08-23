@@ -76,3 +76,38 @@ export function CloseIcon(props: IconProps) {
     </svg>
   )
 }
+
+/**
+ * A bulleted list.
+ *
+ * A real icon rather than a `•` character, for the reason set out in
+ * `shared/ui/icons.tsx`: a glyph takes its size and weight from the font, so a
+ * bullet in a small toolbar renders as a barely visible dot beside letters
+ * that are not.
+ */
+export function BulletListIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="5" cy="7" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="5" cy="12" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="5" cy="17" r="1.3" fill="currentColor" stroke="none" />
+      <path d="M10 7h9M10 12h9M10 17h9" />
+    </svg>
+  )
+}
+
+/**
+ * A task list: a ticked box and lines.
+ *
+ * Was `☑`, which most platforms render as a colour emoji — it ignores
+ * `currentColor` and arrived as a blue box in every one of the eleven themes.
+ */
+export function TaskListIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M3.5 7.2 5 8.7l2.6-2.9" />
+      <path d="M3.5 15.2 5 16.7l2.6-2.9" />
+      <path d="M11 7.5h9M11 15.5h9" />
+    </svg>
+  )
+}

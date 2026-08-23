@@ -1,0 +1,92 @@
+/*
+ * The formatting row above a note.
+ *
+ * Quiet by default: it sits over somebody's writing, and a row of five bright
+ * buttons competes with the thing being written. They take the ink colour on
+ * hover and focus, which is when they are actually being used.
+ */
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding-block: var(--space-2);
+  border-block-end: 1px solid var(--line);
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.button {
+  display: grid;
+  place-items: center;
+  /* The tap minimum. A formatting button is pressed with a thumb as often as
+     with a mouse, and these are the smallest controls in the editor. */
+  min-inline-size: var(--tap, 2.75rem);
+  min-block-size: var(--tap, 2.75rem);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-base);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* The letters say what they do by looking like what they do. */
+.button[data-action='bold'] span {
+  font-weight: 800;
+}
+
+.button[data-action='italic'] span {
+  font-style: italic;
+  font-family: var(--font-serif, serif);
+}
+
+.button[data-action='underline'] span {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.preview {
+  margin-inline-start: auto;
+  min-block-size: var(--tap, 2.75rem);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.preview[aria-pressed='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-ink, var(--accent));
+}
+
+.icon {
+  inline-size: 1.15rem;
+  block-size: 1.15rem;
+}
