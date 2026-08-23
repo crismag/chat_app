@@ -18,6 +18,12 @@ import { AI_GUIDANCE_SECTIONS, type AiGuidanceSection } from '@chat/shared'
  * explain a passage explain it under Heart — the background, who was speaking,
  * what it is doing — always tied to what it meant to them. So Heart asks for
  * both, and Content asks for neither.
+ *
+ * Application and Testimony ask what the method asks. "How will you respond?"
+ * invites agreement rather than a decision, so it now asks for the one thing;
+ * and "What do you believe, declare or pray?" pointed at the writer, where the
+ * method points at the Lord and His faithfulness. See `chat-method.ts` in
+ * `@chat/shared` for the original wording these are the short form of.
  */
 export const SECTIONS = [
   {
@@ -36,13 +42,13 @@ export const SECTIONS = [
     type: 'application' as const,
     letter: 'A',
     name: 'Application',
-    prompt: 'How will you respond?',
+    prompt: 'How will you respond? One thing you will actually do.',
   },
   {
     type: 'testimony' as const,
     letter: 'T',
     name: 'Testimony',
-    prompt: 'What do you believe, declare or pray?',
+    prompt: 'What God has done, and His faithfulness in it.',
   },
 ]
 

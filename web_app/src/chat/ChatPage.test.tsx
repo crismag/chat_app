@@ -341,7 +341,7 @@ test('a saved reflection hydrates its title, passage control and C.H.A.T. fields
   expect(screen.getByLabelText(/Application — How will you respond/i)).toHaveValue(
     'Stay with the Word today.',
   )
-  expect(screen.getByLabelText(/Testimony — What do you believe/i)).toHaveValue(
+  expect(screen.getByLabelText(/Testimony — What God has done/i)).toHaveValue(
     'You have kept me.',
   )
   expect(screen.getByRole('button', { name: /John 15:5/i })).toBeInTheDocument()

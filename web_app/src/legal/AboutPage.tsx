@@ -40,6 +40,10 @@ export function AboutPage() {
           order — most people write the ones they have something for and come back to the rest.
         </p>
         <ChatLetters layout="grid" />
+        <p>
+          <Link to="/method">Read the method in full</Link> — what each letter is for, in the
+          words it was taught in, with the questions that go with it.
+        </p>
 
         <h2>How it works</h2>
         <ul>
@@ -65,6 +69,12 @@ export function AboutPage() {
 
         <h2>Policies and help</h2>
         <ul className={styles.links}>
+          <li className={styles.linkRow}>
+            <Link to="/method">The C.H.A.T. method</Link>
+            <span className={styles.linkSummary}>
+              The four letters as they were taught, and the questions that go with them.
+            </span>
+          </li>
           <li className={styles.linkRow}>
             <Link to="/welcome">Welcome</Link>
             <span className={styles.linkSummary}>

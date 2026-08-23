@@ -17,6 +17,7 @@ import { ProfilePage } from '../profile/ProfilePage.tsx'
 import { OpenSourceLicencesPage } from '../licenses/OpenSourceLicencesPage.tsx'
 import { AboutPage } from '../legal/AboutPage.tsx'
 import { WelcomePage } from '../legal/WelcomePage.tsx'
+import { MethodPage } from '../legal/MethodPage.tsx'
 import { PrivacyPage } from '../legal/PrivacyPage.tsx'
 import { TermsPage } from '../legal/TermsPage.tsx'
 import { DisclaimerPage } from '../legal/DisclaimerPage.tsx'
@@ -79,6 +80,12 @@ export function App() {
         */}
           <Route path="/welcome" element={<WelcomePage />} />
           <Route path="/about" element={<AboutPage />} />
+          {/*
+          The method, at an address that can be sent to somebody who has never
+          heard of the application. Outside the shell for the same reason
+          /welcome is: it asks for no account, because C.H.A.T. is not ours.
+        */}
+          <Route path="/method" element={<MethodPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/disclaimer" element={<DisclaimerPage />} />

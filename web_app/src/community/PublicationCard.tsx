@@ -44,8 +44,8 @@ import { ReflectionCard, SECTIONS } from '../shared/ui/ReflectionCard.tsx'
 import { GlobeIcon, LockIcon, CommunityIcon } from '../shared/ui/icons.tsx'
 import { reportIsSubmittable } from '@chat/shared'
 import { ReportDialog } from '../shared/ui/ReportDialog.tsx'
-import { Avatar } from '../shared/ui/Avatar.tsx'
 import type { Publication, ReportReason } from './api.ts'
+import { AuthorLink } from '../shared/ui/AuthorLink.tsx'
 import styles from './CommunityPage.module.css'
 
 /** The section letters, for the small indicators beside each excerpt. */
@@ -186,14 +186,7 @@ export function PublicationCard({
       }
       meta={
         <>
-          <span className={styles.author}>
-            <Avatar
-              name={publication.author.displayName}
-              identity={publication.author.handle}
-              size="small"
-            />
-            {publication.author.displayName}
-          </span>
+          <AuthorLink author={publication.author} className={styles.author} />
           <span aria-hidden="true">·</span>
           <AudienceMark publication={publication} />
         </>

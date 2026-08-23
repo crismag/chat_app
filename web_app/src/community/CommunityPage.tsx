@@ -70,6 +70,7 @@ import {
   type Publication,
   type ReportReason,
 } from './api.ts'
+import { AuthorLink } from '../shared/ui/AuthorLink.tsx'
 import styles from './CommunityPage.module.css'
 
 const DESTINATIONS: {
@@ -1098,7 +1099,17 @@ function JoinRequests({
       <ul className={styles.joinRequestList}>
         {requests.map((request) => (
           <li key={request.userId} className={styles.joinRequestRow}>
-            <span>{request.displayName ?? request.handle ?? 'A C.H.A.T. writer'}</span>
+            {/*
+              Deciding about a person is the moment you most want to see who
+              they are, so the name goes to their profile when they have one.
+            */}
+            <AuthorLink
+              className={styles.author}
+              author={{
+                handle: request.handle ?? '',
+                displayName: request.displayName ?? request.handle ?? 'A C.H.A.T. writer',
+              }}
+            />
             <span className={styles.joinRequestActions}>
               {(['approve', 'decline'] as const).map((decision) => (
                 <button

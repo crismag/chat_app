@@ -21,8 +21,8 @@ import { ApiError } from '../shared/api/client.ts'
 import { shareWithPlatform } from '../shared/native/share.ts'
 import { SECTIONS } from '../shared/ui/ReflectionCard.tsx'
 import { fetchPublication, setEncouraged, setSaved, type Publication } from './api.ts'
+import { AuthorLink } from '../shared/ui/AuthorLink.tsx'
 import styles from './CommunityPage.module.css'
-import { Avatar } from '../shared/ui/Avatar.tsx'
 
 const SECTION_LABEL = new Map(SECTIONS.map((section) => [section.type as string, section]))
 
@@ -98,14 +98,7 @@ export function PublicationPage() {
       <h1 className={styles.detailTitle}>{publication.title}</h1>
 
       <p className={styles.detailMeta}>
-        <span className={styles.author}>
-          <Avatar
-            name={publication.author.displayName}
-            identity={publication.author.handle}
-            size="small"
-          />
-          {publication.author.displayName}
-        </span>
+        <AuthorLink author={publication.author} className={styles.author} showHandle />
         <span aria-hidden="true">·</span>
         {/* The audience, in words, never by colour alone. */}
         <span>{audienceLabel(publication.audience, publication.community?.name)}</span>

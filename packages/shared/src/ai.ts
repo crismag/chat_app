@@ -13,6 +13,8 @@
  * because the mistake is one letter of carelessness away at all times.
  */
 
+import { CHAT_METHOD_BY_TYPE } from './chat-method.ts';
+
 /** The four sections guidance may be asked about. */
 export const AI_GUIDANCE_SECTIONS = [
   'content',
@@ -28,14 +30,21 @@ export type AiGuidanceSection = (typeof AI_GUIDANCE_SECTIONS)[number];
  *
  * Kept beside the section names so a prompt and a label can never drift into
  * describing the section differently.
+ *
+ * Two halves, and the order matters. The first sentence is the method as it
+ * was taught — see `chat-method.ts`, which is where that text lives and which
+ * these read from rather than restate. The second is what this application has
+ * learned about where writers actually put things, which the method could not
+ * have known: that the explanation of a passage lands in Heart far more often
+ * than in Content, and that a Content section which is only the passage is
+ * finished. A model given the method alone marks ordinary reflections wrong;
+ * a model given the observations alone loses the point of the exercise.
  */
 export const AI_SECTION_MEANINGS: Record<AiGuidanceSection, string> = {
-  content:
-    'Content — the passage itself, as the writer wants it read: the verse text, usually with its reference and translation. An explanation may follow it, but often nothing does, and a Content section that is only the passage is finished.',
-  heart:
-    'Heart — how the passage personally touches the writer, and where their reading of it usually goes. In real reflections the explanation of what a passage means — its background, who was speaking, what it is doing — appears here far more often than in Content.',
-  application: 'Application — how it applies, and what they may do.',
-  testimony: 'Testimony — their own declaration of faith, conviction or prayer.',
+  content: `Content — ${CHAT_METHOD_BY_TYPE.content.description} In practice this is the passage itself, as the writer wants it read: the verse text, usually with its reference and translation. An explanation may follow it, but often nothing does, and a Content section that is only the passage is finished.`,
+  heart: `Heart — ${CHAT_METHOD_BY_TYPE.heart.description} This is how the passage personally touches the writer, and where their reading of it usually goes. In real reflections the explanation of what a passage means — its background, who was speaking, what it is doing — appears here far more often than in Content.`,
+  application: `Application — ${CHAT_METHOD_BY_TYPE.application.description} So it is what this asks of them in particular, and what they will actually do; a general truth restated is not yet an application.`,
+  testimony: `Testimony — ${CHAT_METHOD_BY_TYPE.testimony.description} It is their own declaration of faith, conviction or prayer, and its subject is God rather than themselves.`,
 };
 
 /**

@@ -47,6 +47,15 @@
   margin-block-start: var(--space-2);
 }
 
+/*
+ * The way out of the four blurbs and into the method itself, for the reader
+ * whose next thought after "Heart" is "yes, but what does that mean".
+ */
+.methodLink {
+  margin: var(--space-4) 0 0;
+  font-size: var(--text-sm);
+}
+
 /* --- the promises -------------------------------------------------------- */
 
 /*

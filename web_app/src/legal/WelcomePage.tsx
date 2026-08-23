@@ -74,6 +74,9 @@ export function WelcomePage() {
             What the four letters mean
           </h2>
           <ChatLetters layout="grid" />
+          <p className={styles.methodLink}>
+            <Link to="/method">Read the C.H.A.T. method in full →</Link>
+          </p>
         </section>
 
         <section aria-labelledby="promises-heading">
@@ -100,6 +103,12 @@ export function WelcomePage() {
       <footer className={styles.footer}>
         <h2 className={styles.footerTitle}>Policies and help</h2>
         <ul className={styles.links}>
+          <li className={styles.linkRow}>
+            <Link to="/method">The C.H.A.T. method</Link>
+            <span className={styles.linkSummary}>
+              The four letters as they were taught, and the questions that go with them.
+            </span>
+          </li>
           <li className={styles.linkRow}>
             <Link to="/about">About</Link>
             <span className={styles.linkSummary}>
