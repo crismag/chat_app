@@ -54,10 +54,12 @@ function mockFetch(options: {
   community?: CommunityDetail
   members?: CommunityMember[]
   me?: { id: string }
+  joinRequests?: { userId: string; handle: string | null; displayName: string | null; requestedAt: string }[]
 } = {}) {
   const view = options.community ?? community
   const roster = options.members ?? members
   const me = options.me ?? { id: 'u-owner' }
+  const joinRequests = options.joinRequests ?? []
 
   return vi.fn((input: RequestInfo, init?: RequestInit) => {
     const url = String(input)
@@ -108,10 +110,17 @@ function mockFetch(options: {
       } as Response)
     }
 
+    if (url.includes('/join-requests') && method === 'POST') {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ state: 'active' }),
+      } as Response)
+    }
+
     if (url.includes('/join-requests')) {
       return Promise.resolve({
         ok: true,
-        json: async () => ({ requests: [] }),
+        json: async () => ({ requests: joinRequests }),
       } as Response)
     }
 
@@ -214,6 +223,42 @@ test('the owner can identify a member and add them as an owner', async () => {
     )
   })
   expect(await screen.findByText('They are now an owner of this community.')).toBeInTheDocument()
+})
+
+test('when the community lets any member approve, a member sees waiting people and can decide', async () => {
+  const fetchMock = mockFetch({
+    community: {
+      ...community,
+      role: 'member',
+      settings: { ...community.settings, approvalPolicy: 'members' },
+    },
+    me: { id: 'u-member' },
+    joinRequests: [
+      {
+        userId: 'u-asker',
+        handle: 'cara',
+        displayName: 'Cara',
+        requestedAt: '2026-08-23T00:00:00.000Z',
+      },
+    ],
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  renderManage()
+
+  expect(await screen.findByRole('heading', { name: 'One person is asking to join' })).toBeInTheDocument()
+  expect(screen.getByText('Cara')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Approve' }))
+
+  await waitFor(() => {
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/communities/c1/join-requests/u-asker'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ decision: 'approve' }),
+      }),
+    )
+  })
+  expect(await screen.findByText('They are in.')).toBeInTheDocument()
 })
 
 test('finding a person filters the roster by name or handle', async () => {

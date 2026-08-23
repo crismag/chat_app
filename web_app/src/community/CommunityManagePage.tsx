@@ -39,18 +39,17 @@ import {
   addCommunityOwner,
   deleteCommunity,
   fetchCommunity,
-  fetchJoinRequests,
   fetchMembers,
   inviteToCommunity,
   leaveCommunity,
   updateCommunityDetails,
   updateCommunitySettings,
   updateMember,
-  decideJoinRequest,
   type CommunityDetail,
   type CommunityMember,
 } from './api.ts'
-import { isManager, isOwner, roleLabel } from './roles.ts'
+import { JoinRequests } from './JoinRequests.tsx'
+import { canDecideJoins, isManager, isOwner, roleLabel } from './roles.ts'
 import styles from './CommunityPage.module.css'
 
 type Failure = {
@@ -196,6 +195,7 @@ export function CommunityManagePage() {
 
   const owner = isOwner(community.role)
   const manager = isManager(community.role)
+  const decidesJoins = canDecideJoins(community.role, community.settings.approvalPolicy)
   const heading = owner || manager ? `Manage ${community.name}` : community.name
 
   return (
@@ -219,6 +219,9 @@ export function CommunityManagePage() {
               {' · '}
               {community.memberCount === 1 ? '1 member' : `${community.memberCount} members`}
               {community.ownerCount > 1 ? ` · ${community.ownerCount} owners` : ''}
+              {community.settings.approvalPolicy === 'members'
+                ? ' · any member may approve joins'
+                : ''}
             </p>
           </div>
         </header>
@@ -295,11 +298,15 @@ export function CommunityManagePage() {
         }
       />
 
-      {manager ? (
+      {decidesJoins ? (
         <JoinRequests
           communityId={community.id}
+          headingLevel="h2"
           onNotice={setNotice}
-          onFailure={(next) => setProblem(next.message)}
+          onError={(caught) =>
+            setProblem(caught instanceof Error ? caught.message : 'That could not be done.')
+          }
+          onChanged={() => void load()}
         />
       ) : null}
 
@@ -471,6 +478,12 @@ function SettingsForm({
         <option value={APPROVAL_POLICY.OWNER_ADMIN}>You and your admins</option>
         <option value={APPROVAL_POLICY.MEMBERS}>Any member</option>
       </select>
+      {approvals === APPROVAL_POLICY.MEMBERS ? (
+        <p className="hint">
+          Any approved member can then let people in. Most communities keep this
+          with the owner and admins.
+        </p>
+      ) : null}
 
       <button type="submit" className="btn btn-primary btn-sm">
         Save settings
@@ -709,76 +722,6 @@ function MembersPanel({
         </form>
       ) : null}
     </section>
-  )
-}
-
-function JoinRequests({
-  communityId,
-  onNotice,
-  onFailure,
-}: {
-  communityId: string
-  onNotice: (message: string) => void
-  onFailure: (failure: Failure) => void
-}) {
-  const [requests, setRequests] = useState<
-    Awaited<ReturnType<typeof fetchJoinRequests>>['requests']
-  >([])
-
-  const refresh = useCallback(() => {
-    void fetchJoinRequests(communityId)
-      .then((found) => setRequests(found.requests))
-      .catch(() => setRequests([]))
-  }, [communityId])
-
-  useEffect(refresh, [refresh])
-
-  if (requests.length === 0) return null
-
-  return (
-    <div className={styles.joinRequests}>
-      <h2 className={styles.joinRequestsHeading}>
-        {requests.length === 1
-          ? 'One person is asking to join'
-          : `${requests.length} people are asking to join`}
-      </h2>
-      <ul className={styles.joinRequestList}>
-        {requests.map((request) => (
-          <li key={request.userId} className={styles.joinRequestRow}>
-            <AuthorLink
-              className={styles.author}
-              author={{
-                handle: request.handle ?? '',
-                displayName: request.displayName ?? request.handle ?? 'A C.H.A.T. writer',
-              }}
-            />
-            <span className={styles.joinRequestActions}>
-              {(['approve', 'decline'] as const).map((decision) => (
-                <button
-                  key={decision}
-                  type="button"
-                  className={decision === 'approve' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm'}
-                  onClick={() => {
-                    void decideJoinRequest(communityId, request.userId, decision)
-                      .then(() => {
-                        onNotice(
-                          decision === 'approve'
-                            ? 'They are in.'
-                            : 'Declined. They can ask again later.',
-                        )
-                        refresh()
-                      })
-                      .catch((caught: unknown) => onFailure(describe(caught)))
-                  }}
-                >
-                  {decision === 'approve' ? 'Approve' : 'Decline'}
-                </button>
-              ))}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
   )
 }
 

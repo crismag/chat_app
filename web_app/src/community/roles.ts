@@ -1,7 +1,10 @@
 import {
+  APPROVAL_POLICY,
   COMMUNITY_ROLES,
+  canApproveMembers,
   canModerate,
   readCommunityRole,
+  type ApprovalPolicy,
   type CommunityRole,
 } from '@chat/shared'
 
@@ -16,6 +19,19 @@ export function isOwner(value: string | null | undefined): boolean {
 
 export function isManager(value: string | null | undefined): boolean {
   return canModerate(communityRole(value))
+}
+
+/**
+ * Whether this person may decide on a join request.
+ *
+ * Ownership is not the only answer: a community may open approvals to every
+ * member, and until it says so the default stays with the owner and admins.
+ */
+export function canDecideJoins(
+  role: string | null | undefined,
+  policy: ApprovalPolicy | null | undefined,
+): boolean {
+  return canApproveMembers(communityRole(role), policy ?? APPROVAL_POLICY.OWNER_ADMIN)
 }
 
 /** Plain language, never permission terminology. */
