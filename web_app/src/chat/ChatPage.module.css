@@ -523,7 +523,7 @@
 /*
  * The two inline inputs. They share everything except their width, which is
  * the one thing they must not share: the title takes the line it is on, and
- * the tags sit in a metadata row beside the format and the progress.
+ * the tags field takes what it is given in the footer, below the sections.
  */
 .titleInput,
 .tagsInput {
@@ -556,12 +556,29 @@
 }
 
 /*
- * Bounded, because tags are short and an input greedy for the whole line would
- * push the progress off the end of it.
+ * Wide, because it is alone in its row now — beside only the repeated Share
+ * button, not squeezed against the format chooser and the progress line.
+ *
+ * Set as an explicit width rather than `flex-grow`. `TagInput` wraps the
+ * input in its own column-direction flex container (`.field`, in
+ * `TagInput.module.css`); a `flex-grow` on the input controls its *height*
+ * contribution inside that column, not the width of `.field` as a flex item
+ * of `.artifactFooter` — the input just fell back to the browser's default
+ * text-input width and looked exactly as narrow as the box this replaced.
+ *
+ * It used to be bounded to `min(14rem, 40%)` beside the format button and the
+ * progress line, and a tag list any longer than a couple of short words sat
+ * in that box clipped, with nothing on screen saying there was more.
  */
 .tagsInput {
-  inline-size: min(14rem, 40%);
-  flex: 0 1 auto;
+  /*
+   * A viewport unit rather than a percentage: `.field` (TagInput's own
+   * wrapper) is `inline-flex` with no width of its own, so a percentage here
+   * would resolve against a parent that is itself trying to shrink to fit
+   * this element — the two disagree about who decides, and the safer,
+   * unambiguous answer is a size that does not depend on the parent at all.
+   */
+  inline-size: min(24rem, 82vw);
 }
 
 .tagsInput {
@@ -744,8 +761,16 @@
 }
 
 /*
- * Format, tags and progress on one line, at the size of metadata rather than
- * of controls. Each of these had a row of its own.
+ * Format and progress on one line, at the size of metadata rather than of
+ * controls. Each of these had a row of its own.
+ *
+ * Tags used to be a third thing here and is not any more — see
+ * `.artifactFooter`. In this row it was the one piece of purely optional
+ * metadata sharing space with two things that say something about the
+ * reflection itself, and on anything narrower than a wide desktop it lost
+ * that argument: the row wrapped, and tags ended up alone on its own full
+ * line above the passage and Share — a whole line of header space spent on
+ * a box that, more often than not, held nothing yet.
  */
 .artifactMeta {
   display: flex;
@@ -852,6 +877,32 @@
   gap: var(--space-4);
   max-width: var(--measure);
   margin-inline: auto;
+}
+
+/*
+ * Tags, and Share again, after Testimony rather than above Content.
+ *
+ * Both used to live only at the top, where Share is the right weight — the
+ * first thing reached, before there is anything to share — but tags is
+ * metadata about a reflection someone has usually not started yet. Reached
+ * here by scrolling past the sections rather than pinned in place: this is
+ * part of the same document the sections are, not a toolbar bolted under it.
+ *
+ * Share is a repeat of the one in the head, not a replacement for it — the
+ * same handler, the same disabled rule — offered again for whoever has
+ * scrolled this far and is done, so finishing does not mean scrolling back up
+ * to the one control that started the page.
+ */
+.artifactFooter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  max-width: var(--measure);
+  margin-inline: auto;
+  margin-block-start: var(--space-6);
+  padding-block-start: var(--space-4);
+  border-top: 1px solid var(--line);
 }
 
 /* --- A field of the artifact ------------------------------------------- */
@@ -2942,9 +2993,14 @@
     font-size: max(16px, var(--text-lg));
   }
 
+  /*
+   * A real touch target, and 16px so focusing it does not make the page zoom
+   * itself. `inline-size` is left to the default rule: it is alone in
+   * `.artifactFooter` with only the repeated Share button beside it now, not
+   * squeezed into the status line this override was written for.
+   */
   .tagsInput {
     min-height: var(--tap);
-    inline-size: 100%;
     font-size: 16px;
   }
 
@@ -2995,12 +3051,6 @@
     gap: var(--space-2);
     padding-bottom: var(--space-3);
     font-size: var(--text-xs);
-  }
-
-  .tagsInput {
-    flex: 1 1 8rem;
-    inline-size: auto;
-    min-inline-size: 6rem;
   }
 
   .artifactMeta .progress {
@@ -3259,8 +3309,9 @@
    * took the replacement with it, and the screen went from three rows of
    * status to none at all.
    *
-   * Tags are among them: secondary, still on desktop, and not worth a row of
-   * a phone screen on their own.
+   * Tags is not among them any more — it lives in `.artifactFooter`, below
+   * the sections, on every width, and has no phone-specific replacement to
+   * defer to here.
    */
   .artifactMeta {
     display: block;
@@ -3268,7 +3319,6 @@
   }
 
   .artifactMeta > .formatButton,
-  .artifactMeta > .tagsInput,
   .artifactMeta > .progress {
     display: none;
   }

@@ -194,6 +194,76 @@ function type(field: HTMLElement, text: string) {
   }
 }
 
+/*
+ * Nothing is saved for a page nobody has written a word on.
+ *
+ * A title typed and blurred, a passage looked up, a tag committed: on their
+ * own none of these used to need a section — each one silently created an
+ * untitled, sectionless conversation the moment it was touched. The value
+ * typed is not lost in any of these — it stays exactly where it was typed —
+ * only the premature row in the reflections table is gone.
+ */
+test('a title on a blank page is kept, not saved, until a section has something in it', async () => {
+  renderPage()
+
+  const title = screen.getByLabelText('Reflection title')
+  type(title, 'Quiet morning')
+  fireEvent.blur(title)
+
+  /* Given a moment to (not) reach the server. */
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(server.createdWith).toBeNull()
+  /* And the words typed are still exactly there, not reverted to the placeholder. */
+  expect((screen.getByLabelText('Reflection title') as HTMLInputElement).value).toBe(
+    'Quiet morning',
+  )
+
+  /* The first real sentence is what actually creates it — title included. */
+  const content = screen.getByLabelText(/Content — the passage itself/i)
+  fireEvent.change(content, { target: { value: 'He is the vine.' } })
+  await waitFor(() => expect(server.createdWith).not.toBeNull(), { timeout: 2000 })
+  expect(server.createdWith?.['title']).toBe('Quiet morning')
+})
+
+test('a passage picked before any writing is shown, not saved, until a section has content', async () => {
+  renderPage()
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Add Bible passage' }))
+  const sheet = await screen.findByRole('dialog', { name: 'Bible passage' })
+  fireEvent.click(await within(sheet).findByRole('button', { name: /choose bible passage/i }))
+  const passageField = await within(sheet).findByPlaceholderText('John 3:16-18')
+  fireEvent.change(passageField, { target: { value: 'John 3:16' } })
+  await waitFor(() =>
+    expect(within(sheet).getByRole('button', { name: 'Load passage' })).toBeEnabled(),
+  )
+  fireEvent.click(within(sheet).getByRole('button', { name: 'Load passage' }))
+
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(server.createdWith).toBeNull()
+
+  /* Closing the sheet, the button reads the passage that was picked. */
+  fireEvent.click(within(sheet).getByRole('button', { name: 'Close Bible passage' }))
+  expect(await screen.findByRole('button', { name: /John 3:16/i })).toBeInTheDocument()
+
+  /* And it is what the eventual first save actually creates the reflection with. */
+  const content = screen.getByLabelText(/Content — the passage itself/i)
+  fireEvent.change(content, { target: { value: 'For God so loved the world.' } })
+  await waitFor(() => expect(server.createdWith).not.toBeNull(), { timeout: 2000 })
+  expect(server.createdWith?.['scriptureReference']).toBe('John 3:16')
+})
+
+test('tags set on a blank page are kept, not saved, until a section has something in it', async () => {
+  renderPage()
+
+  const tags = await screen.findByLabelText('Tags')
+  type(tags, 'prayer')
+  fireEvent.blur(tags)
+
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(server.createdWith).toBeNull()
+  expect((screen.getByLabelText('Tags') as HTMLInputElement).value).toBe('prayer')
+})
+
 test('a title typed while the first message is creating the reflection survives whole', async () => {
   server.create = deferred()
   renderPage()
@@ -345,6 +415,47 @@ test('a saved reflection hydrates its title, passage control and C.H.A.T. fields
     'You have kept me.',
   )
   expect(screen.getByRole('button', { name: /John 15:5/i })).toBeInTheDocument()
+})
+
+/*
+ * Tags moved below the sections, and Share is repeated beside it — the fix
+ * for tags reading as an oversized, half-empty header row, and for Share
+ * being the one useful control that stayed at the top of a page somebody had
+ * scrolled all the way down.
+ */
+test('Tags sits after Testimony, not in the header, and Share is offered again beside it', async () => {
+  render(
+    <MemoryRouter initialEntries={['/?c=c1']}>
+      <AuthProvider>
+        <ChatPage />
+      </AuthProvider>
+    </MemoryRouter>,
+  )
+
+  const tags = await screen.findByLabelText('Tags')
+  const testimony = screen.getByLabelText(/Testimony — What God has done/i)
+  /*
+   * DOM order, not just presence: `compareDocumentPosition` says which comes
+   * first in the document, which is what "below the sections" actually
+   * means. A CSS reorder would satisfy a screenshot and fail this.
+   */
+  expect(
+    testimony.compareDocumentPosition(tags) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy()
+
+  const shares = screen.getAllByRole('button', { name: 'Share' })
+  expect(shares).toHaveLength(2)
+  /* A saved reflection with content: both are the live action, not a stub. */
+  for (const share of shares) expect(share).toBeEnabled()
+})
+
+test('on a brand-new reflection both Share controls start disabled, together', async () => {
+  renderPage()
+  await screen.findByLabelText('Reflection title')
+
+  const shares = screen.getAllByRole('button', { name: 'Share' })
+  expect(shares).toHaveLength(2)
+  for (const share of shares) expect(share).toBeDisabled()
 })
 
 test('Suggest title appears once there is something to name', async () => {

@@ -132,6 +132,17 @@ export function ChatPage() {
   const [titleDraft, setTitleDraft] = useState<string | null>(null)
   const [tagsDraft, setTagsDraft] = useState<string | null>(null)
   /*
+   * A passage chosen before there is anywhere to save it to.
+   *
+   * Picking a passage is usually the *first* thing somebody does, before a
+   * single word of Content — so it has to survive exactly the gap
+   * `ensureConversation` now refuses to cross. Held here and read back by the
+   * passage button and the connector's own initial value, the same way
+   * `titleDraft` already is; folded into the first real save's seed once one
+   * happens, wherever it is triggered from.
+   */
+  const [referenceDraft, setReferenceDraft] = useState<string | null>(null)
+  /*
    * The one sentence the server sends back when it refused a tag. Held beside
    * the draft rather than in the page's error banner: it is about one word in
    * one field, and a banner across the reflection would read as the save
@@ -279,6 +290,8 @@ export function ChatPage() {
 
   const format: ChatFormat = detail?.format ?? CHAT_FORMATS.FULL
   const fields = fieldsFor(format)
+  /** The server's reference once there is one, the pending pick until then. */
+  const displayedReference = detail?.scriptureReference?.trim() || referenceDraft?.trim() || ''
 
   const storedValue = useCallback(
     (field: FieldType): string => {
@@ -316,6 +329,20 @@ export function ChatPage() {
   }, [edits, storedValue])
 
   const hasUnsaved = dirtyFields.size > 0
+
+  /*
+   * Whether there is anything here worth keeping.
+   *
+   * A title typed and blurred, a passage looked up, a format chosen, a tag
+   * committed — none of those are a reflection. They are all things somebody
+   * can do to an empty page, and doing them used to be enough to write a row
+   * into the reflections table: an untitled, sectionless conversation that
+   * existed only because a metadata field was touched. `ensureConversation`
+   * reads this before it creates anything, so the first save is the first
+   * real sentence, not the first click.
+   */
+  const written = fields.filter((meta) => valueOf(meta.type).trim()).length
+  const hasSectionContent = written > 0
 
   const refreshList = useCallback(async () => {
     setConversations(await fetchReflections())
@@ -356,6 +383,7 @@ export function ChatPage() {
         setDiscussing(null)
         setTitleDraft(null)
         setTagsDraft(null)
+        setReferenceDraft(null)
         setValidation(null)
       }
       setSearchParams(
@@ -376,11 +404,20 @@ export function ChatPage() {
     async (seed: { title?: string; scriptureReference?: string } = {}): Promise<string | null> => {
       if (activeId) return activeId
       if (creatingRef.current) return creatingRef.current
+      /*
+       * Refused, not queued. A title typed, a passage looked up, a tag
+       * committed: every caller of this function already copes with `null` —
+       * the draft it was about to spend stays exactly where it was typed,
+       * and is picked up by whichever save actually happens first, once one
+       * does. See `hasSectionContent`, above, for why this line exists at
+       * all.
+       */
+      if (!hasSectionContent) return null
       const work = (async () => {
         const conversation = await createReflection<Summary>({
             title: seed.title?.trim() || titleDraft?.trim() || 'New reflection',
-            ...(seed.scriptureReference?.trim()
-              ? { scriptureReference: seed.scriptureReference.trim() }
+            ...((seed.scriptureReference ?? referenceDraft)?.trim()
+              ? { scriptureReference: (seed.scriptureReference ?? referenceDraft ?? '').trim() }
               : {}),
           })
         await openConversation(conversation.id, { continuing: true })
@@ -394,7 +431,7 @@ export function ChatPage() {
         if (creatingRef.current === work) creatingRef.current = null
       }
     },
-    [activeId, openConversation, refreshList, titleDraft],
+    [activeId, hasSectionContent, openConversation, referenceDraft, refreshList, titleDraft],
   )
 
   useEffect(() => {
@@ -698,6 +735,7 @@ export function ChatPage() {
     setDiscussing(null)
     setTitleDraft(null)
     setTagsDraft(null)
+    setReferenceDraft(null)
     setValidation(null)
     setListOpen(false)
     setSearchParams(
@@ -941,10 +979,22 @@ export function ChatPage() {
   async function onCanonicalPassageChange(next: BiblePassage | null) {
     if (!next) {
       if (activeId) await patchConversation({ scriptureReference: '' }, activeId)
+      setReferenceDraft(null)
       return
     }
+    /*
+     * Picking a passage is usually the first thing that happens on a blank
+     * page, well before a word of Content — the most common way to hit the
+     * gap `ensureConversation` now refuses to cross. Set locally either way,
+     * so the button reads correctly whether or not a save happened; only
+     * cleared once the server actually has it.
+     */
+    setReferenceDraft(next.reference)
     const id = await ensureConversation({ scriptureReference: next.reference })
-    if (id) await patchConversation({ scriptureReference: next.reference }, id)
+    if (id) {
+      await patchConversation({ scriptureReference: next.reference }, id)
+      setReferenceDraft(null)
+    }
   }
 
   /**
@@ -1206,7 +1256,6 @@ export function ChatPage() {
   /* --- Rendering -------------------------------------------------------- */
 
   const hasChatMessages = (detail?.messages.length ?? 0) > 0
-  const written = fields.filter((meta) => valueOf(meta.type).trim()).length
   const hasReflectionText = written > 0
 
   /*
@@ -1416,8 +1465,17 @@ export function ChatPage() {
               }
               void (async () => {
                 if (!detail) {
-                  await ensureConversation({ title: value })
-                  setTitleDraft(null)
+                  /*
+                   * Left set, not cleared, when there is nothing to save yet
+                   * — `ensureConversation` refuses until a section has
+                   * content, and clearing the draft here would blank the
+                   * field back to the placeholder the moment focus left it,
+                   * for a title that was never wrong, only early. The value
+                   * is not lost: it is exactly what the eventual first save
+                   * falls back to.
+                   */
+                  const id = await ensureConversation({ title: value })
+                  if (id) setTitleDraft(null)
                   return
                 }
                 const ok = await patchConversation({ title: value })
@@ -1570,9 +1628,7 @@ export function ChatPage() {
                 onClick={() => setPassageOpen(true)}
               >
                 <BookIcon className={styles.smallIcon} />
-                {detail?.scriptureReference?.trim()
-                  ? detail.scriptureReference.trim()
-                  : 'Add Bible passage'}
+                {displayedReference || 'Add Bible passage'}
               </button>
               {/*
                 Rendered here only on a desktop. On a phone this same field is
@@ -1697,10 +1753,11 @@ export function ChatPage() {
         </div>
 
         {/*
-          Format, tags and how far this has got — one line, at the size of
-          metadata. These were three separate rows of full-height controls
-          above the writing, which is a lot of furniture to walk past on the
-          way to a blank Content field.
+          Format and how far this has got — one line, at the size of
+          metadata. This and tags were three separate rows of full-height
+          controls above the writing, which is a lot of furniture to walk
+          past on the way to a blank Content field. Tags is no longer one of
+          them — see `.artifactFooter`, below the sections, for where and why.
         */}
         <div className={styles.artifactMeta}>
           <button
@@ -1708,6 +1765,14 @@ export function ChatPage() {
             className={styles.formatButton}
             onClick={() => {
               if (!detail) {
+                /*
+                 * Choosing a format is metadata, same as a title or a
+                 * passage — `ensureConversation` refuses until a section has
+                 * content, so this is quietly a no-op on a page nobody has
+                 * written a word on yet. Full C.H.A.T. is the default either
+                 * way, and Condensed is one press away the moment there is
+                 * a reflection to change the format of.
+                 */
                 void ensureConversation().then((id) => {
                   if (id) setFormatOpen(true)
                 })
@@ -1719,39 +1784,6 @@ export function ChatPage() {
             {format === CHAT_FORMATS.CONDENSED ? 'Condensed C.H.A.T.' : 'Full C.H.A.T.'}
             <ChevronDownIcon className={styles.formatChange} />
           </button>
-
-          <TagInput
-            className={styles.tagsInput}
-            value={tagsDraft ?? (detail?.tags ?? []).map((item) => item.label).join(', ')}
-            onChange={setTagsDraft}
-            error={tagError}
-            onDismissError={() => setTagError(null)}
-            onCancel={() => {
-              setTagsDraft(null)
-              setTagError(null)
-            }}
-            onCommit={() => {
-              if (tagsDraft === null) return
-              const next = parseHashtags(tagsDraft)
-              const previous = (detail?.tags ?? []).map((item) => item.tag).join(',')
-              const upcoming = next.map((item) => item.tag).join(',')
-              if (upcoming === previous) {
-                setTagsDraft(null)
-                return
-              }
-              void (async () => {
-                const id = await ensureConversation()
-                /*
-                 * The server decides which tags exist, so the answer is read
-                 * rather than assumed: a refused word is dropped there, the
-                 * rest are saved, and the draft is cleared so the field shows
-                 * what was actually kept.
-                 */
-                const saved = await patchTags(next.map((item) => item.label), id)
-                if (saved) setTagsDraft(null)
-              })()
-            }}
-          />
 
           {/*
             The three things from the head a phone still needs, on one line.
@@ -1791,9 +1823,7 @@ export function ChatPage() {
                   anyway, so the long form was costing a row precisely when
                   there was nothing to show for it.
                 */}
-                {detail?.scriptureReference?.trim()
-                  ? detail.scriptureReference.trim()
-                  : 'Add passage'}
+                {displayedReference || 'Add passage'}
               </button>
 
               <p className={styles.statusLine}>
@@ -1931,6 +1961,64 @@ export function ChatPage() {
             }}
             onDismissProposal={() => setProposal(null)}
           />
+
+          {/*
+            Tags, and Share again — after Testimony, not above Content.
+            Reached by scrolling past the sections, as part of the same
+            document rather than a toolbar pinned under it; see
+            `.artifactFooter` for the rest of why.
+          */}
+          <div className={styles.artifactFooter}>
+            <TagInput
+              className={styles.tagsInput}
+              value={tagsDraft ?? (detail?.tags ?? []).map((item) => item.label).join(', ')}
+              onChange={setTagsDraft}
+              error={tagError}
+              onDismissError={() => setTagError(null)}
+              onCancel={() => {
+                setTagsDraft(null)
+                setTagError(null)
+              }}
+              onCommit={() => {
+                if (tagsDraft === null) return
+                const next = parseHashtags(tagsDraft)
+                const previous = (detail?.tags ?? []).map((item) => item.tag).join(',')
+                const upcoming = next.map((item) => item.tag).join(',')
+                if (upcoming === previous) {
+                  setTagsDraft(null)
+                  return
+                }
+                void (async () => {
+                  const id = await ensureConversation()
+                  /*
+                   * The server decides which tags exist, so the answer is
+                   * read rather than assumed: a refused word is dropped
+                   * there, the rest are saved, and the draft is cleared so
+                   * the field shows what was actually kept.
+                   */
+                  const saved = await patchTags(next.map((item) => item.label), id)
+                  if (saved) setTagsDraft(null)
+                })()
+              }}
+            />
+
+            {/*
+              The same Share as the head: same handler, same disabled rule.
+              Not a second control that happens to say the same word — a
+              second way to reach the one Share action, for whoever has
+              scrolled this far and is done, so finishing does not mean
+              scrolling back up to the control that started the page.
+            */}
+            <button
+              type="button"
+              className={`btn btn-sm ${written > 0 ? 'btn-primary' : 'btn-secondary'}`}
+              disabled={!detail}
+              onClick={() => setShareOpen(true)}
+            >
+              <ShareIcon className={styles.tinyIcon} />
+              Share
+            </button>
+          </div>
         </div>
 
       </div>
@@ -1988,7 +2076,7 @@ export function ChatPage() {
         <Sheet title="Bible passage" onClose={() => setPassageOpen(false)}>
           <ScripturePassage
             conversationId={activeId}
-            initialReference={detail?.scriptureReference ?? ''}
+            initialReference={displayedReference}
             onPassageChange={(next) => void onCanonicalPassageChange(next)}
             onUsePassage={(text) => {
               /*
