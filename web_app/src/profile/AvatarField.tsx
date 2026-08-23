@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 
+import { apiUrl } from '../shared/api/client.ts'
 import { Sheet } from '../shared/mobile/Sheet.tsx'
 import { Avatar } from '../shared/ui/Avatar.tsx'
 import { cropRect } from './crop.ts'
@@ -85,14 +86,38 @@ export function AvatarField({
     setBusy(true)
     setError(null)
     try {
-      const response = await fetch('/api/profiles/me/avatar', {
+      /*
+       * `apiUrl`, not a bare `/api/...` path.
+       *
+       * This was the only request in the application written as a relative
+       * URL. In development it worked, because the dev server proxies /api to
+       * the API; in production the web app is served from one host and the API
+       * answers on another, so the upload went to the static host, which
+       * replied with its 404 *page*. `response.json()` then failed on the
+       * first character of `<!DOCTYPE`, and the person adding a picture was
+       * shown a JSON parse error.
+       *
+       * It is a plain `fetch` rather than `api()` because the body is a Blob
+       * and the client sets its own Content-Type; only the base was missing.
+       */
+      const response = await fetch(apiUrl('/profiles/me/avatar'), {
         method,
         credentials: 'include',
         ...(contentType ? { headers: { 'Content-Type': contentType } } : {}),
         ...(body ? { body } : {}),
       })
-      const view = (await response.json()) as { avatarUrl?: string | null; error?: string }
-      if (!response.ok) throw new Error(view.error ?? 'That picture could not be saved.')
+      /*
+       * A response that is not JSON is a response from something that is not
+       * this API — a proxy error page, a captive portal, a host's 404. Saying
+       * so beats letting the parser's message reach somebody as if it were
+       * about their picture.
+       */
+      const view = (await response.json().catch(() => null)) as
+        | { avatarUrl?: string | null; error?: string }
+        | null
+      if (!response.ok || !view) {
+        throw new Error(view?.error ?? 'That picture could not be saved.')
+      }
       onChanged(view.avatarUrl ?? null)
       setPicked(null)
       return true
