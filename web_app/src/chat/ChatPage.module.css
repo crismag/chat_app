@@ -783,9 +783,16 @@
   opacity: 0.5;
 }
 
+/*
+ * The chevron on a chooser. Sized explicitly because it is an SVG now: a `▾`
+ * took its size from the surrounding type, and an icon that does not say what
+ * size it is defaults to 20px beside 13px text.
+ */
 .formatChange {
+  inline-size: 0.95rem;
+  block-size: 0.95rem;
+  flex: none;
   color: var(--accent);
-  font-weight: 600;
 }
 
 .progress {
@@ -994,10 +1001,33 @@
   outline-offset: -2px;
 }
 
+/*
+ * 1.15rem, not 0.9rem.
+ *
+ * The unsaved mark was the least visible thing on a card that people were
+ * expected to press. It sits in a 2.5rem target, so there was never a layout
+ * reason for it to be small — only that it had been drawn to the size of the
+ * metadata beside it.
+ */
 .markGlyph {
-  width: 0.9rem;
-  height: 0.9rem;
+  width: 1.15rem;
+  height: 1.15rem;
   flex: none;
+}
+
+/*
+ * Unsaved work is the accent colour; a confirmed save stays muted.
+ *
+ * `--muted` is the colour this application uses for things that do not need
+ * attention, and "you have unsaved words in this field" is not one of them.
+ */
+.mark[data-save='dirty'] {
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.mark[data-save='dirty']:hover {
+  background: var(--accent-soft);
 }
 
 /*

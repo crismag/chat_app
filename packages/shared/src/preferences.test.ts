@@ -11,7 +11,8 @@ describe('normalisePreferences', () => {
   })
 
   test('a theme this release no longer has falls back rather than breaking', () => {
-    expect(normalisePreferences({ theme: 'neon-1998' }).theme).toBe(THEMES.DEFAULT)
+    /* The default, whatever it currently is — not the appearance keyed `default`. */
+    expect(normalisePreferences({ theme: 'neon-1998' }).theme).toBe(DEFAULT_PREFERENCES.theme)
   })
 
   test('a chosen theme survives', () => {

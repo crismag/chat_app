@@ -365,6 +365,18 @@ a.author:focus-visible {
   color: var(--ink);
 }
 
+/*
+ * The overflow trigger, larger than the audience marks beside it.
+ *
+ * `.metaIcon` is 0.875rem, which is right for a padlock sitting next to a
+ * word and wrong for the only control in this row that opens something. It was
+ * a `⋯` character before, which was smaller still.
+ */
+.action .metaIcon {
+  inline-size: 1.15rem;
+  block-size: 1.15rem;
+}
+
 .encourage[aria-pressed='true'] {
   background: var(--heart-soft);
   color: var(--heart);

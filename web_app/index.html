@@ -16,7 +16,8 @@
       The chosen theme, before the first pixel.
 
       This runs ahead of the stylesheet and the application, so a person who
-      chose Dark never sees a white page flash first. It reads a mirror of the
+      chose Dark never sees a white page flash first, and somebody who has
+      chosen nothing gets Retro rather than a flash of it. It reads a mirror of the
       preference the account holds; the application replaces it with whatever
       the server says a moment later. Deliberately tiny, dependency-free and
       wrapped in try/catch, because it sits in front of everything: if storage
@@ -25,9 +26,27 @@
     <script>
       (function () {
         try {
-          var THEMES = ['default', 'formal', 'zen', 'ladies', 'retro', 'techno', 'light', 'dark'];
+          var THEMES = [
+            'default',
+            'formal',
+            'zen',
+            'ladies',
+            'retro',
+            'techno',
+            'blush',
+            'azure',
+            'leather',
+            'light',
+            'dark',
+          ];
           var stored = window.localStorage.getItem('chat.theme');
-          var theme = THEMES.indexOf(stored) >= 0 ? stored : 'default';
+          /*
+           * Retro when nothing has been chosen, matching DEFAULT_PREFERENCES.
+           * These two are the same decision written in two places — this one
+           * runs before any JavaScript module loads — and if they disagree the
+           * first paint is one theme and the second is another.
+           */
+          var theme = THEMES.indexOf(stored) >= 0 ? stored : 'retro';
           var root = document.documentElement;
           root.dataset.theme = theme;
           if (theme === 'default') {

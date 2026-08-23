@@ -45,7 +45,7 @@ import { Recoverable } from '../shared/ui/Recoverable.tsx'
 import { NARROW_QUERY, useMediaQuery } from '../shared/ui/useMediaQuery.ts'
 import { useMobileBar } from '../shared/mobile/MobileBar.tsx'
 import { PageMenu } from '../shared/mobile/PageMenu.tsx'
-import { MoreIcon } from '../shared/ui/icons.tsx'
+import { ChevronDownIcon, MoreHorizontalIcon, MoreIcon } from '../shared/ui/icons.tsx'
 import { ChatHelper } from './ChatHelper.tsx'
 import {
   DeleteSheet,
@@ -1569,7 +1569,7 @@ export function ChatPage() {
                 title="Look up a Bible passage. Optional — you can write without one."
                 onClick={() => setPassageOpen(true)}
               >
-                <span aria-hidden="true">📖</span>
+                <BookIcon className={styles.smallIcon} />
                 {detail?.scriptureReference?.trim()
                   ? detail.scriptureReference.trim()
                   : 'Add Bible passage'}
@@ -1678,7 +1678,7 @@ export function ChatPage() {
             <ActionMenu
               label="More actions for this reflection"
               triggerClassName={styles.iconButton}
-              trigger={<span aria-hidden="true">⋯</span>}
+              trigger={<MoreHorizontalIcon />}
               items={moreItems}
             />
 
@@ -1717,7 +1717,7 @@ export function ChatPage() {
             }}
           >
             {format === CHAT_FORMATS.CONDENSED ? 'Condensed C.H.A.T.' : 'Full C.H.A.T.'}
-            <span className={styles.formatChange} aria-hidden="true">▾</span>
+            <ChevronDownIcon className={styles.formatChange} />
           </button>
 
           <TagInput
@@ -1811,7 +1811,7 @@ export function ChatPage() {
                   }}
                 >
                   {format === CHAT_FORMATS.CONDENSED ? 'Short' : 'Full'}
-                  <span aria-hidden="true">▾</span>
+                  <ChevronDownIcon className={styles.formatChange} />
                   <span className="sr-only"> C.H.A.T. — change the format</span>
                 </button>
                 <span aria-hidden="true">·</span>

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import {
   DEFAULT_PREFERENCES,
   type Preferences,
-  THEMES,
   type Theme,
   isTheme,
   normalisePreferences,
@@ -28,13 +27,21 @@ import { THEME_STORAGE_KEY, applyTheme } from './theme.ts'
 
 const SYSTEM_DARK = '(prefers-color-scheme: dark)'
 
+/**
+ * The mirror of the last chosen theme, or the one nobody has chosen yet.
+ *
+ * The fallback is `DEFAULT_PREFERENCES.theme` rather than a literal, so this,
+ * the server's default and the pre-paint script in `index.html` cannot drift
+ * apart into three answers — which a person would see as the page changing
+ * appearance twice while it loads.
+ */
 function storedTheme(): Theme {
   try {
     const raw = window.localStorage.getItem(THEME_STORAGE_KEY)
-    return isTheme(raw) ? raw : THEMES.DEFAULT
+    return isTheme(raw) ? raw : DEFAULT_PREFERENCES.theme
   } catch {
     /* Private mode, or storage disabled. A theme is not worth an exception. */
-    return THEMES.DEFAULT
+    return DEFAULT_PREFERENCES.theme
   }
 }
 

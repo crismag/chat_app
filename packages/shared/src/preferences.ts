@@ -16,11 +16,19 @@ import { CHAT_FORMATS, type ChatFormat } from './formats.ts';
  */
 
 /**
- * The eight appearances.
+ * The eleven appearances.
  *
  * `default` is the only one that follows the operating system's light/dark
  * setting; the rest are a decision the person has made and are honoured
  * whatever the system says. That is the point of choosing one.
+ *
+ * The **key is `default` and its name is "System Tone"**, and those two facts
+ * have to stay apart. The key is what is stored in every account row and every
+ * browser's mirror of it, so renaming it would silently reset the appearance of
+ * everybody who had chosen it. The name is what a person reads, and "Default"
+ * had stopped being true the moment Retro became the one a new account starts
+ * with. What it *is* — the appearance that takes its cue from the device — is
+ * what it is now called.
  */
 export const THEMES = {
   DEFAULT: 'default',
@@ -29,6 +37,9 @@ export const THEMES = {
   LADIES: 'ladies',
   RETRO: 'retro',
   TECHNO: 'techno',
+  BLUSH: 'blush',
+  AZURE: 'azure',
+  LEATHER: 'leather',
   LIGHT: 'light',
   DARK: 'dark',
 } as const;
@@ -40,7 +51,7 @@ export const THEME_LIST: readonly Theme[] = Object.values(THEMES);
 /** What each one is called, and what it is for. Shown as written. */
 export const THEME_LABELS: Record<Theme, { name: string; description: string }> = {
   [THEMES.DEFAULT]: {
-    name: 'Default',
+    name: 'System Tone',
     description: 'Warm and quiet. Follows your device’s light or dark setting.',
   },
   [THEMES.FORMAL]: { name: 'Formal', description: 'Restrained, high contrast, serif.' },
@@ -48,6 +59,27 @@ export const THEME_LABELS: Record<Theme, { name: string; description: string }> 
   [THEMES.LADIES]: { name: 'Ladies', description: 'Rose and plum, with a lighter hand.' },
   [THEMES.RETRO]: { name: 'Retro', description: 'Paper, ink and amber.' },
   [THEMES.TECHNO]: { name: 'Techno', description: 'Dark, cool and precise.' },
+  [THEMES.BLUSH]: {
+    name: 'Blush & Sage',
+    description: 'Blush pink, sage green and soft grey. Calm and nature-inspired.',
+  },
+  /*
+   * Named for the colour, not for the company.
+   *
+   * The palette was asked for by reference to Facebook's — Azure Radiance blue
+   * on light grey, white cards — and the palette is what was taken. The name is
+   * not: another company's trademark on a menu item inside this product would
+   * suggest an association that does not exist, and it would need changing the
+   * first time they revised their brand.
+   */
+  [THEMES.AZURE]: {
+    name: 'Azure',
+    description: 'Crisp blue on light grey, with white cards. High contrast and familiar.',
+  },
+  [THEMES.LEATHER]: {
+    name: 'Leatherbound',
+    description: 'Brown leather, aged parchment and muted gold, like a study Bible.',
+  },
   [THEMES.LIGHT]: { name: 'Light', description: 'Always light, whatever your device says.' },
   [THEMES.DARK]: { name: 'Dark', description: 'Always dark, whatever your device says.' },
 };
@@ -73,7 +105,16 @@ export type Preferences = {
 };
 
 export const DEFAULT_PREFERENCES: Preferences = {
-  theme: THEMES.DEFAULT,
+  /*
+   * Retro, not System Tone.
+   *
+   * Somebody arriving has chosen nothing, and what they see should be a choice
+   * somebody made rather than whatever their operating system happens to be set
+   * to at that moment. Paper, ink and amber is the register this application
+   * writes in. Anybody who prefers their device to decide can still pick System
+   * Tone, and the moment they do, this stops applying to them.
+   */
+  theme: THEMES.RETRO,
   bibleTranslationId: null,
   defaultChatFormat: CHAT_FORMATS.FULL,
 };

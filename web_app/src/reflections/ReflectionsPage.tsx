@@ -42,7 +42,7 @@ import { NARROW_QUERY, useMediaQuery } from '../shared/ui/useMediaQuery.ts'
 import { useMobileBar } from '../shared/mobile/MobileBar.tsx'
 import { Sheet } from '../shared/mobile/Sheet.tsx'
 import { PageMenu } from '../shared/mobile/PageMenu.tsx'
-import { FilterIcon, MoreIcon } from '../shared/ui/icons.tsx'
+import { FilterIcon, MoreHorizontalIcon, MoreIcon } from '../shared/ui/icons.tsx'
 import { groupByDay } from './grouping.ts'
 import { MobileCard, MobileTimeline } from './MobileTimeline.tsx'
 import { BarAction, MobileSearchBar, NewReflectionFab, SearchAction } from './mobile.tsx'
@@ -291,7 +291,7 @@ function Overflow({ item }: { item: ReflectionSummary }) {
         aria-label={`More actions for ${item.title}`}
         onClick={() => setOpen((value) => !value)}
       >
-        <span aria-hidden="true">···</span>
+        <MoreHorizontalIcon />
       </button>
       {open ? (
         <div className={styles.menu} role="menu">

@@ -15,6 +15,7 @@
  */
 
 import { describe, expect, test } from 'vitest';
+import { DEFAULT_PREFERENCES } from '@chat/shared';
 import { createApp } from '../app.ts';
 import { SqliteStore } from '../db.ts';
 import { MemoryStore } from '../store.ts';
@@ -462,7 +463,11 @@ for (const backing of backings) {
       const read = await send(app, '/api/profiles/me/preferences', cookie);
       expect(read.status).toBe(200);
       expect((await read.json()) as unknown).toEqual({
-        preferences: { theme: 'default', bibleTranslationId: null, defaultChatFormat: 'full' },
+        preferences: {
+          theme: DEFAULT_PREFERENCES.theme,
+          bibleTranslationId: null,
+          defaultChatFormat: 'full',
+        },
       });
     });
 
@@ -495,8 +500,9 @@ for (const backing of backings) {
       });
 
       expect(saved.status).toBe(200);
+      /* The default appearance, whichever it currently is. */
       expect(((await saved.json()) as { preferences: { theme: string } }).preferences.theme).toBe(
-        'default',
+        DEFAULT_PREFERENCES.theme,
       );
     });
 
@@ -519,7 +525,7 @@ for (const backing of backings) {
       const bob = await register(app, 'bob@example.com');
       const theirs = await send(app, '/api/profiles/me/preferences', bob);
       expect(((await theirs.json()) as { preferences: { theme: string } }).preferences.theme).toBe(
-        'default',
+        DEFAULT_PREFERENCES.theme,
       );
     });
 

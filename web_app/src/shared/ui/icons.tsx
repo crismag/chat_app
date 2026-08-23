@@ -5,6 +5,25 @@
  * dependency, and inline paths inherit `currentColor`, so an icon is the same
  * colour as the label beside it in both themes without anyone maintaining a
  * second palette.
+ *
+ * ── Why a text character is not an icon ─────────────────────────────────────
+ *
+ * Several controls used to draw themselves with a glyph — `⋯` for a menu, `▾`
+ * for a chooser, a lowercase `i` for About, `§` for the licences, `📖` for a
+ * passage. They look like icons in the source and are not:
+ *
+ *  - they take their size from the surrounding font, so a control in small
+ *    metadata type gets an icon of small metadata type;
+ *  - their weight is the font's, not `strokeWidth`, so they are thinner than
+ *    every real icon beside them;
+ *  - `⋯` and `···` are different characters that render differently, and both
+ *    differ again by platform and by installed font;
+ *  - an emoji ignores `currentColor` entirely and stays its own colour in
+ *    every theme.
+ *
+ * The result is a control nobody can see. Everything here is a real SVG at the
+ * same 24-unit grid and the same stroke weight, so an icon looks like the rest
+ * of the set wherever it is put.
  */
 type IconProps = { className?: string }
 
@@ -271,6 +290,81 @@ export function MoreIcon(props: IconProps) {
       <circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none" />
       <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
       <circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+/**
+ * Horizontal, for a menu that lives in a row of other controls.
+ *
+ * `MoreIcon` is the vertical arrangement and belongs in an app bar. The two
+ * exist separately because the direction is a layout decision: dots stacked
+ * vertically inside a horizontal row of actions read as a different control
+ * rather than as "more of these".
+ *
+ * The dots are r=1.6 rather than the 1.4 of the vertical one. This is the
+ * version that replaced a `⋯` character in metadata-sized type, and matching
+ * that character's weight would have kept the problem it was replacing.
+ */
+export function MoreHorizontalIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+/** A chooser opens downwards. Was `▾`, which is a font's idea of an arrow. */
+export function ChevronDownIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M6 9.5 12 15.5 18 9.5" />
+    </svg>
+  )
+}
+
+/** About. Was a lowercase `i`, which is a letter. */
+export function InfoIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 11v5.5" />
+      <circle cx="12" cy="7.9" r="1.05" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+/** Licences and notices — a page with writing on it. Was `§`. */
+export function DocumentIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M6.5 3.5h7l4.5 4.5v12a1 1 0 0 1-1 1H6.5a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z" />
+      <path d="M13.5 3.5V8H18" />
+      <path d="M9 13h6M9 16.5h4" />
+    </svg>
+  )
+}
+
+/**
+ * Unsaved work in a field, and the control that saves it.
+ *
+ * What was here was a filled dot inside a ring, drawn at 0.9rem in `--muted`:
+ * a shape with no meaning of its own, at the size of small print, in the
+ * colour reserved for things that do not matter. It was the one control on the
+ * card that had something to say and the least visible thing on it.
+ *
+ * An arrow going down into a tray is the ordinary sign for "save this", it is
+ * legible at 14px, and it says what pressing it does rather than that a state
+ * exists.
+ */
+export function SaveIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12 3.5v10" />
+      <path d="M8 10l4 3.5 4-3.5" />
+      <path d="M4.5 16v3a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-3" />
     </svg>
   )
 }
