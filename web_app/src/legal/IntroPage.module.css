@@ -29,8 +29,8 @@
   padding-block-end: clamp(var(--space-5), 5vw, var(--space-7, 3rem));
 }
 
-.back {
-  justify-self: start;
+.skip {
+  justify-self: end;
   font-size: var(--text-sm);
   color: var(--muted);
 }

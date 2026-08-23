@@ -10,9 +10,12 @@ each card in the editor, the section meanings handed to the assistant, and the
 framework section of [`PRODUCT.md`](./PRODUCT.md).
 
 It lives in code as well as here: [`packages/shared/src/chat-method.ts`](../../packages/shared/src/chat-method.ts)
-holds the same text, and the application, the AI prompt and the `/method` page
-all read it from there. **Change it in one place and everything follows; change
-a copy of it and you have created the drift this file exists to end.**
+holds the same text, and the application, the AI prompt and the `/intro` page
+(`IntroPage.tsx`, formerly `MethodPage.tsx` — renamed when it became a
+first-visit's front page and not only a document About linked to; `/method`
+still resolves, as a redirect) all read it from there. **Change it in one
+place and everything follows; change a copy of it and you have created the
+drift this file exists to end.**
 
 ## C — Content
 
@@ -108,7 +111,7 @@ meditate on it day and night (Heart), be careful to do everything written in it
 
 | Surface | What it shows | Source |
 | --- | --- | --- |
-| `/method` | All of the above, set as a page | `web_app/src/legal/MethodPage.tsx` |
+| `/intro` (formerly `/method`, still resolving) | All of the above, set as a page — and a brand-new browser's very first visit | `web_app/src/legal/IntroPage.tsx` |
 | `/about`, `/welcome` | Four short blurbs, linking here | `web_app/src/shared/ui/ChatLetters.tsx` |
 | The editor | One prompt per card | `web_app/src/chat/sections.ts` |
 | The AI system instruction | The definitions, the movement, the verse, and the Testimony constraint | `api/src/ai/prompt.ts` |
@@ -117,7 +120,7 @@ meditate on it day and night (Heart), be careful to do everything written in it
 The short surfaces are deliberately modern and brief — this is not restated on
 a card somebody is trying to write in. What they may not do is drift: the
 interpretation has to stay faithful to the text above, and
-`api/src/ai/method-context.test.ts` and `web_app/src/legal/MethodPage.test.tsx`
+`api/src/ai/method-context.test.ts` and `web_app/src/legal/IntroPage.test.tsx`
 fail if the two clauses most easily lost — Application's warning and Testimony's
 subject — stop reaching the model or the reader.
 

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { accountLabel, isGuest, type Account } from '@chat/shared'
-import { CreateIcon, DocumentIcon, InfoIcon, ProfileIcon, SignOutIcon } from './icons.tsx'
+import { BookIcon, CreateIcon, DocumentIcon, InfoIcon, ProfileIcon, SignOutIcon } from './icons.tsx'
 import { Avatar } from './Avatar.tsx'
 import styles from './ProfileMenu.module.css'
 
@@ -146,6 +146,37 @@ export function ProfileMenu({
             <span className={styles.identityEmail}>{label}</span>
           </p>
           {/*
+            Intro and About, first rather than last. Both are also reachable
+            from the header now, without opening this menu at all — but they
+            stay here too, at the top rather than buried under Create image
+            and the licences, for anyone who already has this menu open and
+            is looking for "what is this" among the things it can do.
+          */}
+          <button
+            type="button"
+            role="menuitem"
+            className={styles.item}
+            onClick={() => {
+              close(false)
+              void navigate('/intro')
+            }}
+          >
+            <BookIcon className={styles.itemIcon} />
+            Intro
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={styles.item}
+            onClick={() => {
+              close(false)
+              void navigate('/about')
+            }}
+          >
+            <InfoIcon className={styles.itemIcon} />
+            About
+          </button>
+          {/*
             The way out of being a guest, offered rather than insisted on. It
             claims the account they already have -- same reflections, same
             everything -- which is why it says "your account" and not "sign up".
@@ -187,23 +218,6 @@ export function ProfileMenu({
           >
             <CreateIcon className={styles.itemIcon} />
             Create image
-          </button>
-          {/*
-            About is the way in to the policies. It is listed here rather than
-            the four documents themselves, so this menu does not become a legal
-            index and there is one address to send someone to.
-          */}
-          <button
-            type="button"
-            role="menuitem"
-            className={styles.item}
-            onClick={() => {
-              close(false)
-              void navigate('/about')
-            }}
-          >
-            <InfoIcon className={styles.itemIcon} />
-            About
           </button>
           <button
             type="button"

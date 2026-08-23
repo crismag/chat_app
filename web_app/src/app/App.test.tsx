@@ -2,6 +2,7 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, expect, test, vi } from 'vitest'
 import { App } from './App.tsx'
+import { markIntroSeen } from '../legal/introSeen.ts'
 
 const healthPayload = {
   status: 'ok',
@@ -18,6 +19,18 @@ function mockUnauthenticatedFetch() {
         status: 401,
         json: async () => ({ error: 'Unauthenticated.' }),
       })
+    }
+    /*
+     * ChatPage lists existing reflections on mount whether or not anyone is
+     * signed in — a visitor can have written some as a guest already — so
+     * `/conversations` needs a list here too, not the catch-all object below.
+     * Without this, `setConversations` receives an object instead of an
+     * array; `ConversationSidebar` renders fine at first and then throws the
+     * moment anything causes it to re-render, which a test that waits on
+     * anything past the first paint eventually does.
+     */
+    if (url.includes('/conversations')) {
+      return Promise.resolve({ ok: true, json: async () => [] })
     }
     /*
      * Community answers with an object carrying the feed, the tag chips and
@@ -114,9 +127,19 @@ function mockAuthenticatedFetch() {
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  window.localStorage.clear()
 })
 
-function renderAt(path: string) {
+/*
+ * Every test in this file except the ones about the intro itself is about
+ * something else — a route, a nav item, a page's own content — and none of
+ * them means to be exercising a brand-new browser's very first visit. So
+ * "the intro has already been seen" is the default here, exactly as it is
+ * for anyone who has opened Reflections before; the handful of tests that
+ * care about a first visit ask for it explicitly with `introSeen: false`.
+ */
+function renderAt(path: string, { introSeen = true }: { introSeen?: boolean } = {}) {
+  if (introSeen) markIntroSeen()
   return render(
     <MemoryRouter initialEntries={[path]}>
       <App />
@@ -271,4 +294,49 @@ test('open-source licences remain directly reachable without signing in', async 
   renderAt('/open-source-licenses')
   expect(await screen.findByRole('heading', { name: 'Open Source Licences' })).toBeInTheDocument()
   expect(screen.getByRole('heading', { name: 'Fabric.js' })).toBeInTheDocument()
+})
+
+/*
+ * The first-run gate at `/`. Everything above this point ran with the intro
+ * already marked seen, by `renderAt`'s own default — these are the tests
+ * that turn that default off and look at the one visit it exists for.
+ */
+test('a brand-new browser is shown the intro before Reflect', async () => {
+  vi.stubGlobal('fetch', mockUnauthenticatedFetch())
+  renderAt('/', { introSeen: false })
+  expect(
+    await screen.findByText(/Four steps, in the words they were taught in/),
+  ).toBeInTheDocument()
+  expect(screen.queryByLabelText('Write your reflection')).toBeNull()
+})
+
+test('once the intro has been seen, "/" opens straight into Reflect', async () => {
+  vi.stubGlobal('fetch', mockUnauthenticatedFetch())
+  renderAt('/', { introSeen: true })
+  expect(await screen.findByLabelText('Write your reflection')).toBeInTheDocument()
+  expect(screen.queryByText(/Four steps, in the words they were taught in/)).toBeNull()
+})
+
+/*
+ * Intro and About, without the account menu.
+ *
+ * The account menu does not render at all until `user` is somebody — a guest
+ * or a registered person — so it was never a way for a first-time visitor
+ * with neither yet to reach either page. This is the one that is: present
+ * regardless of `user`, which is asserted in both states below. What opening
+ * it actually does is `InfoMenu`'s own test — clicking it here would mean
+ * clicking through a fully mounted Reflect editor, and a fetch fixture built
+ * to answer "is there a sign-in wall" is not one built to feed that editor's
+ * own data needs.
+ */
+test('the quick access to Intro and About is there before anyone is signed in', async () => {
+  vi.stubGlobal('fetch', mockUnauthenticatedFetch())
+  renderAt('/')
+  expect(await screen.findByRole('button', { name: 'Intro and About' })).toBeInTheDocument()
+})
+
+test('the same quick access is there once somebody is signed in', async () => {
+  vi.stubGlobal('fetch', mockAuthenticatedFetch())
+  renderAt('/')
+  expect(await screen.findByRole('button', { name: 'Intro and About' })).toBeInTheDocument()
 })

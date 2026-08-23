@@ -1,0 +1,101 @@
+.root {
+  position: relative;
+  flex: none;
+}
+
+/*
+ * The same footprint as the account trigger beside it — a 36px target either
+ * way — so the header reads as one row of controls at one size, not a small
+ * icon crowded next to a big one.
+ */
+.trigger {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--muted);
+  transition:
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.trigger:hover,
+.trigger:focus-visible,
+.trigger[aria-expanded='true'] {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.triggerIcon {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  /*
+   * From the right edge, like the account menu beside it. The trigger sits
+   * left of New reflection and the account control inside `.meta`, which is
+   * itself flush against the header's right edge — anchoring the menu to its
+   * own left edge instead would risk running the menu off the right side of
+   * a narrow screen.
+   */
+  right: 0;
+  z-index: 20;
+  min-width: 10rem;
+  display: grid;
+  gap: 2px;
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  animation: info-menu-in var(--fast) var(--ease-out);
+}
+
+@keyframes info-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 550;
+  text-align: left;
+  transition: background var(--fast) var(--ease);
+}
+
+.item:hover,
+.item:focus-visible {
+  background: var(--surface-2);
+}
+
+.itemIcon {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex: none;
+  color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .trigger {
+    min-inline-size: var(--tap);
+    min-block-size: var(--tap);
+  }
+}

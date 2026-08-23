@@ -75,7 +75,7 @@ export function WelcomePage() {
           </h2>
           <ChatLetters layout="grid" />
           <p className={styles.methodLink}>
-            <Link to="/method">Read the C.H.A.T. method in full →</Link>
+            <Link to="/intro">Read the C.H.A.T. method in full →</Link>
           </p>
         </section>
 
@@ -104,9 +104,9 @@ export function WelcomePage() {
         <h2 className={styles.footerTitle}>Policies and help</h2>
         <ul className={styles.links}>
           <li className={styles.linkRow}>
-            <Link to="/method">The C.H.A.T. method</Link>
+            <Link to="/intro">Intro</Link>
             <span className={styles.linkSummary}>
-              The four letters as they were taught, and the questions that go with them.
+              The C.H.A.T. method, as it was taught, and the questions that go with each letter.
             </span>
           </li>
           <li className={styles.linkRow}>

@@ -5,6 +5,7 @@ import { NotesIcon } from '../../notes/icons.tsx'
 import { MessagesIcon } from '../../messaging/icons.tsx'
 import { badgeLabel, badgeText, useWaiting } from '../../messaging/useWaiting.ts'
 import { ProfileMenu } from '../ui/ProfileMenu.tsx'
+import { InfoMenu } from '../ui/InfoMenu.tsx'
 import { useSoftKeyboard } from '../ui/useSoftKeyboard.ts'
 import { MobileBarProvider, useMobileBarConfig } from '../mobile/MobileBar.tsx'
 import { NARROW_QUERY, useMediaQuery } from '../ui/useMediaQuery.ts'
@@ -184,6 +185,15 @@ function Shell() {
           </nav>
 
           <div className={styles.meta}>
+            {/*
+              Intro and About, reachable without an account and without
+              opening the account menu — which does not even render until
+              somebody is recognised as a guest or a registered person. A
+              first-time visitor with neither yet still has a way to read
+              either page. Unconditional on purpose: this is the one control
+              in `.meta` that does not change with `user`.
+            */}
+            <InfoMenu />
             {/*
               The one primary action in the shell. Writing is what the product
               is for, so starting is never more than one press away — and on a

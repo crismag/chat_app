@@ -5,7 +5,7 @@ import { AuthPage } from '../auth/AuthPage.tsx'
 import { PasswordResetPage } from '../auth/PasswordResetPage.tsx'
 import { VerifyEmailPage } from '../auth/VerifyEmailPage.tsx'
 import { AppShell } from '../shared/layout/AppShell.tsx'
-import { ChatPage } from '../chat/ChatPage.tsx'
+import { RootEntry } from './RootEntry.tsx'
 import { ReflectionsPage } from '../reflections/ReflectionsPage.tsx'
 import { ReflectionViewPage } from '../reflections/ReflectionViewPage.tsx'
 import { NotesPage } from '../notes/NotesPage.tsx'
@@ -17,7 +17,7 @@ import { ProfilePage } from '../profile/ProfilePage.tsx'
 import { OpenSourceLicencesPage } from '../licenses/OpenSourceLicencesPage.tsx'
 import { AboutPage } from '../legal/AboutPage.tsx'
 import { WelcomePage } from '../legal/WelcomePage.tsx'
-import { MethodPage } from '../legal/MethodPage.tsx'
+import { IntroPage } from '../legal/IntroPage.tsx'
 import { PrivacyPage } from '../legal/PrivacyPage.tsx'
 import { TermsPage } from '../legal/TermsPage.tsx'
 import { DisclaimerPage } from '../legal/DisclaimerPage.tsx'
@@ -76,23 +76,36 @@ export function App() {
           The front door, for a link that has to explain itself: the banner,
           the four letters, and every other page from one place. Not at `/` on
           purpose — that opens straight into writing, and a splash screen in
-          front of it would be the login wall again, wearing a different coat.
+          front of it on every visit would be the login wall again, wearing a
+          different coat. `RootEntry`, below, carries the one exception: a
+          browser's very first `/` goes to the intro instead, exactly once.
         */}
           <Route path="/welcome" element={<WelcomePage />} />
           <Route path="/about" element={<AboutPage />} />
           {/*
-          The method, at an address that can be sent to somebody who has never
-          heard of the application. Outside the shell for the same reason
-          /welcome is: it asks for no account, because C.H.A.T. is not ours.
+          The intro (the C.H.A.T. method, as it was taught), at an address
+          that can be sent to somebody who has never heard of the
+          application — and, since `RootEntry` sends a brand-new browser's
+          first `/` here, usually the very first page Reflections shows
+          anyone. Outside the shell for the same reason /welcome is: no
+          account, because C.H.A.T. is not ours.
         */}
-          <Route path="/method" element={<MethodPage />} />
+          <Route path="/intro" element={<IntroPage />} />
+          {/*
+          Renamed from Method to Intro once it stopped being only a document
+          About linked to and became a first visit's front page too. Kept
+          resolving here rather than removed: a bookmark, a shared link or a
+          platform reviewer's saved URL should not 404 over a rename that is
+          ours to absorb.
+        */}
+          <Route path="/method" element={<Navigate to="/intro" replace />} />
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/disclaimer" element={<DisclaimerPage />} />
           <Route path="/data-deletion" element={<DataDeletionPage />} />
           <Route path="/support" element={<SupportPage />} />
           <Route element={<AppShell />}>
-            <Route path="/" element={<ChatPage />} />
+            <Route path="/" element={<RootEntry />} />
             <Route path="/reflections" element={<ReflectionsPage />} />
             {/*
             A reflection has an address of its own, and it is a reading one.
