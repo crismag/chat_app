@@ -167,13 +167,39 @@
 
 /* --- Card interior ----------------------------------------------------- */
 
+/*
+ * The author, and the way to their profile.
+ *
+ * `position: relative; z-index: 1` for the same reason `.actions` carries it:
+ * a card lays the title link's `::after` over the whole tile, and anything
+ * inside that has to stay clickable must sit above it. Without these two lines
+ * this looks and reads like a link and opens the reflection instead.
+ *
+ * Underlined on hover rather than always, because in a feed of twenty cards a
+ * permanently underlined name competes with the title for the eye — and the
+ * title is what the card is for.
+ */
 .author {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
   min-width: 0;
   color: var(--ink);
   font-weight: 600;
+  text-decoration: none;
+}
+
+a.author:hover,
+a.author:focus-visible {
+  text-decoration: underline;
+}
+
+/* The @handle, where a page has room to show it: quieter than the name. */
+.author :global(.author-handle) {
+  color: var(--muted);
+  font-weight: 400;
 }
 
 .avatar {
