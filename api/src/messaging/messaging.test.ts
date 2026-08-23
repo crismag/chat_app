@@ -163,7 +163,7 @@ describe('direct threads and requests', () => {
     expect(contacts.body.items.some((item) => item.person.handle === bea.handle)).toBe(true);
   });
 
-  test('decline does not create a contact and blocks an immediate repeat', async () => {
+  test('declining leaves the decliner’s own list empty and blocks an immediate repeat', async () => {
     const ada = await register('ada@example.com');
     const bea = await register('bea@example.com');
     await call(ada.cookie, '/api/messaging/open', {
@@ -175,7 +175,18 @@ describe('direct threads and requests', () => {
       (await call(bea.cookie, `/api/messaging/requests/${requests.body.items[0]!.id}/decline`, { method: 'POST' }))
         .status,
     ).toBe(200);
-    expect((await call<{ items: unknown[] }>(ada.cookie, '/api/messaging/contacts')).body.items).toEqual([]);
+    /*
+     * Bea's list is the one that grants anything — it decides who may write to
+     * her without asking — and declining leaves it empty. Ada's own list has
+     * Bea in it, because Ada wrote to her; that is an address book entry and
+     * carries no permission over Bea at all, which the 429 below proves.
+     */
+    expect((await call<{ items: unknown[] }>(bea.cookie, '/api/messaging/contacts')).body.items).toEqual([]);
+    expect(
+      (
+        await call<{ items: { person: { handle: string } }[] }>(ada.cookie, '/api/messaging/contacts')
+      ).body.items.map((item) => item.person.handle),
+    ).toEqual([bea.handle]);
     const repeat = await call(ada.cookie, '/api/messaging/open', {
       method: 'POST',
       body: JSON.stringify({ handle: bea.handle }),
@@ -650,5 +661,170 @@ describe('finding somebody to write to', () => {
     /* Bounded so the directory cannot be walked a page at a time. */
     expect(statuses.filter((status) => status === 429).length).toBeGreaterThan(0);
     expect(statuses.filter((status) => status === 200).length).toBe(30);
+  });
+});
+
+/*
+ * Contacts are an address book, not an agreement.
+ *
+ * The whole security of this rests on one direction: the list that decides who
+ * may write to somebody without asking is **that person's own**. Ask it the
+ * other way round and anybody can grant themselves the right to write to a
+ * stranger by adding the stranger to their own list, which is the failure these
+ * tests exist to keep out.
+ */
+describe('contacts', () => {
+  test('adding somebody needs only their profile, and does not need them', async () => {
+    const ada = await register('ada@example.com');
+    const bea = await register('bea@example.com');
+    const added = await call<{ isContact: boolean }>(ada.cookie, '/api/messaging/contacts', {
+      method: 'POST',
+      body: JSON.stringify({ handle: bea.handle }),
+    });
+    expect(added.status).toBe(200);
+    expect(added.body.isContact).toBe(true);
+  });
+
+  test('it is not reciprocal', async () => {
+    const ada = await register('ada@example.com');
+    const bea = await register('bea@example.com');
+    await call(ada.cookie, '/api/messaging/contacts', {
+      method: 'POST',
+      body: JSON.stringify({ handle: bea.handle }),
+    });
+    const hers = await call<{ items: unknown[] }>(bea.cookie, '/api/messaging/contacts');
+    expect(hers.body.items).toEqual([]);
+  });
+
+  /*
+   * The one that matters. Ada adding Bea is Ada's note to herself; it must not
+   * open Bea's door. Bea adding Ada is what opens it, because it is Bea's.
+   */
+  test('adding somebody does not let me write to them without asking', async () => {
+    const ada = await register('ada@example.com');
+    const bea = await register('bea@example.com');
+    await call(ada.cookie, '/api/messaging/contacts', {
+      method: 'POST',
+      body: JSON.stringify({ handle: bea.handle }),
+    });
+    await call(ada.cookie, '/api/messaging/open', {
+      method: 'POST',
+      body: JSON.stringify({ handle: bea.handle }),
+    });
+    const waiting = await call<{ items: unknown[] }>(bea.cookie, '/api/messaging/requests');
+    expect(waiting.body.items).toHaveLength(1);
+  });
+
+  test('being added by them is what lets me write without asking', async () => {
+    const ada = await register('ada@example.com');
+    const bea = await register('bea@example.com');
+    await call(bea.cookie, '/api/messaging/contacts', {
+      method: 'POST',
+      body: JSON.stringify({ handle: ada.handle }),
+    });
+    await call(ada.cookie, '/api/messaging/open', {
+      method: 'POST',
+      body: JSON.stringify({ handle: bea.handle }),
+    });
+    const waiting = await call<{ items: unknown[] }>(bea.cookie, '/api/messaging/requests');
+    expect(waiting.body.items).toEqual([]);
+  });
+
+  test('writing to somebody puts them in my own contacts', async () => {
+    const ada = await register('ada@example.com');
+    const bea = await register('bea@example.com');
+    await call(ada.cookie, '/api/messaging/open', {
+      method: 'POST',
+      body: JSON.stringify({ handle: bea.handle }),
+    });
+    const mine = await call<{ items: { person: { handle: string } }[] }>(
+      ada.cookie,
+      '/api/messaging/contacts',
+    );
+    expect(mine.body.items.map((item) => item.person.handle)).toEqual([bea.handle]);
+  });
+
+  test('accepting puts the sender in the accepter’s contacts, and nobody in the sender’s', async () => {
+    const ada = await register('ada@example.com');
+    const bea = await register('bea@example.com');
+    await call(ada.cookie, '/api/messaging/open', {
+      method: 'POST',
+      body: JSON.stringify({ handle: bea.handle }),
+    });
+    const requests = await call<{ items: { id: string }[] }>(bea.cookie, '/api/messaging/requests');
+    await call(bea.cookie, `/api/messaging/requests/${requests.body.items[0]!.id}/accept`, {
+      method: 'POST',
+    });
+    const hers = await call<{ items: { person: { handle: string } }[] }>(
+      bea.cookie,
+      '/api/messaging/contacts',
+    );
+    expect(hers.body.items.map((item) => item.person.handle)).toEqual([ada.handle]);
+  });
+
+  test('removing takes them out of my list only', async () => {
+    const ada = await register('ada@example.com');
+    const bea = await register('bea@example.com');
+    await call(ada.cookie, '/api/messaging/contacts', {
+      method: 'POST',
+      body: JSON.stringify({ handle: bea.handle }),
+    });
+    const gone = await call<{ isContact: boolean }>(
+      ada.cookie,
+      `/api/messaging/contacts/${bea.handle}`,
+      { method: 'DELETE' },
+    );
+    expect(gone.status).toBe(200);
+    expect(gone.body.isContact).toBe(false);
+    expect((await call<{ items: unknown[] }>(ada.cookie, '/api/messaging/contacts')).body.items).toEqual([]);
+  });
+
+  test('a thread says whether the other person is in this reader’s contacts', async () => {
+    const ada = await register('ada@example.com');
+    const bea = await register('bea@example.com');
+    const opened = await call<{ thread: { id: string; isContact: boolean } }>(
+      ada.cookie,
+      '/api/messaging/open',
+      { method: 'POST', body: JSON.stringify({ handle: bea.handle }) },
+    );
+    /* Ada wrote, so Bea is in Ada's own list. */
+    expect(opened.body.thread.isContact).toBe(true);
+    const requests = await call<{ items: { id: string }[] }>(bea.cookie, '/api/messaging/requests');
+    const accepted = await call<{ id: string; isContact: boolean }>(
+      bea.cookie,
+      `/api/messaging/requests/${requests.body.items[0]!.id}/accept`,
+      { method: 'POST' },
+    );
+    expect(accepted.body.isContact).toBe(true);
+  });
+
+  test('reopening an existing conversation does not raise a second request', async () => {
+    const ada = await register('ada@example.com');
+    const bea = await register('bea@example.com');
+    for (let i = 0; i < 2; i += 1) {
+      await call(ada.cookie, '/api/messaging/open', {
+        method: 'POST',
+        body: JSON.stringify({ handle: bea.handle }),
+      });
+    }
+    const waiting = await call<{ items: unknown[] }>(bea.cookie, '/api/messaging/requests');
+    expect(waiting.body.items).toHaveLength(1);
+  });
+
+  test('a blocked person cannot be added', async () => {
+    const ada = await register('ada@example.com');
+    const bea = await register('bea@example.com');
+    await call(bea.cookie, `/api/profiles/${ada.handle}/block`, { method: 'POST' });
+    const refused = await call(ada.cookie, '/api/messaging/contacts', {
+      method: 'POST',
+      body: JSON.stringify({ handle: bea.handle }),
+    });
+    expect(refused.status).toBe(403);
+  });
+
+  test('a signed-out visitor is told nothing about anybody’s list', async () => {
+    const ada = await register('ada@example.com');
+    const asked = await call<{ isContact: boolean }>(null, `/api/messaging/contacts/${ada.handle}`);
+    expect(asked.body.isContact).toBe(false);
   });
 });

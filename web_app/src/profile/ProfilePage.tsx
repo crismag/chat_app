@@ -44,6 +44,8 @@ import { CommunitiesPanel, EncouragedPanel } from './ProfilePanels.tsx'
 import { ProfileTabs, isProfileTab, type ProfileTab } from './ProfileTabs.tsx'
 import { SettingsPanel } from './SettingsPanel.tsx'
 import { Avatar } from '../shared/ui/Avatar.tsx'
+import { ContactButton } from '../messaging/ContactButton.tsx'
+import { contactStatus } from '../messaging/api.ts'
 import styles from './ProfilePage.module.css'
 
 /* ------------------------------------------------------------------- types */
@@ -356,6 +358,15 @@ export function ProfilePage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [now, setNow] = useState(() => Date.now())
+  /*
+   * Whether this person is in my contacts.
+   *
+   * Asked for separately rather than folded into the profile payload: a
+   * profile is a public document and this is a private fact about the reader's
+   * own address book, so it is answered by the messaging module on the
+   * reader's behalf and never becomes part of what a profile *is*.
+   */
+  const [isContact, setIsContact] = useState(false)
 
   /*
    * `/profile` with no handle is "my profile". It resolves the signed-in
@@ -363,6 +374,22 @@ export function ProfilePage() {
    * one URL that can be shared — rather than one address that means different
    * people depending on who is looking.
    */
+  useEffect(() => {
+    if (!handle) return
+    let live = true
+    contactStatus(handle)
+      .then((status) => {
+        if (live) setIsContact(status.isContact)
+      })
+      /* Not knowing is the same as not added, which is what the button shows. */
+      .catch(() => {
+        if (live) setIsContact(false)
+      })
+    return () => {
+      live = false
+    }
+  }, [handle])
+
   useEffect(() => {
     if (handle) return
     let live = true
@@ -609,6 +636,19 @@ export function ProfilePage() {
                 >
                   Message
                 </button>
+              ) : null}
+              {/*
+                Adding somebody from their profile is the point of a profile
+                being public. It asks nothing of them and gives them something:
+                a message from a person on your list does not join a queue.
+              */}
+              {user?.accountType === 'REGISTERED' ? (
+                <ContactButton
+                  handle={profile.handle}
+                  isContact={isContact}
+                  size="medium"
+                  onChanged={setIsContact}
+                />
               ) : null}
               <button
                 type="button"

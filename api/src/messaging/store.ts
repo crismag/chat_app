@@ -42,6 +42,13 @@ export type PublicThread = {
   lastMessage: PublicMessage | null;
   unreadCount: number;
   pendingIncomingRequestId: string | null;
+  /**
+   * Whether the other person is in *this reader's* contacts.
+   *
+   * Sent with the thread rather than fetched beside it so the control that
+   * adds or removes them cannot disagree with the thread it is drawn on.
+   */
+  isContact: boolean;
   updatedAt: string;
 };
 
@@ -122,10 +129,26 @@ export interface MessagingStore {
   listMessages(actorId: string, threadId: string, afterId?: string): PublicMessage[] | null;
   sendMessage(actorId: string, threadId: string, body: string): PublicMessage | null | 'forbidden';
   markRead(actorId: string, threadId: string, messageId: string): boolean;
+  /**
+   * Is `b` in `a`'s contacts?
+   *
+   * **One direction, and the direction carries the meaning.** A contact list is
+   * somebody's own address book: adding a person is a note to yourself, not an
+   * agreement between two people, and it says nothing about whether they have
+   * added you.
+   *
+   * A caller deciding a *permission* must therefore ask it the way round the
+   * permission runs. "May this person write to me without asking first" is a
+   * question about **my** list, never theirs — see `routes.ts`.
+   */
   areContacts(a: string, b: string): boolean;
   /** Whether these two already have a direct thread, however it began. */
   hasDirectThread(a: string, b: string): boolean;
   listContacts(actorId: string, lookup: PersonLookup): PublicContact[];
+  /** Put somebody in this person's own contacts. Theirs is untouched. */
+  addContactFor(actorId: string, contactUserId: string): void;
+  /** Take somebody out of this person's own contacts. Theirs is untouched. */
+  removeContactFor(actorId: string, contactUserId: string): void;
   listIncomingRequests(actorId: string, lookup: PersonLookup): PublicRequest[];
   pendingBetween(a: string, b: string): StoredRequest | null;
   cooldownActive(senderId: string, recipientId: string): boolean;
@@ -466,8 +489,17 @@ class SqliteMessagingStore implements MessagingStore {
           `UPDATE messaging_requests SET status = ?, respondedAt = ? WHERE id = ?`,
         )
         .run(REQUEST_STATUS.ACCEPTED, at, request.id);
+      /*
+       * One row, not two: the sender joins the accepter's contacts, and the
+       * accepter does not join the sender's.
+       *
+       * Both rows used to be written, which made a contact list an agreement
+       * rather than an address book — and it meant answering one message
+       * silently handed that person a place on your list that you never chose
+       * to give them. What accepting says is "I will hear from you"; it does
+       * not say anything about the other direction.
+       */
       this.addContact(actorId, request.senderUserId, at);
-      this.addContact(request.senderUserId, actorId, at);
       this.db.exec('COMMIT');
     } catch (error) {
       this.db.exec('ROLLBACK');
@@ -529,6 +561,16 @@ class SqliteMessagingStore implements MessagingStore {
     return row !== undefined;
   }
 
+  addContactFor(actorId: string, contactUserId: string): void {
+    this.addContact(actorId, contactUserId, nowIso());
+  }
+
+  removeContactFor(actorId: string, contactUserId: string): void {
+    this.db
+      .prepare('DELETE FROM messaging_contacts WHERE userId = ? AND contactUserId = ?')
+      .run(actorId, contactUserId);
+  }
+
   private addContact(userId: string, contactUserId: string, at: string): void {
     this.db
       .prepare(
@@ -582,6 +624,7 @@ class SqliteMessagingStore implements MessagingStore {
       lastMessage: last,
       unreadCount,
       pendingIncomingRequestId: incoming?.id ?? null,
+      isContact: this.areContacts(actorId, otherId),
       updatedAt: String(row['updatedAt']),
     };
   }
@@ -799,8 +842,8 @@ class MemoryMessagingStore implements MessagingStore {
     const at = nowIso();
     request.status = REQUEST_STATUS.ACCEPTED;
     request.respondedAt = at;
+    /* The accepter's own list only. See the SQLite implementation's note. */
     this.addContact(actorId, request.senderUserId, at);
-    this.addContact(request.senderUserId, actorId, at);
     return this.publicThread(actorId, request.threadId, lookup);
   }
 
@@ -830,6 +873,16 @@ class MemoryMessagingStore implements MessagingStore {
 
   isMember(threadId: string, userId: string): boolean {
     return this.state.members.some((row) => row.threadId === threadId && row.userId === userId);
+  }
+
+  addContactFor(actorId: string, contactUserId: string): void {
+    this.addContact(actorId, contactUserId, nowIso());
+  }
+
+  removeContactFor(actorId: string, contactUserId: string): void {
+    this.state.contacts = this.state.contacts.filter(
+      (row) => !(row.userId === actorId && row.contactUserId === contactUserId),
+    );
   }
 
   private addContact(userId: string, contactUserId: string, at: string): void {
@@ -869,6 +922,7 @@ class MemoryMessagingStore implements MessagingStore {
       lastMessage: last ? { ...last } : null,
       unreadCount: this.unreadCount(threadId, actorId, membership?.lastReadMessageId ?? null),
       pendingIncomingRequestId: incoming?.id ?? null,
+      isContact: this.areContacts(actorId, otherId),
       updatedAt: thread.updatedAt,
     };
   }

@@ -116,3 +116,24 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
 }
+
+/*
+ * The name and handle, between the avatar and the contact control.
+ *
+ * `min-inline-size: 0` so a long display name truncates instead of pushing the
+ * button off the end of the header on a phone.
+ */
+.who {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.name a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.name a:hover,
+.name a:focus-visible {
+  text-decoration: underline;
+}

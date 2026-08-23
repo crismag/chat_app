@@ -4,8 +4,10 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router'
 import { ApiError } from '../shared/api/client.ts'
 import { Avatar } from '../shared/ui/Avatar.tsx'
+import { ContactButton } from './ContactButton.tsx'
 import {
   listMessages,
   markRead,
@@ -102,10 +104,32 @@ export function ThreadView({
           </button>
         ) : null}
         <Avatar name={name} identity={thread.other.handle ?? thread.other.id} src={thread.other.avatarUrl} size="small" />
-        <div>
-          <h2 className={styles.name}>{name}</h2>
+        <div className={styles.who}>
+          {/*
+            The name goes to their profile. It was the one thing in a
+            conversation that named a person and led nowhere.
+          */}
+          <h2 className={styles.name}>
+            {thread.other.handle ? (
+              <Link to={`/profile/${thread.other.handle}`}>{name}</Link>
+            ) : (
+              name
+            )}
+          </h2>
           {thread.other.handle ? <p className={styles.handle}>@{thread.other.handle}</p> : null}
         </div>
+        {/*
+          Adding somebody is a note in your own address book — it is what lets
+          them write to you later without joining a queue, and it says nothing
+          about whether they have added you.
+        */}
+        {thread.other.handle ? (
+          <ContactButton
+            handle={thread.other.handle}
+            isContact={thread.isContact}
+            onChanged={(isContact) => onUpdated({ ...thread, isContact })}
+          />
+        ) : null}
       </header>
 
       {thread.pendingIncomingRequestId ? (

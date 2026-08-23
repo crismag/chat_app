@@ -29,6 +29,7 @@ import type { AuthUser } from '../auth/store.ts';
 import { MIN_SEARCH_LENGTH, type ProfileStore, type StoredProfile } from '../profile/store.ts';
 import { parseMessageBody } from './limits.ts';
 import { blockedEitherWay, canCreateMessageRequest } from './permissions.ts';
+import { waitingFor } from './waiting.ts';
 import {
   fallbackPerson,
   type MessagingPerson,
@@ -138,6 +139,21 @@ export function createMessagingRoutes({ currentUser, store, profiles }: Messagin
 
   const actorOf = async (c: Context) => currentUser(c);
 
+  /*
+   * How much is waiting, for the badge on the Messages icon.
+   *
+   * Answers 200 with zeros for a signed-out or unverified visitor rather than
+   * 401 or 403. Every page in the shell asks this, most of them belonging to
+   * people who are not signed in; an error would be the correct status and
+   * would put a red line in the console of somebody who has simply not signed
+   * in yet. Nothing is disclosed by "you have nothing waiting".
+   */
+  app.get('/waiting', async (c) => {
+    const actor = await actorOf(c);
+    if (!actor) return c.json({ messages: 0, requests: 0, total: 0 });
+    return c.json(waitingFor(store, actor.id, lookup));
+  });
+
   app.get('/threads', async (c) => {
     const actor = await actorOf(c);
     if (!actor) return c.json(SIGN_IN, 401);
@@ -180,7 +196,13 @@ export function createMessagingRoutes({ currentUser, store, profiles }: Messagin
        */
       .filter(
         (profile) =>
-          store.areContacts(actor.id, profile.userId) ||
+          /*
+           * `(them, me)` — has this person put me in *their* contacts? That is
+           * what decides whether writing to them reaches them without asking,
+           * so it is what decides whether listing them offers a door that
+           * opens. My own list is my address book and grants me nothing.
+           */
+          store.areContacts(profile.userId, actor.id) ||
           store.preferences(profile.userId).allowNonContactRequests,
       )
       .slice(0, PEOPLE_LIMIT)
@@ -204,11 +226,18 @@ export function createMessagingRoutes({ currentUser, store, profiles }: Messagin
 
     if (actor.emailVerified === false) return c.json(CONFIRM_FIRST, 403);
 
-    const areContacts = store.areContacts(actor.id, target.userId);
+    /*
+     * `(target, actor)` — has the person being written to put me in their
+     * contacts? A contact list is not reciprocal, so the list that decides
+     * whether I may skip their request queue is theirs, not mine. Asking it
+     * the other way round would let anybody grant themselves the right to
+     * write to a stranger by adding that stranger to their own address book.
+     */
+    const mayWriteDirectly = store.areContacts(target.userId, actor.id);
     const allowed = canCreateMessageRequest({
       actorId: actor.id,
       otherId: target.userId,
-      areContacts,
+      areContacts: mayWriteDirectly,
       allowNonContactRequests: store.preferences(target.userId).allowNonContactRequests,
       cooldownActive: store.cooldownActive(actor.id, target.userId),
       blocks: profiles,
@@ -220,7 +249,8 @@ export function createMessagingRoutes({ currentUser, store, profiles }: Messagin
      * is navigation — somebody returning to a thread they are already in —
      * and charging for it would put a daily cap on reading your own messages.
      */
-    if (!store.areContacts(actor.id, target.userId) && !store.hasDirectThread(actor.id, target.userId)) {
+    const existed = store.hasDirectThread(actor.id, target.userId);
+    if (!mayWriteDirectly && !existed) {
       const decision = openLimiter.take(actor.id);
       if (!decision.allowed) {
         return refused(
@@ -232,9 +262,21 @@ export function createMessagingRoutes({ currentUser, store, profiles }: Messagin
     }
 
     const thread = store.openDirect(actor.id, target.userId, lookup);
-    if (!areContacts) {
+    /*
+     * A request is what a *first* approach is. Reopening a conversation that
+     * already exists must never make one — it would put a thread somebody is
+     * already in back behind a door they have already opened.
+     */
+    if (!mayWriteDirectly && !existed) {
       store.createPendingRequest(actor.id, target.userId, thread.id);
     }
+    /*
+     * Writing to somebody puts them in my contacts. It is my own list, it says
+     * only that I have spoken to this person, and it is what lets them write
+     * back without joining a queue — which is the least somebody deserves for
+     * having been written to first.
+     */
+    store.addContactFor(actor.id, target.userId);
     const fresh = store.getThread(actor.id, thread.id, lookup);
     return c.json({ thread: fresh ?? thread }, 201);
   });
@@ -243,6 +285,70 @@ export function createMessagingRoutes({ currentUser, store, profiles }: Messagin
     const actor = await actorOf(c);
     if (!actor) return c.json(SIGN_IN, 401);
     return c.json({ items: store.listContacts(actor.id, lookup) });
+  });
+
+  /*
+   * Add somebody to my own contacts, from anywhere their profile can be seen.
+   *
+   * ── Why this needs no permission from them ──────────────────────────────
+   *
+   * Because it grants me nothing. The list is an address book: it is read to
+   * decide who may write to *me* without asking, so adding somebody widens
+   * what they may do and narrows nothing for them. That is why it takes only a
+   * public handle and why there is no request, no acceptance and no notice — a
+   * person who has been added has been given something, and telling them would
+   * be telling them about a list of mine that is not their business.
+   *
+   * A block is the exception, and it is checked both ways round: adding is
+   * harmless but the row would sit there implying a relationship that one of
+   * the two has explicitly ended.
+   */
+  app.post('/contacts', async (c) => {
+    const actor = await actorOf(c);
+    if (!actor) return c.json(SIGN_IN, 401);
+    const body = (await c.req.json().catch(() => ({}))) as { handle?: unknown };
+    if (typeof body.handle !== 'string' || !body.handle.trim()) {
+      return c.json({ error: 'A profile handle is required.' }, 400);
+    }
+    const target = profiles.byHandle(body.handle.trim());
+    if (!target) return c.json({ error: 'There is no profile at that handle.' }, 404);
+    if (target.userId === actor.id) {
+      return c.json({ error: 'You are already yourself.' }, 400);
+    }
+    if (blockedEitherWay(profiles, actor.id, target.userId)) {
+      return c.json({ error: 'You cannot add this person.' }, 403);
+    }
+    store.addContactFor(actor.id, target.userId);
+    return c.json({ ok: true, isContact: true });
+  });
+
+  /* Out of my own list. Theirs is untouched, and they are not told. */
+  app.delete('/contacts/:handle', async (c) => {
+    const actor = await actorOf(c);
+    if (!actor) return c.json(SIGN_IN, 401);
+    const target = profiles.byHandle(c.req.param('handle'));
+    if (!target) return c.json({ error: 'There is no profile at that handle.' }, 404);
+    store.removeContactFor(actor.id, target.userId);
+    return c.json({ ok: true, isContact: false });
+  });
+
+  /*
+   * Where one person stands with another, for a profile page to draw a button.
+   *
+   * `isContact` is about the asker's own list. `theyHaveMe` is deliberately not
+   * returned: whether somebody has added me is a fact about their address book,
+   * and answering it would turn a private list into something anybody could
+   * enumerate one handle at a time.
+   */
+  app.get('/contacts/:handle', async (c) => {
+    const actor = await actorOf(c);
+    if (!actor) return c.json({ isContact: false, isSelf: false });
+    const target = profiles.byHandle(c.req.param('handle'));
+    if (!target) return c.json({ error: 'There is no profile at that handle.' }, 404);
+    return c.json({
+      isContact: store.areContacts(actor.id, target.userId),
+      isSelf: target.userId === actor.id,
+    });
   });
 
   app.get('/requests', async (c) => {

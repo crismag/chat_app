@@ -22,6 +22,8 @@ export type MessagingThread = {
   lastMessage: MessagingMessage | null
   unreadCount: number
   pendingIncomingRequestId: string | null
+  /** Whether the other person is in *my* contacts. Never whether I am in theirs. */
+  isContact: boolean
   updatedAt: string
 }
 
@@ -129,4 +131,32 @@ export function setAllowRequests(allowNonContactRequests: boolean) {
 
 export function personLabel(person: MessagingPerson) {
   return person.displayName || (person.handle ? `@${person.handle}` : 'Someone')
+}
+
+/*
+ * Contacts, which are one person's own address book.
+ *
+ * Adding somebody needs nothing from them and tells them nothing: the list is
+ * read to decide who may write to *you* without asking, so adding a person
+ * widens what they may do and takes nothing away. See `api/src/messaging/
+ * routes.ts` for why that makes it safe to do from a public profile.
+ */
+export function addContact(handle: string): Promise<{ isContact: boolean }> {
+  return api<{ isContact: boolean }>('/messaging/contacts', {
+    method: 'POST',
+    body: JSON.stringify({ handle }),
+  })
+}
+
+export function removeContact(handle: string): Promise<{ isContact: boolean }> {
+  return api<{ isContact: boolean }>(`/messaging/contacts/${encodeURIComponent(handle)}`, {
+    method: 'DELETE',
+  })
+}
+
+/** Whether this person is in my contacts. Never whether I am in theirs. */
+export function contactStatus(handle: string): Promise<{ isContact: boolean; isSelf: boolean }> {
+  return api<{ isContact: boolean; isSelf: boolean }>(
+    `/messaging/contacts/${encodeURIComponent(handle)}`,
+  )
 }

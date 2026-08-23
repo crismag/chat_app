@@ -3,6 +3,7 @@ import { useAuth } from '../../auth/useAuth.ts'
 import { BackIcon, ChatIcon, CommunityIcon, LibraryIcon, PlusIcon } from '../ui/icons.tsx'
 import { NotesIcon } from '../../notes/icons.tsx'
 import { MessagesIcon } from '../../messaging/icons.tsx'
+import { badgeLabel, badgeText, useWaiting } from '../../messaging/useWaiting.ts'
 import { ProfileMenu } from '../ui/ProfileMenu.tsx'
 import { useSoftKeyboard } from '../ui/useSoftKeyboard.ts'
 import { MobileBarProvider, useMobileBarConfig } from '../mobile/MobileBar.tsx'
@@ -63,6 +64,14 @@ function Shell() {
   const narrow = useMediaQuery(NARROW_QUERY)
   const described = useMobileBarConfig()
   const bar = narrow ? described : null
+  /*
+   * What is waiting in Messages, for the badge in both navs.
+   *
+   * Read once here and used twice: the desktop header and the phone bar are
+   * two renderings of one set of destinations, and two hooks would be two
+   * requests answering the same question.
+   */
+  const waiting = useWaiting()
   /*
    * One place watches for the software keyboard and marks the body; the
    * layout reads that attribute. Three components each deciding for
@@ -153,8 +162,23 @@ function Shell() {
                   isActive ? `${styles.navLink} ${styles.active}` : styles.navLink
                 }
               >
-                <Icon className={styles.navIcon} />
+                {/*
+                  The count rides on the icon, not beside the word: it belongs
+                  to the thing it is counting, and on the phone bar below there
+                  is no word for it to sit beside.
+                */}
+                <span className={styles.iconSlot}>
+                  <Icon className={styles.navIcon} />
+                  {to === '/messages' && waiting.total > 0 ? (
+                    <span className={styles.badge} aria-hidden="true">
+                      {badgeText(waiting.total)}
+                    </span>
+                  ) : null}
+                </span>
                 <span>{label}</span>
+                {to === '/messages' && waiting.total > 0 ? (
+                  <span className="sr-only">, {badgeLabel(waiting)}</span>
+                ) : null}
               </NavLink>
             ))}
           </nav>
@@ -228,8 +252,18 @@ function Shell() {
                 : styles.mobileLink
             }
           >
-            <Icon className={styles.mobileIcon} />
+            <span className={styles.iconSlot}>
+              <Icon className={styles.mobileIcon} />
+              {to === '/messages' && waiting.total > 0 ? (
+                <span className={styles.badge} aria-hidden="true">
+                  {badgeText(waiting.total)}
+                </span>
+              ) : null}
+            </span>
             <span className={styles.mobileLabel}>{label}</span>
+            {to === '/messages' && waiting.total > 0 ? (
+              <span className="sr-only">, {badgeLabel(waiting)}</span>
+            ) : null}
           </NavLink>
         ))}
       </nav>

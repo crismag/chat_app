@@ -18,6 +18,7 @@ const thread: MessagingThread = {
   },
   unreadCount: 1,
   pendingIncomingRequestId: null,
+  isContact: false,
   updatedAt: new Date().toISOString(),
 }
 

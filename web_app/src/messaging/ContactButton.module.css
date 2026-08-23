@@ -1,0 +1,18 @@
+/*
+ * The contact control, and the one line it says when it fails.
+ *
+ * Inline rather than a banner: it is a bookmark, and a failed bookmark is not
+ * an event that should push a conversation down the page.
+ */
+.wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+
+.error {
+  font-size: var(--text-xs);
+  line-height: 1.3;
+  color: var(--danger);
+}
