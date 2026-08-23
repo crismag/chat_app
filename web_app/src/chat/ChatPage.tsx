@@ -85,6 +85,7 @@ import { useReflectionAssist } from './useReflectionAssist.ts'
 import { useReflectionChat } from './useReflectionChat.ts'
 import { ActionMenu, type ActionItem } from '../shared/ui/ActionMenu.tsx'
 import { AddToSectionSheet } from './ChatSheets.tsx'
+import { TagInput } from '../tags/TagInput.tsx'
 import styles from './ChatPage.module.css'
 
 const SIDEBAR_KEY = 'chat.reflect.sidebar'
@@ -130,6 +131,13 @@ export function ChatPage() {
 
   const [titleDraft, setTitleDraft] = useState<string | null>(null)
   const [tagsDraft, setTagsDraft] = useState<string | null>(null)
+  /*
+   * The one sentence the server sends back when it refused a tag. Held beside
+   * the draft rather than in the page's error banner: it is about one word in
+   * one field, and a banner across the reflection would read as the save
+   * failing when the save succeeded.
+   */
+  const [tagError, setTagError] = useState<string | null>(null)
 
   const [discussing, setDiscussing] = useState<FieldType | null>(null)
   const [proposal, setProposal] = useState<Proposal | null>(null)
@@ -618,6 +626,40 @@ export function ChatPage() {
   }, [saveAll])
 
   /* --- Editing the reflection ------------------------------------------ */
+
+  /**
+   * Save tags, and say so when one was refused.
+   *
+   * Separate from `patchConversation` because the answer is different in kind:
+   * the request succeeds, the reflection is saved, and part of what was sent
+   * was not kept. Treating that as a failed save would be wrong, and treating
+   * it as a clean save would drop a word without telling anybody — which is
+   * precisely what a person must not have happen to their writing.
+   */
+  async function patchTags(labels: string[], conversationId: string | null): Promise<boolean> {
+    if (!conversationId) return false
+    setTagError(null)
+    const generation = viewGeneration.current
+    setSaveState({ status: 'saving' })
+    try {
+      const answer = await updateReflection<{ tagError?: string }>(conversationId, {
+        tags: labels,
+      })
+      const next = await fetchReflection<ConversationDetail>(conversationId)
+      if (viewGeneration.current !== generation) return true
+      setDetail(next)
+      if (answer?.tagError) setTagError(answer.tagError)
+      await refreshList()
+      setSaveState({ status: 'saved', at: Date.now() })
+      return true
+    } catch (caught: unknown) {
+      setSaveState({
+        status: 'failed',
+        message: caught instanceof Error ? caught.message : 'Could not save',
+      })
+      return false
+    }
+  }
 
   async function patchConversation(
     body: Record<string, unknown>,
@@ -1678,13 +1720,17 @@ export function ChatPage() {
             <span className={styles.formatChange} aria-hidden="true">▾</span>
           </button>
 
-          <input
+          <TagInput
             className={styles.tagsInput}
             value={tagsDraft ?? (detail?.tags ?? []).map((item) => item.label).join(', ')}
-            placeholder="Tags"
-            aria-label="Tags"
-            onChange={(event) => setTagsDraft(event.target.value)}
-            onBlur={() => {
+            onChange={setTagsDraft}
+            error={tagError}
+            onDismissError={() => setTagError(null)}
+            onCancel={() => {
+              setTagsDraft(null)
+              setTagError(null)
+            }}
+            onCommit={() => {
               if (tagsDraft === null) return
               const next = parseHashtags(tagsDraft)
               const previous = (detail?.tags ?? []).map((item) => item.tag).join(',')
@@ -1695,13 +1741,15 @@ export function ChatPage() {
               }
               void (async () => {
                 const id = await ensureConversation()
-                const ok = await patchConversation({ tags: next.map((item) => item.label) }, id)
-                if (ok) setTagsDraft(null)
+                /*
+                 * The server decides which tags exist, so the answer is read
+                 * rather than assumed: a refused word is dropped there, the
+                 * rest are saved, and the draft is cleared so the field shows
+                 * what was actually kept.
+                 */
+                const saved = await patchTags(next.map((item) => item.label), id)
+                if (saved) setTagsDraft(null)
               })()
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') event.currentTarget.blur()
-              if (event.key === 'Escape') setTagsDraft(null)
             }}
           />
 

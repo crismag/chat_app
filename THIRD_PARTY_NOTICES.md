@@ -333,3 +333,18 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## List of Dirty, Naughty, Obscene and Otherwise Bad Words
+
+Package: `LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words`
+
+Version: 4638b970cb8d9d82789564fcba1f4a1eb508ff1a
+
+Licence: CC-BY-4.0
+
+Copyright Shutterstock, Inc.
+
+Licensed under the Creative Commons Attribution 4.0 International License
+(CC BY 4.0): https://creativecommons.org/licenses/by/4.0/
+
+Used as word data for tag moderation. The file is included unmodified.

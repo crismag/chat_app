@@ -16,7 +16,8 @@ It exists so implementation work, AI-assisted development, code generation, and 
 7. [`REFLECTION_CHAT.md`](REFLECTION_CHAT.md) — the conversation panel beside the card: the brief as the owner gave it, and what was built against it.
 8. [`PRODUCT_READINESS.md`](PRODUCT_READINESS.md) — what is actually finished, page by page, and what is not. The counterweight to the six documents above, which describe intent.
 9. [`CREATE_STUDIO_INTEGRATION.md`](CREATE_STUDIO_INTEGRATION.md) — Phase 3 host mapping, persistence, package, export, and attribution boundaries.
-10. [`MOBILE.md`](MOBILE.md) — Capacitor hosts, live reload, packaged API origin, share, and deep links.
+10. [`TAGS.md`](TAGS.md) — the tag registry, suggestions and moderation: how a tag is folded, why the registry keeps two counts that are never the same number, how suggestions are ranked, and what the banned-word list does and does not catch.
+11. [`MOBILE.md`](MOBILE.md) — Capacitor hosts, live reload, packaged API origin, share, and deep links.
 
 Alongside these, [`../examples/REAL_CHAT_SAMPLES.md`](../examples/REAL_CHAT_SAMPLES.md) transcribes roughly thirty reflections people actually wrote. It is evidence, not intent, and it is why the C section holds the passage.
 

@@ -1,0 +1,99 @@
+/*
+ * The tags field and the small list under it.
+ *
+ * Small is the requirement, not the aesthetic. This sits on the metadata line
+ * above somebody's writing, and on a phone a tall autocomplete panel covers the
+ * thing being written — which is why the server caps the list at five and why
+ * this one scrolls rather than growing.
+ */
+
+.field {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+
+/*
+ * Floating, so the metadata line does not jump when suggestions appear. Above
+ * the card's own furniture but below any sheet or menu — those own the screen
+ * when they are open and a suggestion list must not sit on top of one.
+ */
+.suggestions {
+  position: absolute;
+  inset-block-start: calc(100% + var(--space-1));
+  inset-inline-start: 0;
+  z-index: 20;
+  display: grid;
+  gap: 2px;
+  min-inline-size: min(14rem, 70vw);
+  max-inline-size: min(20rem, 90vw);
+  margin: 0;
+  padding: var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  list-style: none;
+  /* Five rows is the cap, but text can be scaled to 200%. Scroll, never grow. */
+  max-block-size: 14rem;
+  overflow-y: auto;
+}
+
+.suggestion {
+  display: block;
+  inline-size: 100%;
+  min-block-size: var(--tap);
+  padding: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: start;
+  cursor: pointer;
+  /* A long tag truncates rather than widening the list off the screen. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suggestion:hover,
+.suggestion[data-active='true'] {
+  background: var(--surface-2);
+}
+
+.suggestion:focus-visible {
+  outline: 2px solid var(--focus, var(--ink));
+  outline-offset: -2px;
+}
+
+/*
+ * The refusal, inline and quiet.
+ *
+ * It never says which rule refused the tag — the same sentence for every
+ * reason, because a message that distinguished them would describe the word
+ * list a few attempts at a time.
+ */
+.error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  color: var(--danger, var(--ink));
+}
+
+.dismiss {
+  flex: 0 0 auto;
+  min-inline-size: 1.5rem;
+  padding: 0 0.25rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: var(--text-sm);
+  line-height: 1;
+  cursor: pointer;
+}

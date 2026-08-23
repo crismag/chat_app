@@ -135,6 +135,22 @@ export type CommunityRouteOptions = {
   userIdByEmail: (email: string) => string | null | Promise<string | null>;
   /** Ensure the person has a public identity before their name is shown. */
   ensureIdentity: (user: CommunityUser) => { handle: string; displayName: string };
+  /**
+   * Register the tags a publication carries, and say which are allowed.
+   *
+   * Injected rather than imported so this module keeps knowing nothing about
+   * the registry's storage. Optional because a test that hands in half an
+   * application should not have to supply one — when it is absent the tags are
+   * still parsed and stored on the publication, they simply gain no standing.
+   */
+  tags?: {
+    validate: (raw: readonly string[]) => { accepted: { tag: string; label: string }[] };
+    record: (input: {
+      userId: string;
+      tags: readonly { tag: string; label: string }[];
+      published: boolean;
+    }) => void;
+  };
   /** Injected in tests so a ceiling can be reached without making 40 requests. */
   limits?: OutwardLimits;
 };
@@ -1149,11 +1165,20 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
 
     ensureIdentity(user);
 
-    const hashtags = parseHashtags(
-      Array.isArray(body.hashtags)
-        ? (body.hashtags as unknown[]).map((tag) => String(tag))
-        : String(body.hashtags ?? ''),
-    );
+    /*
+     * The same gate a reflection's tags pass, not a second one.
+     *
+     * This route accepted `parseHashtags` output directly, which folds and
+     * de-duplicates but asks nothing about whether a word is allowed. A client
+     * posting here is not the editor, and a moderation rule enforced in one
+     * writer and not the other is a rule with a way round it.
+     */
+    const rawHashtags = Array.isArray(body.hashtags)
+      ? (body.hashtags as unknown[]).map((tag) => String(tag))
+      : String(body.hashtags ?? '').split(/[\s,]+/);
+    const hashtags = options.tags
+      ? options.tags.validate(rawHashtags).accepted
+      : parseHashtags(rawHashtags);
 
     /*
      * One share per destination. Sharing the same reflection into the same
@@ -1170,6 +1195,7 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     });
     if (already) {
       db.refreshShare(already, { caption, sectionTypes, hashtags }, source);
+      options.tags?.record({ userId: user.id, tags: hashtags, published: true });
       const updated = db.publication(user.id, already);
       if (!updated) return c.json({ error: 'Publication could not be read back.' }, 500);
       /*
@@ -1197,6 +1223,8 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
       },
       source,
     );
+    /* Published by definition: this is the count strangers are ranked by. */
+    options.tags?.record({ userId: user.id, tags: hashtags, published: true });
 
     const view = db.publication(user.id, id);
     if (!view) return c.json({ error: 'Publication could not be read back.' }, 500);
