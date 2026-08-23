@@ -54,6 +54,20 @@
   cursor: pointer;
 }
 
+/*
+ * The book, sized in rem rather than left to the font.
+ *
+ * This was a 📖 emoji, which is not an icon: it ignores `currentColor` and
+ * stays its own colour in all eleven themes, and its size is whatever the
+ * platform's emoji font decides. A stroked book inherits the accent colour of
+ * the control it sits in.
+ */
+.triggerIcon {
+  inline-size: 1.05rem;
+  block-size: 1.05rem;
+  flex: none;
+}
+
 .trigger:hover,
 .trigger:focus-visible {
   border-color: var(--line);

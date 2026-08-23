@@ -43,6 +43,7 @@ import {
   type BibleTranslation,
   type LookupFailure,
 } from './api.ts'
+import { BookIcon } from '../shared/ui/icons.tsx'
 import styles from './ScripturePassage.module.css'
 
 export interface ScripturePassageProps {
@@ -314,7 +315,7 @@ export function ScripturePassage({
             title={passage ? passage.name : 'Look up a Bible passage. Optional — you can write without one.'}
             onClick={() => setChoosing((open) => !open)}
           >
-            <span aria-hidden="true">📖</span>
+            <BookIcon className={styles.triggerIcon} />
             {triggerLabel}
           </button>
         ) : (

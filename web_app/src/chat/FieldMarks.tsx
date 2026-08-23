@@ -26,7 +26,7 @@
  */
 
 import type { ReactNode } from 'react'
-import { CheckIcon } from '../shared/ui/icons.tsx'
+import { CheckIcon, SaveIcon } from '../shared/ui/icons.tsx'
 import styles from './ChatPage.module.css'
 
 /**
@@ -76,16 +76,14 @@ export function SaveToggle({
         aria-label={label}
         onClick={onSave}
       >
+        {/*
+          Two states, and only one of them is a control worth finding.
+          Unsaved says "press me and this is kept"; saved is a tick that
+          confirms and then gets out of the way, which is why it stays quiet
+          while the other does not.
+        */}
         {dirty ? (
-          <svg
-            className={styles.markGlyph}
-            viewBox="0 0 16 16"
-            aria-hidden="true"
-            focusable="false"
-          >
-            <circle cx="8" cy="8" r="4" fill="currentColor" />
-            <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" strokeWidth="1.4" />
-          </svg>
+          <SaveIcon className={styles.markGlyph} />
         ) : (
           <CheckIcon className={styles.markGlyph} />
         )}

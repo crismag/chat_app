@@ -20,5 +20,13 @@ export default defineConfig({
     environment: 'happy-dom',
     setupFiles: './src/test/setup.ts',
     pool: 'threads',
+    /*
+     * Stylesheets are stubbed to '' by default, which is right for component
+     * tests and wrong for the one test that reads a stylesheet as text: a
+     * theme with no palette block inherits the light one, and the assertion
+     * that catches it needs the file to actually arrive. Scoped to the themes
+     * sheet so nothing else pays for processing it does not use.
+     */
+    css: { include: [/themes\.css/] },
   },
 })

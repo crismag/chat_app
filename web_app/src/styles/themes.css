@@ -1,9 +1,9 @@
 /*
  * The chosen appearances.
  *
- * Default, Light and Dark are in tokens.css: they are the base palette and its
- * dark counterpart, selected by `data-palette`. The five here are choices with
- * a character of their own, selected by `data-theme`, and each one overrides
+ * System Tone, Light and Dark are in tokens.css: they are the base palette and
+ * its dark counterpart, selected by `data-palette`. The eight here are choices
+ * with a character of their own, selected by `data-theme`, and each one overrides
  * only the colour tokens — never a size, a radius or a font size, so a theme
  * can change how the application feels without changing where anything is or
  * how large a tap target ends up.
@@ -272,4 +272,183 @@
   --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.5), 0 10px 24px rgba(0, 0, 0, 0.45);
   --shadow-lg: 0 4px 10px rgba(0, 0, 0, 0.55), 0 24px 50px rgba(0, 0, 0, 0.6);
   --ring: 0 0 0 3px rgba(79, 195, 247, 0.32);
+}
+
+/* --- Blush & Sage: blush pink, sage green, soft grey ---------------------- */
+
+/*
+ * Two hues that have to stay out of each other's way. Blush carries the
+ * accent and Heart; sage carries Testimony and the "all is well" green. The
+ * greys between them are warm rather than neutral, or the pink reads as an
+ * error state on a white page.
+ */
+[data-theme='blush'] {
+  color-scheme: light;
+
+  --paper: #f7f3f2;
+  --surface: #fffdfd;
+  --surface-2: #f1eae9;
+  --surface-sunk: #e9e0df;
+
+  --ink: #33292b;
+  --ink-soft: #4d3f42;
+  --muted: #6f6165;
+  --faint: #948589;
+
+  --line: #e2d5d5;
+  --line-strong: #c9b6b7;
+
+  --accent: #a85f70;
+  --accent-hover: #8f4d5e;
+  --accent-soft: #f6e6e8;
+  --accent-ink: #7d4252;
+  --on-accent: #fffdfd;
+
+  --ok: #5b7a5f;
+  --ok-soft: #e6eee6;
+  --warn: #946a3c;
+  --warn-soft: #f4e8d9;
+  --danger: #a3453c;
+  --danger-soft: #f6e1de;
+
+  /*
+   * Four hues that stay four. Blush and sage are the theme, so Content takes a
+   * muted slate and Application a warm clay to keep the set distinguishable —
+   * a theme may restate the sections in its own register, never collapse them.
+   */
+  --content: #5c6a80;
+  --content-soft: #e5e9f0;
+  --heart: #a85f70;
+  --heart-soft: #f6e6e8;
+  --application: #946a3c;
+  --application-soft: #f4e8d9;
+  --testimony: #5b7a5f;
+  --testimony-soft: #e6eee6;
+
+  --ai-assisted: #6f6191;
+  --ai-assisted-soft: #ebe6f2;
+  --ai-generated: #946a3c;
+  --ai-generated-soft: #f4e8d9;
+
+  --shadow-sm: 0 1px 2px rgba(51, 41, 43, 0.07);
+  --shadow-md: 0 2px 4px rgba(51, 41, 43, 0.06), 0 8px 20px rgba(51, 41, 43, 0.09);
+  --shadow-lg: 0 4px 8px rgba(51, 41, 43, 0.07), 0 20px 44px rgba(51, 41, 43, 0.13);
+  --ring: 0 0 0 3px rgba(168, 95, 112, 0.28);
+}
+
+/* --- Azure: crisp blue on light grey ------------------------------------- */
+
+/*
+ * The high-contrast social-feed register: one strong blue, a light grey ground,
+ * and white cards standing on it. The whole effect depends on `--paper` staying
+ * grey and `--surface` staying pure white — collapse those two and it becomes
+ * an ordinary light theme with a blue button.
+ */
+[data-theme='azure'] {
+  color-scheme: light;
+
+  --paper: #f0f2f5;
+  --surface: #ffffff;
+  --surface-2: #e4e6eb;
+  --surface-sunk: #dadde1;
+
+  --ink: #050505;
+  --ink-soft: #1c1e21;
+  --muted: #65676b;
+  --faint: #8a8d91;
+
+  --line: #dadde1;
+  --line-strong: #c1c4c9;
+
+  --accent: #1877f2;
+  --accent-hover: #166fe5;
+  --accent-soft: #e7f0fe;
+  --accent-ink: #1461cc;
+  --on-accent: #ffffff;
+
+  --ok: #31a24c;
+  --ok-soft: #e3f3e7;
+  --warn: #b8730c;
+  --warn-soft: #fbeed8;
+  --danger: #e41e3f;
+  --danger-soft: #fce3e7;
+
+  --content: #1877f2;
+  --content-soft: #e7f0fe;
+  --heart: #d9418a;
+  --heart-soft: #fce4f0;
+  --application: #b8730c;
+  --application-soft: #fbeed8;
+  --testimony: #31a24c;
+  --testimony-soft: #e3f3e7;
+
+  --ai-assisted: #6a4fbb;
+  --ai-assisted-soft: #ece7f8;
+  --ai-generated: #b8730c;
+  --ai-generated-soft: #fbeed8;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.1), 0 12px 28px rgba(0, 0, 0, 0.2);
+  --ring: 0 0 0 3px rgba(24, 119, 242, 0.3);
+}
+
+/* --- Leatherbound: brown leather, parchment and muted gold ---------------- */
+
+/*
+ * An antique study Bible: aged paper, oxblood-brown leather, gold foil.
+ *
+ * Gold is the hard part. Real gold foil is a light value, and a light accent on
+ * parchment fails contrast on everything it touches, so `--accent` is the
+ * leather brown and gold appears as `--warn` and in Application — used where it
+ * belongs on a spine, for lettering and edges, rather than as the colour of
+ * every button.
+ */
+[data-theme='leather'] {
+  color-scheme: light;
+
+  --paper: #efe6d5;
+  --surface: #f8f1e3;
+  --surface-2: #e4d7c0;
+  --surface-sunk: #d9c9ae;
+
+  --ink: #2b1d12;
+  --ink-soft: #46311f;
+  --muted: #6a5138;
+  --faint: #8d7355;
+
+  --line: #d3c0a2;
+  --line-strong: #b39c78;
+
+  --accent: #6b3b22;
+  --accent-hover: #572e19;
+  --accent-soft: #ecdcc6;
+  --accent-ink: #4a2814;
+  --on-accent: #f8f1e3;
+
+  --ok: #4a6234;
+  --ok-soft: #e4ead6;
+  --warn: #9a7420;
+  --warn-soft: #f1e6c8;
+  --danger: #8c2f22;
+  --danger-soft: #f0dad4;
+
+  --content: #3f4f63;
+  --content-soft: #e0e5ec;
+  --heart: #7d3038;
+  --heart-soft: #efd9da;
+  --application: #9a7420;
+  --application-soft: #f1e6c8;
+  --testimony: #4a6234;
+  --testimony-soft: #e4ead6;
+
+  --ai-assisted: #5c4b7a;
+  --ai-assisted-soft: #e5e0ee;
+  --ai-generated: #9a7420;
+  --ai-generated-soft: #f1e6c8;
+
+  --shadow-sm: 0 1px 2px rgba(43, 29, 18, 0.1);
+  --shadow-md: 0 2px 4px rgba(43, 29, 18, 0.08), 0 8px 20px rgba(43, 29, 18, 0.12);
+  --shadow-lg: 0 4px 8px rgba(43, 29, 18, 0.1), 0 20px 44px rgba(43, 29, 18, 0.16);
+  --ring: 0 0 0 3px rgba(107, 59, 34, 0.3);
 }

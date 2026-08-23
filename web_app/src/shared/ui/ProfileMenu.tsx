@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { accountLabel, isGuest, type Account } from '@chat/shared'
-import { CreateIcon, ProfileIcon, SignOutIcon } from './icons.tsx'
+import { CreateIcon, DocumentIcon, InfoIcon, ProfileIcon, SignOutIcon } from './icons.tsx'
 import { Avatar } from './Avatar.tsx'
 import styles from './ProfileMenu.module.css'
 
@@ -202,7 +202,7 @@ export function ProfileMenu({
               void navigate('/about')
             }}
           >
-            <span className={styles.itemIcon} aria-hidden="true">i</span>
+            <InfoIcon className={styles.itemIcon} />
             About
           </button>
           <button
@@ -214,7 +214,7 @@ export function ProfileMenu({
               void navigate('/open-source-licenses')
             }}
           >
-            <span className={styles.itemIcon} aria-hidden="true">§</span>
+            <DocumentIcon className={styles.itemIcon} />
             Open Source Licences
           </button>
           {/*

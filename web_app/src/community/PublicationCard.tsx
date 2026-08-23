@@ -41,7 +41,7 @@ import {
   type ChatSectionType,
 } from '@chat/shared'
 import { ReflectionCard, SECTIONS } from '../shared/ui/ReflectionCard.tsx'
-import { GlobeIcon, LockIcon, CommunityIcon } from '../shared/ui/icons.tsx'
+import { GlobeIcon, LockIcon, CommunityIcon, MoreHorizontalIcon } from '../shared/ui/icons.tsx'
 import { reportIsSubmittable } from '@chat/shared'
 import { ReportDialog } from '../shared/ui/ReportDialog.tsx'
 import type { Publication, ReportReason } from './api.ts'
@@ -270,7 +270,7 @@ export function PublicationCard({
                 aria-haspopup="menu"
                 onClick={() => setMenuOpen((open) => !open)}
               >
-                <span aria-hidden="true">⋯</span>
+                <MoreHorizontalIcon className={styles.metaIcon} />
                 <span className="sr-only">More actions for {publication.title}</span>
               </button>
 
