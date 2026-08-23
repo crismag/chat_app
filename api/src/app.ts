@@ -824,6 +824,7 @@ export function createApp(
         };
       },
       userIdByEmail: async (email) => (await auth.findByEmail(email))?.id ?? null,
+      userIdByHandle: (handle) => profiles.byHandle(handle)?.userId ?? null,
       ensureIdentity: (user) => ensureProfile(profiles, user),
     }),
   );

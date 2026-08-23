@@ -43,7 +43,7 @@ import { PageMenu } from '../shared/mobile/PageMenu.tsx'
 import { useAccountRequired } from '../shared/mobile/AccountRequired.tsx'
 import { NARROW_QUERY, useMediaQuery } from '../shared/ui/useMediaQuery.ts'
 import { MoreIcon } from '../shared/ui/icons.tsx'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { useAuth } from '../auth/useAuth.ts'
 import { ReflectionCardSkeleton } from '../shared/ui/ReflectionCard.tsx'
 import { PublicationCard } from './PublicationCard.tsx'
@@ -70,6 +70,7 @@ import {
   type Publication,
   type ReportReason,
 } from './api.ts'
+import { isManager, roleLabel } from './roles.ts'
 import { AuthorLink } from '../shared/ui/AuthorLink.tsx'
 import styles from './CommunityPage.module.css'
 
@@ -624,6 +625,7 @@ function CommunitiesPanel({
   onNotice: (message: string) => void
   onFailure: (failure: Failure) => void
 }) {
+  const navigate = useNavigate()
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -718,6 +720,7 @@ function CommunitiesPanel({
                   setDescription('')
                   onNotice(`${community.name} is ready. Invite the people you want in it.`)
                   onChanged()
+                  navigate(`/community/${community.id}`)
                 })
                 .catch((caught: unknown) => {
                   setProblem(
@@ -854,32 +857,42 @@ function CommunitiesPanel({
                     {community.description || 'A private community.'}
                   </p>
                   <p className={styles.communityMeta}>
-                    {/* Plain language, not permission terminology. */}
-                    Members only · {community.memberCount}{' '}
-                    {community.memberCount === 1 ? 'member' : 'members'}
-                    {community.role === 'member' ? '' : ` · you are an ${community.role}`}
+                    {roleLabel(community.role)}
+                    {' · '}
+                    {community.memberCount === 1 ? '1 member' : `${community.memberCount} members`}
+                    {community.settings?.reflectionVisibility === 'public'
+                      ? ' · readable by anyone'
+                      : ' · members only'}
                   </p>
                 </div>
-                {community.role === 'member' ? null : (
-                  <button
-                    type="button"
+                <span className={styles.communityActions}>
+                  <Link
                     className="btn btn-secondary btn-sm"
-                    onClick={() =>
-                      setInvitingTo(invitingTo === community.id ? null : community.id)
-                    }
+                    to={`/community/${community.id}`}
                   >
-                    Invite
-                  </button>
-                )}
+                    {isManager(community.role) ? 'Manage' : 'Open'}
+                  </Link>
+                  {isManager(community.role) ? (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() =>
+                        setInvitingTo(invitingTo === community.id ? null : community.id)
+                      }
+                    >
+                      Invite
+                    </button>
+                  ) : null}
+                </span>
 
                 {/* Only for the people who may decide, and only when somebody is waiting. */}
-                {community.role === 'member' ? null : (
+                {isManager(community.role) ? (
                   <JoinRequests
                     communityId={community.id}
                     onNotice={onNotice}
                     onFailure={onFailure}
                   />
-                )}
+                ) : null}
 
                 {invitingTo === community.id ? (
                   <form

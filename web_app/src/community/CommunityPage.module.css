@@ -587,6 +587,74 @@ a.author:focus-visible {
   background: var(--accent-soft);
 }
 
+.communityActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* --- One community ----------------------------------------------------- */
+
+.manage {
+  container-type: inline-size;
+  display: grid;
+  gap: var(--space-5);
+  align-content: start;
+  width: 100%;
+  max-width: var(--shell-max);
+  margin-inline: auto;
+}
+
+.manageSection {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.memberList {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.memberRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.memberActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.roleSelect {
+  width: auto;
+  min-width: 8rem;
+}
+
+.danger {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+
+.closeConfirm {
+  display: grid;
+  gap: var(--space-3);
+}
+
 /* --- One publication --------------------------------------------------- */
 
 .detail {

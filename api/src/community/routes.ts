@@ -4,9 +4,12 @@
  *   GET    /api/communities                      — mine, and invitations to me
  *   POST   /api/communities                      — create one; creator is owner
  *   GET    /api/communities/:id                  — a community, if I am in it
+ *   PATCH  /api/communities/:id                  — name and description (owner)
+ *   PATCH  /api/communities/:id/settings         — who may find, join, read (owner)
  *   GET    /api/communities/:id/members          — the roster, if I am in it
  *   POST   /api/communities/:id/invitations      — invite by email (owner/mod)
  *   POST   /api/communities/:id/invitations/accept — accept an invitation to me
+ *   POST   /api/communities/:id/owners           — add or promote an owner
  *   PATCH  /api/communities/:id/members/:userId  — role, removal, mute
  *   POST   /api/communities/:id/leave            — leave voluntarily
  *
@@ -133,6 +136,12 @@ export type CommunityRouteOptions = {
   } | null;
   /** Resolve an email to an account, for invitations. */
   userIdByEmail: (email: string) => string | null | Promise<string | null>;
+  /**
+   * Resolve a public handle to an account, for adding an owner by who they are
+   * rather than by an address. Optional so a test that does not exercise that
+   * path need not invent a profile store.
+   */
+  userIdByHandle?: (handle: string) => string | null | Promise<string | null>;
   /** Ensure the person has a public identity before their name is shown. */
   ensureIdentity: (user: CommunityUser) => { handle: string; displayName: string };
   /**
@@ -240,7 +249,15 @@ function originOf(c: Context): string {
 
 export function createCommunityRoutes(options: CommunityRouteOptions) {
   const app = new Hono();
-  const { currentUser, currentReader, store, reflection, userIdByEmail, ensureIdentity } = options;
+  const {
+    currentUser,
+    currentReader,
+    store,
+    reflection,
+    userIdByEmail,
+    userIdByHandle,
+    ensureIdentity,
+  } = options;
 
   /*
    * The outward surfaces are metered and switchable; private writing is
@@ -345,7 +362,8 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
         id: community.id,
         name: community.name,
         description: community.description,
-        role: community.role,
+        settings: community.settings,
+        role: readCommunityRole(community.role),
         memberCount: community.memberCount,
         closed: community.closedAt !== null,
       })),
@@ -474,16 +492,66 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
     const id = c.req.param('id');
     const membership = activeMembership(db, id, user.id);
     const community = membership ? db.community(id) : null;
-    if (!community) return c.json({ error: 'No community found.' }, 404);
+    if (!membership || !community) return c.json({ error: 'No community found.' }, 404);
 
     return c.json({
       id: community.id,
       name: community.name,
       description: community.description,
-      role: membership?.role,
-      muted: membership?.mutedAt !== null,
+      settings: community.settings,
+      role: readCommunityRole(membership.role),
+      muted: membership.mutedAt !== null,
       closed: community.closedAt !== null,
       memberCount: db.members(id).filter((m) => grantsAccess(m.state)).length,
+      ownerCount: db.ownerCount(id),
+    });
+  });
+
+  /**
+   * Change the name and what the community is for.
+   *
+   * Settings stay on their own route: renaming a room is not the same decision
+   * as who may find it or read what is shared there.
+   */
+  app.patch('/communities/:id', async (c) => {
+    const { user, store: db, response } = await guard(c);
+    if (!user || !db) return response;
+
+    const id = c.req.param('id');
+    const membership = activeMembership(db, id, user.id);
+    const community = membership ? db.community(id) : null;
+    if (!membership || !community) return c.json({ error: 'No community found.' }, 404);
+    if (readCommunityRole(membership.role) !== COMMUNITY_ROLES.OWNER) {
+      return c.json({ error: 'Only an owner may change this community.' }, 403);
+    }
+
+    const body = await c.req
+      .json<{ name?: string; description?: string }>()
+      .catch(() => ({}) as { name?: string; description?: string });
+
+    const name = (body.name ?? community.name).trim();
+    if (!name) return c.json({ error: 'A community needs a name.', field: 'name' }, 400);
+    if (name.length > COMMUNITY_LIMITS.name) {
+      return c.json(
+        { error: `A name is at most ${COMMUNITY_LIMITS.name} characters.`, field: 'name' },
+        400,
+      );
+    }
+    const description = (body.description ?? community.description)
+      .trim()
+      .slice(0, COMMUNITY_LIMITS.description);
+
+    db.updateDetails(id, { name, description });
+    const updated = db.community(id);
+    return c.json({
+      id,
+      name: updated?.name ?? name,
+      description: updated?.description ?? description,
+      settings: updated?.settings ?? community.settings,
+      role: readCommunityRole(membership.role),
+      closed: updated?.closedAt != null,
+      memberCount: db.members(id).filter((m) => grantsAccess(m.state)).length,
+      ownerCount: db.ownerCount(id),
     });
   });
 
@@ -509,7 +577,7 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
           userId: member.userId,
           handle: member.handle,
           displayName: member.displayName ?? 'A C.H.A.T. writer',
-          role: member.role,
+          role: readCommunityRole(member.role),
           state: member.state,
           muted: member.mutedAt !== null,
         })),
@@ -670,7 +738,114 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
       role,
       state,
     });
-    return c.json({ ok: true, role, state });
+    return c.json({ ok: true, role: readCommunityRole(role), state });
+  });
+
+  /**
+   * Add or promote an owner.
+   *
+   * Identify someone who is already here, or add someone by the email or
+   * handle they are known by. They become an owner immediately if they are
+   * already a member; otherwise they are invited as one, and accept that
+   * invitation into the role. Ownership is responsibility for the space, so
+   * only an owner may create another.
+   *
+   * `stepDown` is the transfer: after there is another active owner, this
+   * person becomes an admin. An invitation that has not been accepted yet is
+   * not enough — the community would otherwise be left without an owner.
+   */
+  app.post('/communities/:id/owners', async (c) => {
+    const { user, store: db, response } = await guard(c);
+    if (!user || !db) return response;
+
+    const id = c.req.param('id');
+    const membership = activeMembership(db, id, user.id);
+    const community = membership ? db.community(id) : null;
+    if (!membership || !community) return c.json({ error: 'No community found.' }, 404);
+    if (readCommunityRole(membership.role) !== COMMUNITY_ROLES.OWNER) {
+      return c.json({ error: 'Only an owner may add or change owners.' }, 403);
+    }
+
+    const body = await c.req
+      .json<{ userId?: string; email?: string; handle?: string; stepDown?: boolean }>()
+      .catch(
+        () =>
+          ({}) as { userId?: string; email?: string; handle?: string; stepDown?: boolean },
+      );
+
+    const resolved = await resolvePersonId(body, { userIdByEmail, userIdByHandle });
+    if ('missing' in resolved) {
+      return c.json(
+        {
+          error:
+            'Name the person to add as an owner — a member, an email address, or a public handle.',
+        },
+        400,
+      );
+    }
+    if ('unknown' in resolved) {
+      return c.json(
+        { error: 'That person cannot be added yet. They need a C.H.A.T. account first.' },
+        404,
+      );
+    }
+    const subjectId = resolved.userId;
+    if (subjectId === user.id) {
+      return c.json({ error: 'You are already an owner of this community.' }, 400);
+    }
+
+    const existing = db.membership(id, subjectId);
+    if (isBanned(existing?.state)) {
+      return c.json(
+        { error: 'That person is banned from this community. Lift the ban first.' },
+        409,
+      );
+    }
+
+    const alreadyHere = existing && grantsAccess(existing.state);
+    const state = alreadyHere
+      ? existing.state
+      : existing?.state === MEMBERSHIP_STATES.INVITED
+        ? MEMBERSHIP_STATES.INVITED
+        : MEMBERSHIP_STATES.INVITED;
+
+    db.setMembership({
+      communityId: id,
+      userId: subjectId,
+      role: COMMUNITY_ROLES.OWNER,
+      state,
+      invitedByUserId: alreadyHere ? existing.invitedByUserId : user.id,
+    });
+
+    let steppedDown = false;
+    let note: string | undefined;
+    if (body.stepDown) {
+      if (!alreadyHere) {
+        note = 'They have been invited as an owner. You stay an owner until they accept.';
+      } else if (db.ownerCount(id) <= 1) {
+        return c.json({ error: 'Every community keeps at least one owner.' }, 409);
+      } else {
+        db.setMembership({
+          communityId: id,
+          userId: user.id,
+          role: COMMUNITY_ROLES.ADMIN,
+          state: MEMBERSHIP_STATES.ACTIVE,
+        });
+        steppedDown = true;
+      }
+    }
+
+    return c.json(
+      {
+        userId: subjectId,
+        role: COMMUNITY_ROLES.OWNER,
+        state,
+        invited: !alreadyHere,
+        steppedDown,
+        ...(note ? { note } : {}),
+      },
+      alreadyHere || existing?.state === MEMBERSHIP_STATES.INVITED ? 200 : 201,
+    );
   });
 
   /**
@@ -1495,4 +1670,39 @@ export function createCommunityRoutes(options: CommunityRouteOptions) {
   });
 
   return app;
+}
+
+/**
+ * Who the owner named: a member id, an email, or a public handle.
+ *
+ * Missing is "nothing was offered". Unknown is "something was offered that
+ * does not resolve to an account" — the same refusal an invitation uses, so
+ * the form cannot confirm whether an address has an account here.
+ */
+type PersonLookup = {
+  userIdByEmail: CommunityRouteOptions['userIdByEmail'];
+  userIdByHandle: CommunityRouteOptions['userIdByHandle'];
+};
+
+async function resolvePersonId(
+  body: { userId?: string; email?: string; handle?: string },
+  lookup: PersonLookup,
+): Promise<{ userId: string } | { missing: true } | { unknown: true }> {
+  const userId = (body.userId ?? '').trim();
+  if (userId) return { userId };
+
+  const email = (body.email ?? '').trim().toLowerCase();
+  if (email.includes('@') && !email.startsWith('@')) {
+    const found = await lookup.userIdByEmail(email);
+    return found ? { userId: found } : { unknown: true };
+  }
+
+  const handle = (body.handle ?? email.replace(/^@/, '')).trim().replace(/^@/, '');
+  if (handle && lookup.userIdByHandle) {
+    const found = await lookup.userIdByHandle(handle);
+    return found ? { userId: found } : { unknown: true };
+  }
+
+  if (email || handle) return { unknown: true };
+  return { missing: true };
 }
