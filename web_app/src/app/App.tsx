@@ -11,6 +11,7 @@ import { ReflectionViewPage } from '../reflections/ReflectionViewPage.tsx'
 import { NotesPage } from '../notes/NotesPage.tsx'
 import { MessagesPage } from '../messaging/MessagesPage.tsx'
 import { CommunityPage } from '../community/CommunityPage.tsx'
+import { CommunityManagePage } from '../community/CommunityManagePage.tsx'
 import { PublicationPage } from '../community/PublicationPage.tsx'
 import { CreatePage } from '../create/CreatePage.tsx'
 import { ProfilePage } from '../profile/ProfilePage.tsx'
@@ -129,6 +130,12 @@ export function App() {
             URL, different answer, decided server-side each time.
           */}
             <Route path="/community/publications/:id" element={<PublicationPage />} />
+            {/*
+              A community the reader belongs to. Creating one used to be the
+              last thing the interface offered; this is where the person who
+              started it — or anyone they made an owner — looks after it.
+            */}
+            <Route path="/community/:id" element={<CommunityManagePage />} />
             <Route path="/create" element={<CreatePage />} />
             {/*
             Two paths, one page. `/profile` is "mine" and resolves to the

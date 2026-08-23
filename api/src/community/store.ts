@@ -640,20 +640,23 @@ export class CommunityStore {
     role: CommunityRole;
     memberCount: number;
   })[] {
-    return this.db
-      .prepare(
-        `SELECT c.*, m.role AS role,
-                (SELECT COUNT(*) FROM community_members AS x
-                  WHERE x.communityId = c.id AND x.state = 'active') AS memberCount
-           FROM communities AS c
-           JOIN community_members AS m ON m.communityId = c.id
-          WHERE m.userId = ? AND m.state = 'active'
-          ORDER BY c.name COLLATE NOCASE`,
-      )
-      .all(userId) as unknown as (StoredCommunity & {
-      role: CommunityRole;
-      memberCount: number;
-    })[];
+    return (
+      this.db
+        .prepare(
+          `SELECT c.*, m.role AS role,
+                  (SELECT COUNT(*) FROM community_members AS x
+                    WHERE x.communityId = c.id AND x.state = 'active') AS memberCount
+             FROM communities AS c
+             JOIN community_members AS m ON m.communityId = c.id
+            WHERE m.userId = ? AND m.state = 'active'
+            ORDER BY c.name COLLATE NOCASE`,
+        )
+        .all(userId) as Row[]
+    ).map((row) => ({
+      ...communityFromRow(row),
+      role: readCommunityRole(row['role']),
+      memberCount: Number(row['memberCount'] ?? 0),
+    }));
   }
 
   /** Invitations addressed to this person and not yet answered. */
@@ -745,6 +748,16 @@ export class CommunityStore {
         settings.approvalPolicy,
         communityId,
       );
+  }
+
+  /**
+   * Change the name and what it is for. Settings stay on `updateSettings`,
+   * because renaming a room is not the same decision as who may walk into it.
+   */
+  updateDetails(communityId: string, input: { name: string; description: string }): void {
+    this.db
+      .prepare(`UPDATE communities SET name = ?, description = ? WHERE id = ?`)
+      .run(input.name, input.description, communityId);
   }
 
   /**

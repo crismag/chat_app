@@ -972,6 +972,139 @@ describe('communities are not a directory', () => {
     expect(leaving.body.error).toMatch(/owner/i);
   });
 
+  test('an owner can name the community again, and a member cannot', async () => {
+    const owner = await register('owner-rename@example.com');
+    const member = await register('member-rename@example.com');
+    const id = await makeCommunity(owner, 'Sunday Leaders');
+    await invite(owner, id, 'member-rename@example.com');
+    await accept(member, id);
+
+    const renamed = await call<{ name: string; description: string; settings: { joinPolicy: string } }>(
+      owner,
+      `/api/communities/${id}`,
+      { method: 'PATCH', body: JSON.stringify({ name: 'Tuesday Leaders', description: 'Same people.' }) },
+    );
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.name).toBe('Tuesday Leaders');
+    expect(renamed.body.description).toBe('Same people.');
+    expect(renamed.body.settings.joinPolicy).toBe('approval');
+
+    const refused = await call(member, `/api/communities/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'Not yours' }),
+    });
+    expect(refused.status).toBe(403);
+
+    const read = await call<{ name: string; settings: { joinPolicy: string }; ownerCount: number }>(
+      owner,
+      `/api/communities/${id}`,
+    );
+    expect(read.body.name).toBe('Tuesday Leaders');
+    expect(read.body.settings.joinPolicy).toBe('approval');
+    expect(read.body.ownerCount).toBe(1);
+  });
+
+  test('an owner can identify a member and make them an owner', async () => {
+    const owner = await register('owner-delegate@example.com');
+    const member = await register('member-delegate@example.com');
+    const id = await makeCommunity(owner, 'Christlikeness');
+    await invite(owner, id, 'member-delegate@example.com');
+    await accept(member, id);
+
+    const roster = await call<{ userId: string; role: string }[]>(
+      owner,
+      `/api/communities/${id}/members`,
+    );
+    const subject = roster.body.find((row) => row.role !== 'owner');
+    expect(subject).toBeTruthy();
+
+    const promoted = await call<{ userId: string; role: string; invited: boolean }>(
+      owner,
+      `/api/communities/${id}/owners`,
+      { method: 'POST', body: JSON.stringify({ userId: subject?.userId }) },
+    );
+    expect(promoted.status).toBe(200);
+    expect(promoted.body.role).toBe('owner');
+    expect(promoted.body.invited).toBe(false);
+
+    const after = await call<{ userId: string; role: string }[]>(
+      owner,
+      `/api/communities/${id}/members`,
+    );
+    expect(after.body.filter((row) => row.role === 'owner')).toHaveLength(2);
+
+    const leaving = await call(owner, `/api/communities/${id}/leave`, { method: 'POST' });
+    expect(leaving.status).toBe(200);
+  });
+
+  test('an owner can add someone by email as an incoming owner', async () => {
+    const owner = await register('owner-add@example.com');
+    const incoming = await register('incoming-owner@example.com');
+    const id = await makeCommunity(owner, 'Christlikeness');
+
+    const added = await call<{ role: string; state: string; invited: boolean }>(
+      owner,
+      `/api/communities/${id}/owners`,
+      { method: 'POST', body: JSON.stringify({ email: 'incoming-owner@example.com' }) },
+    );
+    expect(added.status).toBe(201);
+    expect(added.body.role).toBe('owner');
+    expect(added.body.state).toBe('invited');
+    expect(added.body.invited).toBe(true);
+
+    await accept(incoming, id);
+    const roster = await call<{ role: string; state: string }[]>(
+      incoming,
+      `/api/communities/${id}/members`,
+    );
+    expect(roster.body.filter((row) => row.role === 'owner' && row.state === 'active')).toHaveLength(
+      2,
+    );
+  });
+
+  test('an owner can add someone by handle, and step down once they are in', async () => {
+    const owner = await register('owner-handle@example.com');
+    const incoming = await register('ada-owner@example.com');
+    await call(incoming, '/api/profiles/me', {
+      method: 'PATCH',
+      body: JSON.stringify({ handle: 'ada-owner', displayName: 'Ada' }),
+    });
+    const id = await makeCommunity(owner, 'Christlikeness');
+    await invite(owner, id, 'ada-owner@example.com');
+    await accept(incoming, id);
+
+    const transferred = await call<{ role: string; steppedDown: boolean; invited: boolean }>(
+      owner,
+      `/api/communities/${id}/owners`,
+      { method: 'POST', body: JSON.stringify({ handle: 'ada-owner', stepDown: true }) },
+    );
+    expect(transferred.status).toBe(200);
+    expect(transferred.body.role).toBe('owner');
+    expect(transferred.body.steppedDown).toBe(true);
+    expect(transferred.body.invited).toBe(false);
+
+    const mine = await call<{ role: string }>(owner, `/api/communities/${id}`);
+    expect(mine.body.role).toBe('admin');
+    const theirs = await call<{ role: string }>(incoming, `/api/communities/${id}`);
+    expect(theirs.body.role).toBe('owner');
+  });
+
+  test('only an owner may add another owner', async () => {
+    const owner = await register('owner-gate@example.com');
+    const member = await register('member-gate@example.com');
+    await register('other-gate@example.com');
+    const id = await makeCommunity(owner, 'Christlikeness');
+    await invite(owner, id, 'member-gate@example.com');
+    await accept(member, id);
+
+    const attempt = await call<{ error: string }>(member, `/api/communities/${id}/owners`, {
+      method: 'POST',
+      body: JSON.stringify({ email: 'other-gate@example.com' }),
+    });
+    expect(attempt.status).toBe(403);
+    expect(attempt.body.error).toMatch(/owner/i);
+  });
+
   test('only owners and moderators may invite', async () => {
     const owner = await register('ada@example.com');
     const member = await register('bob@example.com');

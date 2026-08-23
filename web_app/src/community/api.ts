@@ -66,15 +66,31 @@ export type FeedResponse = {
   reportReasons: ReportReason[]
 }
 
-import type { CommunityPreset, CommunitySettings } from '@chat/shared'
+import type { CommunityPreset, CommunityRole, CommunitySettings, MembershipState } from '@chat/shared'
 
 export type CommunitySummary = {
   id: string
   name: string
   description: string
-  role: 'owner' | 'moderator' | 'member'
+  settings?: CommunitySettings
+  role: CommunityRole
   memberCount: number
   closed: boolean
+}
+
+export type CommunityDetail = CommunitySummary & {
+  settings: CommunitySettings
+  muted: boolean
+  ownerCount: number
+}
+
+export type CommunityMember = {
+  userId: string
+  handle: string | null
+  displayName: string
+  role: CommunityRole
+  state: MembershipState
+  muted: boolean
 }
 
 export type Invitation = {
@@ -168,6 +184,70 @@ export function inviteToCommunity(
     method: 'POST',
     body: JSON.stringify({ email }),
   })
+}
+
+export function fetchCommunity(communityId: string): Promise<CommunityDetail> {
+  return api(`/communities/${communityId}`)
+}
+
+export function updateCommunityDetails(
+  communityId: string,
+  input: { name: string; description: string },
+): Promise<CommunityDetail> {
+  return api(`/communities/${communityId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  })
+}
+
+export function updateCommunitySettings(
+  communityId: string,
+  settings: Partial<CommunitySettings>,
+): Promise<{ settings: CommunitySettings; note?: string; existingSharesUnchanged?: boolean }> {
+  return api(`/communities/${communityId}/settings`, {
+    method: 'PATCH',
+    body: JSON.stringify(settings),
+  })
+}
+
+export function fetchMembers(communityId: string): Promise<CommunityMember[]> {
+  return api(`/communities/${communityId}/members`)
+}
+
+export function updateMember(
+  communityId: string,
+  userId: string,
+  change: { role?: CommunityRole; state?: MembershipState },
+): Promise<{ ok: boolean; role: CommunityRole; state: MembershipState }> {
+  return api(`/communities/${communityId}/members/${userId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(change),
+  })
+}
+
+export function addCommunityOwner(
+  communityId: string,
+  input: { userId?: string; email?: string; handle?: string; stepDown?: boolean },
+): Promise<{
+  userId: string
+  role: CommunityRole
+  state: MembershipState
+  invited: boolean
+  steppedDown: boolean
+  note?: string
+}> {
+  return api(`/communities/${communityId}/owners`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function leaveCommunity(communityId: string): Promise<{ ok: boolean; state: string }> {
+  return api(`/communities/${communityId}/leave`, { method: 'POST' })
+}
+
+export function deleteCommunity(communityId: string): Promise<{ deleted: boolean }> {
+  return api(`/communities/${communityId}`, { method: 'DELETE' })
 }
 
 export function setEncouraged(

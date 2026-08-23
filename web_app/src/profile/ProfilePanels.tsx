@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 
 import { api } from '../shared/api/client.ts'
+import { isOwner } from '../community/roles.ts'
 import styles from './ProfilePanels.module.css'
 
 /*
@@ -77,22 +78,13 @@ export function CommunitiesPanel() {
     <ul className={styles.list}>
       {items.map((community) => (
         <li key={community.id} className={styles.row}>
-          {/*
-            One address, because there is one Community page: it opens on the
-            group a person picks. Linking to a `/community/<id>` that does not
-            exist would be a tab full of 404s.
-          */}
-          <Link className={styles.rowLink} to="/community">
+          <Link className={styles.rowLink} to={`/community/${community.id}`}>
             <span className={styles.rowTitle}>{community.name}</span>
             {community.description ? (
               <span className={styles.rowBody}>{community.description}</span>
             ) : null}
             <span className={styles.rowMeta}>
-              {/*
-                A role and a size, which is what tells somebody what this
-                group is to them. Not a rank and not a score.
-              */}
-              {community.role === 'OWNER' ? 'You started this' : 'Member'}
+              {isOwner(community.role) ? 'You look after this' : 'Member'}
               <span aria-hidden="true"> · </span>
               {community.memberCount === 1 ? '1 member' : `${community.memberCount} members`}
               {community.closed ? (

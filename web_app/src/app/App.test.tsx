@@ -71,6 +71,48 @@ function mockAuthenticatedFetch() {
         json: async () => ({ scope: 'shared', items: [], hashtags: [], reportReasons: [] }),
       })
     }
+    if (url.includes('/join-requests')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ requests: [] }),
+      })
+    }
+    if (url.includes('/members')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => [
+          {
+            userId: 'u1',
+            handle: 'ada',
+            displayName: 'Ada',
+            role: 'owner',
+            state: 'active',
+            muted: false,
+          },
+        ],
+      })
+    }
+    if (url.includes('/communities/') && !url.includes('/communities/discover')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          id: 'c1',
+          name: 'Sunday Leaders',
+          description: 'A place for our Sunday team.',
+          role: 'owner',
+          memberCount: 1,
+          ownerCount: 1,
+          closed: false,
+          muted: false,
+          settings: {
+            discoverability: 'public',
+            joinPolicy: 'approval',
+            reflectionVisibility: 'members',
+            approvalPolicy: 'owner_admin',
+          },
+        }),
+      })
+    }
     if (url.includes('/communities')) {
       return Promise.resolve({
         ok: true,
@@ -263,6 +305,13 @@ test('an unknown address keeps the shell and explains itself', async () => {
   expect(await screen.findByRole('heading', { name: 'This page is not in C.H.A.T.' })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Back to Reflect' })).toBeInTheDocument()
   expect(screen.getByRole('navigation', { name: 'Primary desktop' })).toBeInTheDocument()
+})
+
+test('a community the reader belongs to has its own address', async () => {
+  vi.stubGlobal('fetch', mockAuthenticatedFetch())
+  renderAt('/community/c1')
+  expect(await screen.findByRole('heading', { name: /Sunday Leaders/ })).toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: 'This page is not in C.H.A.T.' })).toBeNull()
 })
 
 test('Community is in the primary navigation once a shared entry can be opened', async () => {
