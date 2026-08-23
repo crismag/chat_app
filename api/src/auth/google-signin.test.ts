@@ -222,3 +222,98 @@ test('logging out ends the CHAT session', async () => {
   const after = await app.request('/api/auth/me', { headers: { Cookie: signedIn.cookie } });
   expect(after.status).toBe(401);
 });
+
+/* ------------------------------------------------- one address, one account */
+
+/*
+ * The bug these cover.
+ *
+ * A person registered with a password, later pressed the Google button, and
+ * got a *second* account: the Google path looked the identity up by Google's
+ * subject and by nothing else, so an address that already had an account was
+ * not recognised as one. Their reflections stayed with the first account and
+ * the second one looked empty — the same mailbox, split in two, with nothing
+ * in the application able to join them again.
+ */
+
+async function registerWithPassword(email: string, password = 'a-long-enough-passphrase') {
+  const response = await app.request('/api/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  return {
+    status: response.status,
+    body: (await response.json().catch(() => null)) as Record<string, unknown>,
+    cookie: cookieHeader(response.headers.get('set-cookie')),
+  };
+}
+
+test('Google signs in to the account that address already has, rather than making a second', async () => {
+  const registered = await registerWithPassword('ada@example.com');
+  expect(registered.status).toBeLessThan(300);
+  const written = await writeReflection(registered.cookie, 'Written before Google');
+
+  const google = await signInWithGoogle('token-ada');
+  expect(google.status).toBeLessThan(300);
+
+  /* The same account, by id — not a second one wearing the same address. */
+  expect(google.body['id']).toBe(registered.body['id']);
+
+  /* And so the work written before it is still theirs. */
+  const mine = await app.request('/api/reflections', { headers: { Cookie: google.cookie } });
+  const body = (await mine.json()) as { items: { id: string }[] };
+  expect(body.items.map((item) => item.id)).toContain(written);
+});
+
+test('the password still works after Google has been used on the same account', async () => {
+  const registered = await registerWithPassword('ada@example.com');
+  await signInWithGoogle('token-ada');
+
+  const again = await app.request('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'ada@example.com', password: 'a-long-enough-passphrase' }),
+  });
+  expect(again.status).toBeLessThan(300);
+  expect(((await again.json()) as Record<string, unknown>)['id']).toBe(registered.body['id']);
+});
+
+test('an address Google has not confirmed is never adopted into somebody elses account', async () => {
+  const registered = await registerWithPassword('ada@example.com');
+
+  /*
+   * The attack this refuses: a Google account reporting an address it has not
+   * confirmed. Reported is not proved, and adopting on it would hand over
+   * every reflection the real owner has written.
+   */
+  IDENTITIES.set('token-impostor', {
+    subject: 'google-sub-impostor',
+    email: 'ada@example.com',
+    emailVerified: false,
+    name: 'Not Ada',
+    picture: null,
+  });
+
+  const impostor = await signInWithGoogle('token-impostor');
+  expect(impostor.status).toBeLessThan(300);
+  expect(impostor.body['id']).not.toBe(registered.body['id']);
+
+  /* And the impostor sees none of their work. */
+  const theirs = await app.request('/api/reflections', { headers: { Cookie: impostor.cookie } });
+  expect(((await theirs.json()) as { items: unknown[] }).items).toHaveLength(0);
+});
+
+test('a guests work follows them into the account the address already had', async () => {
+  const registered = await registerWithPassword('ada@example.com');
+
+  const guest = await guestSession();
+  const asGuest = await writeReflection(guest.cookie, 'Written as a guest');
+
+  const google = await signInWithGoogle('token-ada', guest.cookie);
+  expect(google.body['id']).toBe(registered.body['id']);
+
+  const mine = await app.request('/api/reflections', { headers: { Cookie: google.cookie } });
+  const body = (await mine.json()) as { items: { id: string }[] };
+  expect(body.items.map((item) => item.id)).toContain(asGuest);
+});

@@ -89,6 +89,29 @@ export interface AuthStore {
    * rather than left with half an account.
    */
   linkIdentity(identity: ProviderIdentity): Promise<AuthUser | null>;
+  /**
+   * Attach a verified identity to the account that already holds its address.
+   *
+   * ── Why this is separate from linkIdentity ────────────────────────────────
+   *
+   * `linkIdentity` makes an account or upgrades a guest. This one joins a
+   * provider to an account that already exists and already belongs to
+   * somebody, which is a different and far more dangerous act: done on the
+   * wrong evidence it hands one person's reflections to another.
+   *
+   * So the evidence is named in the signature and checked by the caller, not
+   * here: it may only be used when the provider itself asserts that the
+   * address is verified. Google saying "this is csmagala@gmail.com and we have
+   * confirmed it" is proof of control of that mailbox, which is the same proof
+   * this application accepts everywhere else — the confirmation link, and the
+   * password reset. An address a provider merely *reports* proves nothing, and
+   * adopting on it would let anybody who can type an address into a provider
+   * profile walk into the account that owns it.
+   *
+   * Null when the identity was claimed in between, so a race is decided by the
+   * unique key rather than by whoever read first.
+   */
+  adoptIdentity(userId: string, identity: ProviderIdentity): Promise<AuthUser | null>;
   /** Record that an existing identity was used to sign in. */
   touchIdentity(provider: string, subject: string, email: string | null): Promise<void>;
   /**
@@ -347,6 +370,25 @@ export class MysqlAuthStore implements AuthStore {
   async register(email: string, password: string, claimUserId?: string | null): Promise<AuthUser | null> {
     const handle = MysqlAuthStore.handle(email);
     if (await this.db.findUserIdByLocalUsername(handle)) return null;
+    /*
+     * An address held by a provider identity is taken too.
+     *
+     * Two tables can hold an address here — `local_credentials.username` for a
+     * password account and `provider_data.email` for a Google one — and no key
+     * spans them, so nothing in the database refuses the second. Checking only
+     * the first is what let one address become two accounts: register with a
+     * password, then sign in with Google, and the reflections were split
+     * between them with no way back.
+     *
+     * Refused rather than adopted, and the asymmetry is deliberate. Signing in
+     * with Google proves the mailbox, so that direction may join the accounts
+     * (see `adoptIdentity`). Typing an address into a registration form proves
+     * nothing at all, so this direction may not: it would let anybody who
+     * knows an address put a password on the account that owns it. They are
+     * told it exists, and signing in with Google — or a password reset, which
+     * goes to the mailbox — is how they reach it.
+     */
+    if (await this.db.findUserIdByIdentityEmail(handle)) return null;
 
     /*
      * A guest registering keeps their row. This is the whole product invariant
@@ -427,6 +469,20 @@ export class MysqlAuthStore implements AuthStore {
 
     await this.db.markUserRegisteredWithoutCredentials(target.id);
     return this.account(target.id, identity.email);
+  }
+
+  async adoptIdentity(userId: string, identity: ProviderIdentity): Promise<AuthUser | null> {
+    const account = await this.db.getUserByPublicUuid(userId);
+    if (!account) return null;
+    const linked = await this.db.linkIdentity({
+      userId: account.id,
+      provider: identity.provider,
+      subject: identity.subject,
+      email: identity.email,
+    });
+    /* Somebody else took this identity in between. The caller looks again. */
+    if (!linked) return null;
+    return this.account(account.id);
   }
 
   async touchIdentity(provider: string, subject: string, email: string | null): Promise<void> {
@@ -697,6 +753,20 @@ export class SqliteAuthStore implements AuthStore {
        */
       return Promise.resolve(null);
     }
+    return Promise.resolve(SqliteAuthStore.user(this.store.accounts.get(account.id)));
+  }
+
+  adoptIdentity(userId: string, identity: ProviderIdentity): Promise<AuthUser | null> {
+    const account = this.store.accounts.get(userId);
+    if (!account) return Promise.resolve(null);
+    const linked = this.store.identities.link({
+      userId: account.id,
+      provider: identity.provider,
+      providerUserId: identity.subject,
+      email: identity.email,
+    });
+    /* Somebody else took this identity in between. The caller looks again. */
+    if (!linked) return Promise.resolve(null);
     return Promise.resolve(SqliteAuthStore.user(this.store.accounts.get(account.id)));
   }
 

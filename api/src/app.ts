@@ -1145,12 +1145,52 @@ export function createApp(
          * upgraded in place — same row, same id — so their reflections, drafts
          * and images stay theirs with nothing to migrate.
          */
-        user = await auth.linkIdentity({
-          provider: 'google',
-          subject: identity.subject,
-          email: identity.email,
-          claimUserId: guest?.id ?? null,
-        });
+        /*
+         * Before making anybody: is this address already an account?
+         *
+         * One person, one address, one account. Without this the same mailbox
+         * became two accounts the moment somebody who had registered with a
+         * password pressed the Google button — the second had none of their
+         * reflections, and nothing ever joined them back up.
+         *
+         * The condition is `emailVerified`, and it is the whole safety of this
+         * branch. Google asserting a confirmed address is proof of control of
+         * that mailbox, which is exactly what this application accepts as
+         * ownership everywhere else: the confirmation link, and the password
+         * reset. An address Google merely reports is not proof, and adopting
+         * on it would hand somebody's reflections to whoever typed their
+         * address into a Google profile. So an unverified address falls
+         * through and gets an account of its own, as before.
+         */
+        const holder =
+          identity.emailVerified && identity.email ? await auth.findByEmail(identity.email) : null;
+
+        if (holder && holder.accountType === ACCOUNT_TYPES.REGISTERED) {
+          /*
+           * Their account, reached a second way. The Google identity is
+           * attached to the row that already owns their work — nothing is
+           * created, moved or rewritten — and a guest in this browser merges
+           * into it exactly as it does when the identity was already known.
+           */
+          user = await auth.adoptIdentity(holder.id, {
+            provider: 'google',
+            subject: identity.subject,
+            email: identity.email,
+            claimUserId: null,
+          });
+          if (user && guest && guest.id !== user.id) {
+            merged = store.accounts.merge(guest.id, user.id);
+            await auth.merge(guest.id, user.id);
+            clearInstallationCookie(c);
+          }
+        } else {
+          user = await auth.linkIdentity({
+            provider: 'google',
+            subject: identity.subject,
+            email: identity.email,
+            claimUserId: guest?.id ?? null,
+          });
+        }
         /*
          * Null means the identity was claimed between the read and the write.
          * Rather than guess, look again: whoever won is the account to sign
