@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import { resolveApiPath } from '../api/client.ts'
 import styles from './Avatar.module.css'
 
 /*
@@ -85,7 +86,14 @@ export function Avatar({
     return (
       <img
         className={`${styles.avatar} ${styles[size]} ${className ?? ''}`}
-        src={src}
+        /*
+         * `src` is a path the server built, rooted at the API's own domain —
+         * resolved against it here rather than passed through, or a browser
+         * loads it against the page's origin instead wherever the two
+         * differ. See `resolveApiPath` for the failure this avoids: not an
+         * error anywhere, just this face quietly falling back to initials.
+         */
+        src={resolveApiPath(src)}
         /*
          * Empty, and deliberately. The picture repeats the name that is almost
          * always beside it, and a screen reader announcing "photo of Ada,

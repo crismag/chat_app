@@ -6,10 +6,13 @@
  * people as you move through it.
  */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, expect, test } from 'vitest'
+import { afterEach, expect, test, vi } from 'vitest'
 import { Avatar, initialsFor } from './Avatar.tsx'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.unstubAllEnvs()
+})
 
 test('initials come from what the person is actually called', () => {
   expect(initialsFor('Ada Lovelace')).toBe('AL')
@@ -60,10 +63,44 @@ test('different people generally get different colours', () => {
 test('a real picture is shown, and does not repeat the name to a screen reader', () => {
   const { container } = render(<Avatar name="Ada Lovelace" src="/avatars/ada.png" />)
   const image = container.querySelector('img')
-  expect(image).toHaveAttribute('src', '/avatars/ada.png')
+  /*
+   * Resolved against the API's origin, not left as the bare path the server
+   * sent — see the picture-loads-cross-origin test below for why. In this
+   * test the API base is unset, so it resolves to the page's own origin,
+   * which is what a bare path always meant here before the fix.
+   */
+  expect(image).toHaveAttribute('src', `${window.location.origin}/avatars/ada.png`)
   /* The name is almost always beside it; "photo of Ada, Ada" is worse than one Ada. */
   expect(image).toHaveAttribute('alt', '')
   expect(screen.queryByRole('img', { name: 'Ada Lovelace' })).toBeNull()
+})
+
+/*
+ * The bug this covers: a picture that really was uploaded, shown as the
+ * generated letters anyway, with nothing on screen saying why.
+ *
+ * `avatarUrl` in a server response is a path rooted at the *API's* domain —
+ * `/api/profiles/<handle>/avatar?v=...` — because that is where the route
+ * lives. The web app and the API are different domains in production,
+ * so a browser given that path bare resolves it against the *page's* origin
+ * instead and gets that host's 404, not the picture. The `<img>` fails
+ * silently into the initials fallback the "picture that fails to load"
+ * test above exists for, and the person who uploaded a real picture has no
+ * way to tell that apart from an upload that never worked.
+ */
+test('a picture path from the API is loaded from the API, even when the page is served elsewhere', async () => {
+  vi.stubEnv('VITE_API_BASE_URL', 'https://chatapi.crishub.com/api')
+  vi.resetModules()
+  const { Avatar: FreshAvatar } = await import('./Avatar.tsx')
+
+  const { container } = render(
+    <FreshAvatar name="Ada Lovelace" src="/api/profiles/ada/avatar?v=1" />,
+  )
+  const image = container.querySelector('img')
+  expect(image).toHaveAttribute(
+    'src',
+    'https://chatapi.crishub.com/api/profiles/ada/avatar?v=1',
+  )
 })
 
 test('a picture that fails to load becomes the generated face, never a broken image', () => {

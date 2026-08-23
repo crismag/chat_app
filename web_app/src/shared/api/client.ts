@@ -6,6 +6,44 @@ export function apiUrl(path: string): string {
 }
 
 /**
+ * The API's own origin — scheme and host, nothing else — derived from the
+ * same setting `apiUrl` reads.
+ *
+ * `apiBase` is `https://chatapi.crishub.com/api` in production and the bare
+ * `/api` in development, where the dev server proxies it. Resolving either one
+ * against `window.location.origin` always yields an absolute origin: the
+ * API's real host in production, and the page's own origin in development —
+ * which is exactly where the dev proxy already sends it, so nothing changes
+ * there.
+ */
+function apiOrigin(): string {
+  return new URL(apiBase, window.location.origin).origin
+}
+
+/**
+ * A path the server already built whole, resolved against the API rather than
+ * the page.
+ *
+ * `avatarUrl` in a profile or a messaging payload arrives as `/api/...` — a
+ * path rooted at the *API's* domain, because that is where the route lives.
+ * Used as-is in an `<img src>`, a browser resolves a path with nothing in
+ * front of it against the page's own origin instead, which is the web app's
+ * host wherever the two differ. That is the read-side twin of the mistake
+ * `apiUrl` exists to prevent on the write side — a fetch written as a bare
+ * `/api/...` reaching the static host instead of the API — except a broken
+ * image fails silently into a fallback with no message at all: the picture
+ * really was uploaded, and the person who uploaded it has no way to tell that
+ * from a picture that never saved.
+ *
+ * A path that is already absolute — `https://...`, or a local `blob:` from a
+ * picture not yet uploaded — is returned unchanged.
+ */
+export function resolveApiPath(path: string): string {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(path)) return path
+  return `${apiOrigin()}${path}`
+}
+
+/**
  * A failed request, carrying what the server actually said.
  *
  * The publication gate answers 422 with a structured report — which field, how
