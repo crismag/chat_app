@@ -22,6 +22,14 @@ The application should make that loop feel simple enough for everyday use.
 
 ## C.H.A.T. framework
 
+The method as it was originally taught — the full text, its guiding questions,
+and the verse it comes from — is in [`CHAT_METHOD.md`](./CHAT_METHOD.md), and in
+code in [`packages/shared/src/chat-method.ts`](../../packages/shared/src/chat-method.ts).
+What follows is how this application implements it, including findings from real
+reflections that the method could not have anticipated. Where the two could be
+read as disagreeing, the method is the authority on what a section is *for* and
+this section is the authority on how the software behaves.
+
 ### C — Content
 Content holds **the passage itself** — the verse text, usually with its reference and its translation named. An explanation may follow it, but often nothing does.
 
@@ -40,8 +48,12 @@ The person shares their heart and how the passage touches them. This includes wh
 ### A — Application
 The person explains how the passage applies to them and how they will apply what they have learned. This may include actions, decisions, repentance, obedience, habits, relationships, attitudes, or practical next steps.
 
+Application is **personal**, and the method is blunt about why it is not optional: *biblical knowledge without a commitment to applying it to life leads only to miscomprehension*. A general truth restated is not yet an application, and assistance should ask what this asks of *this person*, not offer a principle.
+
 ### T — Testimony
 The person expresses a testimony, declaration of faith or conviction, commitment, prayer, or statement of belief related to the verse, passage, or learning. Testimony is not limited to recounting a past event. AI must never invent a personal testimony or experience and attribute it to the user.
+
+Testimony is **God-glorifying**, and that is a constraint rather than a tone. Its subject is the Lord and His faithfulness — what He has actually done — not the writer, and not the reflection. It is specifically not a summary, a closing thought or an encouraging note to end on, which is what a language model produces when it is given the word "testimony" and nothing else. See [`CHAT_METHOD.md`](./CHAT_METHOD.md); this is enforced in the system instruction and covered by `api/src/ai/method-context.test.ts`.
 
 The C.H.A.T. structure must help the user, not force every conversation into four mandatory form fields.
 

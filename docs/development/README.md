@@ -6,6 +6,7 @@ It exists so implementation work, AI-assisted development, code generation, and 
 
 ## Read order
 
+0. [`CHAT_METHOD.md`](CHAT_METHOD.md) — the method itself, as it was taught, with its guiding questions and the verse it comes from. Numbered zero because it is not a product decision: it is the thing the product implements, and every description of the four letters in this repository is a shortening of it.
 1. [`PRODUCT.md`](PRODUCT.md) — product intent, users, boundaries, and core workflows.
 2. [`ARCHITECTURE.md`](ARCHITECTURE.md) — target technical architecture and cross-platform strategy.
 3. [`DEVELOPMENT_INSTRUCTIONS.md`](DEVELOPMENT_INSTRUCTIONS.md) — rules for implementation and AI-assisted development.

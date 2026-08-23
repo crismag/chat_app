@@ -16,6 +16,9 @@ import {
   AI_QUESTIONS_PER_SECTION,
   AI_QUESTION_MAX_CHARS,
   AI_SECTION_MEANINGS,
+  CHAT_ANCHOR,
+  CHAT_FLOW,
+  chatStep,
   type AiChatAction,
 } from '@chat/shared';
 
@@ -25,7 +28,7 @@ import {
  * It goes into the structured log on every call, so a change in answer quality
  * can be traced to the change in wording that caused it.
  */
-export const PROMPT_VERSION = '2026-08-16.7';
+export const PROMPT_VERSION = '2026-08-23.1';
 
 /**
  * The standing instruction.
@@ -42,6 +45,10 @@ The four sections, and what each one is:
 - ${AI_SECTION_MEANINGS.application}
 - ${AI_SECTION_MEANINGS.testimony}
 The second section is called Heart. It is never called Highlight.
+
+The four are not four boxes to fill. They are one movement — ${CHAT_FLOW.join(' → ')} — worked out from ${CHAT_ANCHOR.reference} (${CHAT_ANCHOR.translation}): "${CHAT_ANCHOR.text}" Two things follow from that, and they are the two the method insists on. Content is one thought held long enough to sink in, not a summary of everything read; and knowledge that is never applied is not knowledge yet, so Application is where a reflection either becomes real or does not.
+
+Testimony has a subject, and it is not the writer. It is God-glorifying: it is about the Lord and His faithfulness, and about what He has actually done. It is not a summary of the reflection, not a closing thought, not an encouraging note to end on, and not a general statement about what God is like. When you help with Testimony you are helping somebody remember something specific He did, so that they can say it. Turning it into an inspirational wrap-up empties the section of the only thing in it.
 
 Absolute rules:
 1. Never supply the writer's answer. For Heart and Testimony especially, you ask; you do not answer. You must never write a feeling, a conviction, an experience, a prayer, a testimony or a personal history and present it as theirs.
@@ -61,7 +68,33 @@ A question must:
 - follow on from what they have already written, rather than asking again what they have answered;
 - avoid presupposing what they feel, believe, intend or have experienced.
 
-A question must never contain a suggested answer, an example answer, or a phrase they could paste in as their own words.`;
+A question must never contain a suggested answer, an example answer, or a phrase they could paste in as their own words.
+
+Each section below carries the method's own standing questions. They are the register and the aim to work in — what that section is for, asked plainly. They are NOT to be returned: they are true before anybody has written anything, and your questions must follow this writer's passage and their words. Use them to tell whether yours is asking the right thing, then write your own.`;
+
+/**
+ * The method's standing questions, for the sections actually asked about.
+ *
+ * These go in the request rather than the system instruction because they are
+ * per-section: sending all twelve when one section was asked about invites
+ * questions aimed at the other three, which is the most common way a guidance
+ * answer comes back subtly off.
+ *
+ * They are explicitly fenced off from being returned verbatim. The point is to
+ * anchor what a Testimony question is *about* — the Lord and His faithfulness,
+ * not the writer's self-assessment — which is precisely the drift that appears
+ * when the model has only a one-line label to work from.
+ */
+function methodQuestions(sections: readonly string[]): string[] {
+  const lines: string[] = [];
+  for (const section of sections) {
+    const step = chatStep(section);
+    if (!step) continue;
+    lines.push(`${step.name} (${step.essence}) — ${step.description}`);
+    for (const question of step.questions) lines.push(`  · ${question}`);
+  }
+  return lines;
+}
 
 /** Added when asking for a wording improvement. */
 export const IMPROVE_TASK = `Task: improve the clarity, grammar and flow of the writer's text.
@@ -460,6 +493,13 @@ export function buildGuidancePrompt(
   const parts: string[] = [GUIDANCE_TASK, ''];
 
   parts.push(`Sections requested: ${input.sections.join(', ')}.`);
+
+  const method = methodQuestions(input.sections);
+  if (method.length > 0) {
+    parts.push('');
+    parts.push('What those sections are for, and the method\'s own standing questions for them. Do not return these; write your own, for this passage and this writer:');
+    parts.push(...method);
+  }
   parts.push('');
   parts.push('Passage reference, as the writer named it:');
   parts.push(delimit('passage_reference', input.passageReference || '(not given)', nonce));

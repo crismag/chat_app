@@ -172,6 +172,7 @@ export * from './community.ts';
 export * from './distribution.ts';
 export * from './preferences.ts';
 export * from './sections.ts';
+export * from './chat-method.ts';
 export * from './preview.ts';
 
 /*

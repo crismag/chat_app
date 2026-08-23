@@ -14,6 +14,13 @@ import styles from './ChatLetters.module.css'
  * with its reference and translation, and frequently nothing else; see
  * `docs/examples/REAL_CHAT_SAMPLES.md`. Explanation, where it appears at all,
  * appears under Heart, which is where H's blurb now admits it.
+ *
+ * The blurbs are modern and short on purpose — four lines somebody reads once,
+ * not the method restated. What they must not do is drift from it. The method
+ * as it was taught lives in `chat-method.ts` in `@chat/shared`, and two of
+ * these lines are shorter renderings of the two clauses it is most easily lost
+ * without: that knowledge never applied stays misunderstood, and that Testimony
+ * is about the Lord's faithfulness rather than about the writer.
  */
 export const CHAT_LETTERS = [
   {
@@ -31,13 +38,13 @@ export const CHAT_LETTERS = [
   {
     letter: 'A',
     word: 'Application',
-    blurb: 'What you will actually do about it.',
+    blurb: 'What you will actually do about it — knowledge never applied stays misunderstood.',
     tone: 'application',
   },
   {
     letter: 'T',
     word: 'Testimony',
-    blurb: 'The conviction, prayer or declaration you want to keep.',
+    blurb: 'What God has done, and His faithfulness in it — remembered, and worth saying.',
     tone: 'testimony',
   },
 ] as const
