@@ -59,7 +59,7 @@
 .log {
   overflow: auto;
   display: grid;
-  align-content: start;
+  align-content: end;
   gap: var(--space-1);
   padding: var(--space-2) var(--space-3);
 }
@@ -196,11 +196,12 @@
 .actions {
   display: flex;
   flex: none;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: var(--space-1);
   padding: 0 var(--space-1);
   border-top: 1px solid var(--line);
   background: var(--surface);
+  overflow-x: auto;
 }
 
 .seen {
@@ -239,10 +240,34 @@
   inset-block-end: 100%;
   inset-inline-start: 0;
   inset-inline-end: auto;
+  z-index: 6;
+  /*
+   * Drop-up from the composer. Reverse the list so Search (first in the
+   * markup) sits next to More rather than off the top of a clipped page.
+   */
+  display: flex;
+  flex-direction: column-reverse;
 }
 
 .composeField {
   min-width: 0;
+}
+
+.send {
+  min-height: var(--tap);
+  min-inline-size: var(--tap);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.send:disabled {
+  opacity: 0.45;
 }
 
 .input {

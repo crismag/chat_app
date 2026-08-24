@@ -592,7 +592,7 @@ export function ThreadView({
             }}
           />
         </div>
-        <button type="submit" className="btn btn-primary btn-sm" disabled={sending || !draft.trim()}>
+        <button type="submit" className={styles.send} disabled={sending || !draft.trim()}>
           {editing ? 'Save' : 'Send'}
         </button>
       </form>

@@ -250,6 +250,11 @@
   margin-block-start: 0;
 }
 
+.page[data-narrow='true'] .find :global(.input) {
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-3);
+}
+
 .findLabel {
   font-size: var(--text-sm);
   font-weight: 600;
