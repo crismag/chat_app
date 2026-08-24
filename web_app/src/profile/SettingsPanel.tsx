@@ -3,6 +3,7 @@ import { CHAT_FORMATS, THEMES, THEME_LABELS, THEME_LIST, type Theme } from '@cha
 
 import { fetchTranslations, type BibleTranslation } from '../bible/api.ts'
 import { DevicesSection } from './DevicesSection.tsx'
+import { LibraryArchive } from './LibraryArchive.tsx'
 import { usePreferences } from '../shared/theme/usePreferences.ts'
 import styles from './SettingsPanel.module.css'
 
@@ -84,6 +85,7 @@ export function SettingsPanel() {
       </fieldset>
 
       <DevicesSection />
+      <LibraryArchive />
     </div>
   )
 }

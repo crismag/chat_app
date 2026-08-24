@@ -271,3 +271,13 @@ test('full density is the one view that asks for more', async () => {
     ).toBeGreaterThan(0),
   )
 })
+
+test('the reflections list has no import or export control', async () => {
+  vi.stubGlobal('fetch', mockFetch())
+  renderPage()
+  await screen.findByText('Trusting while I cannot see')
+  expect(screen.queryByRole('button', { name: 'Download JSON' })).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Download Markdown' })).toBeNull()
+  expect(screen.queryByRole('heading', { name: 'Your writing' })).toBeNull()
+  expect(screen.queryByLabelText('Choose a file')).toBeNull()
+})
