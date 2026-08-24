@@ -132,6 +132,8 @@ test('opening a chat shows the conversation', async () => {
   renderMessages()
   fireEvent.click(await screen.findByRole('button', { name: /Bea/ }))
   expect(await screen.findByRole('heading', { name: 'Bea' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull()
+  fireEvent.click(await screen.findByRole('button', { name: 'Hello there' }))
   expect(await screen.findByRole('button', { name: 'Reply' })).toBeInTheDocument()
   expect(screen.getByText('More')).toBeInTheDocument()
 })
