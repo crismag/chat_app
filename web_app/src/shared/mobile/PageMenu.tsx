@@ -131,6 +131,36 @@ function AccountBlock({ onClose }: { onClose: () => void }) {
   )
 }
 
+/*
+ * Intro and About, on every one of these sheets, regardless of who is
+ * signed in.
+ *
+ * The header carries a control that opens both too — see `InfoMenu` — but
+ * that control lives in the shell's desktop-style header, which a phone does
+ * not show at all on any screen that supplies its own app bar. That is
+ * nearly every screen with a `⋮`: this sheet is the only thing a phone
+ * actually has open at the moment somebody presses it, so it is where these
+ * have to live to be reachable on a phone at all, not a duplicate of the
+ * header's copy.
+ */
+function InfoLinks({ onClose }: { onClose: () => void }) {
+  const navigate = useNavigate()
+  const go = (to: string) => {
+    onClose()
+    void navigate(to)
+  }
+  return (
+    <div className={styles.rows}>
+      <button type="button" className={styles.row} onClick={() => go('/intro')}>
+        Intro
+      </button>
+      <button type="button" className={styles.row} onClick={() => go('/about')}>
+        About
+      </button>
+    </div>
+  )
+}
+
 export function PageMenu({
   open,
   onClose,
@@ -173,6 +203,8 @@ export function PageMenu({
           ))}
         </div>
       ) : null}
+
+      <InfoLinks onClose={onClose} />
 
       <AccountBlock onClose={onClose} />
     </Sheet>
