@@ -40,8 +40,8 @@
 }
 
 .body {
-  display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
 }
@@ -60,22 +60,29 @@
 }
 
 .log {
+  flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  display: grid;
-  align-content: end;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-1);
   padding: var(--space-2) var(--space-3);
+}
+
+.log::before {
+  content: '';
+  flex: 1 1 auto;
 }
 
 .row {
   display: grid;
   gap: 2px;
   max-width: min(85%, 28rem);
+  width: fit-content;
 }
 
 .row[data-mine='true'] {
-  justify-self: end;
+  align-self: flex-end;
   text-align: right;
 }
 
@@ -104,7 +111,7 @@
 }
 
 .stamp {
-  justify-self: center;
+  align-self: center;
   margin: var(--space-2) 0 var(--space-1);
   color: var(--muted);
   font-size: var(--text-xs);
@@ -209,7 +216,7 @@
 }
 
 .seen {
-  justify-self: end;
+  align-self: flex-end;
   font-size: var(--text-xs);
 }
 
