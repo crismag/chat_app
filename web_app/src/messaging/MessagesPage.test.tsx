@@ -131,10 +131,8 @@ test('opening a chat shows the conversation', async () => {
   vi.stubGlobal('fetch', mockFetch())
   renderMessages()
   fireEvent.click(await screen.findByRole('button', { name: /Bea/ }))
-  await waitFor(() => {
-    expect(screen.getByRole('heading', { name: 'Bea' })).toBeInTheDocument()
-  })
-  expect(screen.getByRole('button', { name: 'Reply' })).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: 'Bea' })).toBeInTheDocument()
+  expect(await screen.findByRole('button', { name: 'Reply' })).toBeInTheDocument()
   expect(screen.getByText('More')).toBeInTheDocument()
 })
 

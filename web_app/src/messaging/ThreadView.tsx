@@ -55,16 +55,19 @@ export function ThreadView({
   const [sending, setSending] = useState(false)
   const [search, setSearch] = useState('')
   const [hits, setHits] = useState<MessagingMessage[] | null>(null)
+  const [loaded, setLoaded] = useState(false)
   const scroller = useRef<HTMLDivElement>(null)
   const lastId = messages.at(-1)?.id
 
   useEffect(() => {
     let live = true
+    setLoaded(false)
     void listMessages(thread.id)
       .then((result) => {
         if (!live) return
         setMessages(result.items)
         setOlderCursor(result.olderCursor)
+        setLoaded(true)
         const newest = result.items.at(-1)
         if (newest) void markRead(thread.id, newest.id).then(() => onUpdated({ ...thread, unreadCount: 0 }))
       })
@@ -279,7 +282,13 @@ export function ThreadView({
           </button>
         ) : null}
         {shown.length === 0 ? (
-          <p className={styles.empty}>{hits ? 'Nothing in this conversation matches.' : 'No messages yet. Say hello.'}</p>
+          <p className={styles.empty}>
+            {hits
+              ? 'Nothing in this conversation matches.'
+              : loaded
+                ? 'No messages yet. Say hello.'
+                : 'Loading messages…'}
+          </p>
         ) : (
           shown.map((message) => {
             const mine = message.senderUserId === mineId
