@@ -7,6 +7,15 @@
 
 export const MESSAGE_BODY_MAX = 4_000;
 export const DECLINE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+export const MESSAGE_CHANGE_WINDOW_MS = 15 * 60 * 1000;
+export const PARENT_BODY_MAX = 240;
+export const MESSAGE_PAGE_DEFAULT = 50;
+export const MESSAGE_PAGE_MAX = 100;
+export const SEARCH_LIMIT = 50;
+export const PIN_LIMIT = 3;
+export const REACTION_EMOJIS = ['❤', '🙏', '👍', '✅'] as const;
+
+export type ReactionEmoji = (typeof REACTION_EMOJIS)[number];
 
 export const THREAD_KINDS = {
   DIRECT: 'direct',
@@ -44,4 +53,38 @@ export function parseMessageBody(value: unknown): { ok: true; body: string } | {
     };
   }
   return { ok: true, body };
+}
+
+export function parseReactionEmoji(
+  value: unknown,
+): { ok: true; emoji: ReactionEmoji } | { ok: false; error: string } {
+  if (typeof value !== 'string' || !REACTION_EMOJIS.includes(value as ReactionEmoji)) {
+    return { ok: false, error: 'That reaction is not available.' };
+  }
+  return { ok: true, emoji: value as ReactionEmoji };
+}
+
+export function changeWindowOpen(createdAt: string, nowMs: number = Date.now()): boolean {
+  return nowMs - Date.parse(createdAt) <= MESSAGE_CHANGE_WINDOW_MS;
+}
+
+export function truncateParentBody(body: string): string {
+  if (body.length <= PARENT_BODY_MAX) return body;
+  return `${body.slice(0, PARENT_BODY_MAX).trimEnd()}…`;
+}
+
+export function likeFragment(needle: string): string {
+  return needle.replace(/[\\%_]/g, (character) => `\\${character}`);
+}
+
+export function pageLimit(value: string | undefined): number {
+  if (!value) return MESSAGE_PAGE_DEFAULT;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return MESSAGE_PAGE_DEFAULT;
+  return Math.min(parsed, MESSAGE_PAGE_MAX);
+}
+
+export function isMuted(mutedUntil: string | null, nowMs: number = Date.now()): boolean {
+  if (!mutedUntil) return false;
+  return Date.parse(mutedUntil) > nowMs;
 }

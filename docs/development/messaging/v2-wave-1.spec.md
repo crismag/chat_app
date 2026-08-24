@@ -428,39 +428,39 @@ Exact filenames stay inside `api/src/messaging/` and
 
 ### Backend
 
-- [ ] Additive SQLite schema for the columns/tables above
-- [ ] Pagination + `before` cursor on `listMessages`
-- [ ] Reply validation and parent summary
-- [ ] Edit window and body re-validation via `parseMessageBody`
-- [ ] Delete-for-me hides; delete-for-everyone tombstones
-- [ ] Reaction toggle with closed set
-- [ ] Seen cursor on thread + `allowSeenReceipts`
-- [ ] Mute / archive / pin / hide on membership
-- [ ] `waitingFor` ignores muted (and hidden) threads
-- [ ] Thread-scoped search that respects hides and tombstones
-- [ ] Route tests for every refusal in the error table
+- [x] Additive SQLite schema for the columns/tables above
+- [x] Pagination + `before` cursor on `listMessages`
+- [x] Reply validation and parent summary
+- [x] Edit window and body re-validation via `parseMessageBody`
+- [x] Delete-for-me hides; delete-for-everyone tombstones
+- [x] Reaction toggle with closed set
+- [x] Seen cursor on thread + `allowSeenReceipts`
+- [x] Mute / archive / pin / hide on membership
+- [x] `waitingFor` ignores muted (and hidden) threads
+- [x] Thread-scoped search that respects hides and tombstones
+- [x] Route tests for every refusal in the error table
 
 ### Frontend
 
-- [ ] Long-press or message menu: reply, edit, delete, react
-- [ ] Quote preview in the composer
-- [ ] Edited / deleted markers on bubbles
-- [ ] Reaction row under a bubble
-- [ ] Seen line when reciprocal ("Seen" under the last delivered-to-them)
-- [ ] Thread menu: mute, pin, archive, remove for me
-- [ ] Archived list
-- [ ] In-thread search field
-- [ ] Older-history load on scroll up
-- [ ] Preferences: allow requests (existing) + allow seen receipts
-- [ ] Desktop two-pane and narrow stacked layouts
+- [x] Long-press or message menu: reply, edit, delete, react
+- [x] Quote preview in the composer
+- [x] Edited / deleted markers on bubbles
+- [x] Reaction row under a bubble
+- [x] Seen line when reciprocal ("Seen" under the last delivered-to-them)
+- [x] Thread menu: mute, pin, archive, remove for me
+- [x] Archived list
+- [x] In-thread search field
+- [x] Older-history load on scroll up
+- [x] Preferences: allow requests (existing) + allow seen receipts
+- [x] Desktop two-pane and narrow stacked layouts
 
 ### Testing
 
-- [ ] Store tests for edit window, tombstone, hide-for-me, pin cap
-- [ ] Authorization tests: non-member, wrong sender, block, pending request
-- [ ] `waitingFor` mute / archive / request double-count still correct
-- [ ] MessagesPage / ThreadView tests for menu actions and empty/error
-- [ ] MariaDB not required for Wave 1; do not add a second schema here
+- [x] Store tests for edit window, tombstone, hide-for-me, pin cap
+- [x] Authorization tests: non-member, wrong sender, block, pending request
+- [x] `waitingFor` mute / archive / request double-count still correct
+- [x] MessagesPage / ThreadView tests for menu actions and empty/error
+- [x] MariaDB not required for Wave 1; do not add a second schema here
 
 ## Out of Scope
 
@@ -475,14 +475,9 @@ Exact filenames stay inside `api/src/messaging/` and
 
 ## Open Questions
 
-- [ ] Confirm 15 minutes as the edit and delete-for-everyone window.
-- [ ] Confirm the four reactions. A fifth (for example 😂) is a product
-      choice, not an implementation one — do not add it in the slice.
-- [ ] Confirm archive-on-new-message (WhatsApp-style) rather than
-      staying archived until manually restored.
-- [ ] Confirm hide-for-me reopens the same canonical thread (recommended)
-      rather than creating a fresh empty one.
+Resolved by the Wave 1 implementation defaults:
 
-Default answers if implementation starts without a reply: 15 minutes; the
-four emojis above; WhatsApp-style unarchive on inbound; reuse the
-canonical thread.
+- 15 minutes is the edit and delete-for-everyone window.
+- Reactions are the closed set ❤ 🙏 👍 ✅.
+- Archive returns to Chats when the other person writes.
+- Hide-for-me reuses the canonical A↔B thread.

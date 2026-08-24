@@ -1,12 +1,20 @@
 /*
  * Messaging HTTP surface. Registered accounts only.
  *
- *   GET    /api/messaging/threads
+ *   GET    /api/messaging/threads?view=chats|archived
  *   POST   /api/messaging/open            { handle }
  *   GET    /api/messaging/threads/:id
- *   GET    /api/messaging/threads/:id/messages?after=
+ *   GET    /api/messaging/threads/:id/messages?after=&before=&limit=
  *   POST   /api/messaging/threads/:id/messages
+ *   PATCH  /api/messaging/threads/:id/messages/:mid
+ *   POST   /api/messaging/threads/:id/messages/:mid/delete
+ *   PUT    /api/messaging/threads/:id/messages/:mid/reaction
+ *   GET    /api/messaging/threads/:id/search?q=
  *   POST   /api/messaging/threads/:id/read
+ *   POST   /api/messaging/threads/:id/mute
+ *   POST   /api/messaging/threads/:id/archive
+ *   POST   /api/messaging/threads/:id/pin
+ *   POST   /api/messaging/threads/:id/hide
  *   GET    /api/messaging/contacts
  *   GET    /api/messaging/requests
  *   POST   /api/messaging/requests/:id/accept
@@ -15,7 +23,7 @@
  *   GET    /api/messaging/preferences
  *   PATCH  /api/messaging/preferences
  *
- * Groups are not mounted in V1.
+ * Groups are not mounted.
  *
  * Actor identity comes from registeredUser. A guest and a visitor get the same
  * 401 — messaging is not a guest surface, and needsAccount would offer a guest
@@ -27,7 +35,7 @@ import type { Context } from 'hono';
 import { SlidingWindowRateLimiter } from '../ai/rate-limit.ts';
 import type { AuthUser } from '../auth/store.ts';
 import { MIN_SEARCH_LENGTH, type ProfileStore, type StoredProfile } from '../profile/store.ts';
-import { parseMessageBody } from './limits.ts';
+import { pageLimit, parseMessageBody, parseReactionEmoji } from './limits.ts';
 import { blockedEitherWay, canCreateMessageRequest } from './permissions.ts';
 import { waitingFor } from './waiting.ts';
 import {
@@ -157,7 +165,8 @@ export function createMessagingRoutes({ currentUser, store, profiles }: Messagin
   app.get('/threads', async (c) => {
     const actor = await actorOf(c);
     if (!actor) return c.json(SIGN_IN, 401);
-    return c.json({ items: store.listChats(actor.id, lookup) });
+    const view = c.req.query('view') === 'archived' ? 'archived' : 'chats';
+    return c.json({ items: store.listChats(actor.id, lookup, view) });
   });
 
   app.get('/people', async (c) => {
@@ -366,11 +375,24 @@ export function createMessagingRoutes({ currentUser, store, profiles }: Messagin
   app.patch('/preferences', async (c) => {
     const actor = await actorOf(c);
     if (!actor) return c.json(SIGN_IN, 401);
-    const body = (await c.req.json().catch(() => ({}))) as { allowNonContactRequests?: unknown };
-    if (typeof body.allowNonContactRequests !== 'boolean') {
+    const body = (await c.req.json().catch(() => ({}))) as {
+      allowNonContactRequests?: unknown;
+      allowSeenReceipts?: unknown;
+    };
+    if (typeof body.allowNonContactRequests === 'boolean') {
+      store.setAllowNonContactRequests(actor.id, body.allowNonContactRequests);
+    } else if (body.allowNonContactRequests !== undefined) {
       return c.json({ error: 'allowNonContactRequests must be true or false.' }, 400);
     }
-    return c.json(store.setAllowNonContactRequests(actor.id, body.allowNonContactRequests));
+    if (typeof body.allowSeenReceipts === 'boolean') {
+      store.setAllowSeenReceipts(actor.id, body.allowSeenReceipts);
+    } else if (body.allowSeenReceipts !== undefined) {
+      return c.json({ error: 'allowSeenReceipts must be true or false.' }, 400);
+    }
+    if (body.allowNonContactRequests === undefined && body.allowSeenReceipts === undefined) {
+      return c.json({ error: 'Say which preference to change.' }, 400);
+    }
+    return c.json(store.preferences(actor.id));
   });
 
   app.post('/requests/:requestId/accept', async (c) => {
@@ -402,8 +424,21 @@ export function createMessagingRoutes({ currentUser, store, profiles }: Messagin
   app.get('/threads/:threadId/messages', async (c) => {
     const actor = await actorOf(c);
     if (!actor) return c.json(SIGN_IN, 401);
-    const after = c.req.query('after') ?? undefined;
-    const items = store.listMessages(actor.id, c.req.param('threadId'), after);
+    const listed = store.listMessages(actor.id, c.req.param('threadId'), {
+      after: c.req.query('after') ?? undefined,
+      before: c.req.query('before') ?? undefined,
+      limit: pageLimit(c.req.query('limit')),
+    });
+    if (!listed) return c.json(NOT_FOUND, 404);
+    return c.json(listed);
+  });
+
+  app.get('/threads/:threadId/search', async (c) => {
+    const actor = await actorOf(c);
+    if (!actor) return c.json(SIGN_IN, 401);
+    const query = (c.req.query('q') ?? '').trim();
+    if (query.length < 2) return c.json({ items: [] });
+    const items = store.searchMessages(actor.id, c.req.param('threadId'), query);
     if (!items) return c.json(NOT_FOUND, 404);
     return c.json({ items });
   });
@@ -411,8 +446,13 @@ export function createMessagingRoutes({ currentUser, store, profiles }: Messagin
   app.post('/threads/:threadId/messages', async (c) => {
     const actor = await actorOf(c);
     if (!actor) return c.json(SIGN_IN, 401);
-    const parsed = parseMessageBody((await c.req.json().catch(() => ({})) as { body?: unknown }).body);
+    const body = (await c.req.json().catch(() => ({}))) as { body?: unknown; parentMessageId?: unknown };
+    const parsed = parseMessageBody(body.body);
     if (!parsed.ok) return c.json({ error: parsed.error }, 400);
+    const parentMessageId =
+      typeof body.parentMessageId === 'string' && body.parentMessageId.trim()
+        ? body.parentMessageId.trim()
+        : undefined;
     const threadId = c.req.param('threadId');
     const otherId = store.otherMemberId(threadId, actor.id);
     if (!otherId || !store.isMember(threadId, actor.id)) return c.json(NOT_FOUND, 404);
@@ -425,12 +465,127 @@ export function createMessagingRoutes({ currentUser, store, profiles }: Messagin
     if (!decision.allowed) {
       return refused(c, decision.retryAfterSeconds, 'You are sending very fast. Take a moment.');
     }
-    const sent = store.sendMessage(actor.id, threadId, parsed.body);
+    const sent = store.sendMessage(actor.id, threadId, parsed.body, parentMessageId);
     if (sent === 'forbidden') {
       return c.json({ error: 'Accept this request before replying.' }, 403);
     }
+    if (sent === 'bad_parent') {
+      return c.json({ error: 'That message cannot be replied to.' }, 400);
+    }
     if (!sent) return c.json(NOT_FOUND, 404);
     return c.json(sent, 201);
+  });
+
+  const writeGate = async (
+    c: Context,
+    threadId: string,
+  ): Promise<{ ok: true; actorId: string } | { ok: false; response: Response }> => {
+    const actor = await actorOf(c);
+    if (!actor) return { ok: false, response: c.json(SIGN_IN, 401) };
+    const otherId = store.otherMemberId(threadId, actor.id);
+    if (!otherId || !store.isMember(threadId, actor.id)) {
+      return { ok: false, response: c.json(NOT_FOUND, 404) };
+    }
+    if (blockedEitherWay(profiles, actor.id, otherId)) {
+      return { ok: false, response: c.json({ error: 'You cannot message this person.' }, 403) };
+    }
+    if (actor.emailVerified === false) return { ok: false, response: c.json(CONFIRM_FIRST, 403) };
+    return { ok: true, actorId: actor.id };
+  };
+
+  app.patch('/threads/:threadId/messages/:messageId', async (c) => {
+    const threadId = c.req.param('threadId');
+    const gated = await writeGate(c, threadId);
+    if (!gated.ok) return gated.response;
+    const parsed = parseMessageBody((await c.req.json().catch(() => ({})) as { body?: unknown }).body);
+    if (!parsed.ok) return c.json({ error: parsed.error }, 400);
+    const edited = store.editMessage(gated.actorId, threadId, c.req.param('messageId'), parsed.body);
+    if (edited === 'forbidden') return c.json({ error: 'You can only change your own messages.' }, 403);
+    if (edited === 'closed') return c.json({ error: 'That message can no longer be changed.' }, 400);
+    if (!edited) return c.json(NOT_FOUND, 404);
+    return c.json(edited);
+  });
+
+  app.post('/threads/:threadId/messages/:messageId/delete', async (c) => {
+    const threadId = c.req.param('threadId');
+    const gated = await writeGate(c, threadId);
+    if (!gated.ok) return gated.response;
+    const body = (await c.req.json().catch(() => ({}))) as { scope?: unknown };
+    const scope = body.scope === 'everyone' ? 'everyone' : body.scope === 'me' ? 'me' : null;
+    if (!scope) return c.json({ error: 'Say whether this is for you or for everyone.' }, 400);
+    const deleted = store.deleteMessage(gated.actorId, threadId, c.req.param('messageId'), scope);
+    if (deleted === 'forbidden') return c.json({ error: 'You can only change your own messages.' }, 403);
+    if (deleted === 'closed') return c.json({ error: 'That message can no longer be changed.' }, 400);
+    if (!deleted) return c.json(NOT_FOUND, 404);
+    return c.json({ ok: true });
+  });
+
+  app.put('/threads/:threadId/messages/:messageId/reaction', async (c) => {
+    const threadId = c.req.param('threadId');
+    const gated = await writeGate(c, threadId);
+    if (!gated.ok) return gated.response;
+    const body = (await c.req.json().catch(() => ({}))) as { emoji?: unknown };
+    if (body.emoji === null) {
+      const cleared = store.setReaction(gated.actorId, threadId, c.req.param('messageId'), null);
+      if (cleared === 'forbidden') return c.json({ error: 'Accept this request before replying.' }, 403);
+      if (!cleared || cleared === 'bad_emoji') return c.json(NOT_FOUND, 404);
+      return c.json(cleared);
+    }
+    const parsed = parseReactionEmoji(body.emoji);
+    if (!parsed.ok) return c.json({ error: parsed.error }, 400);
+    const reacted = store.setReaction(gated.actorId, threadId, c.req.param('messageId'), parsed.emoji);
+    if (reacted === 'forbidden') return c.json({ error: 'Accept this request before replying.' }, 403);
+    if (reacted === 'bad_emoji') return c.json({ error: 'That reaction is not available.' }, 400);
+    if (!reacted) return c.json(NOT_FOUND, 404);
+    return c.json(reacted);
+  });
+
+  app.post('/threads/:threadId/mute', async (c) => {
+    const actor = await actorOf(c);
+    if (!actor) return c.json(SIGN_IN, 401);
+    const body = (await c.req.json().catch(() => ({}))) as { until?: unknown };
+    if (body.until !== null && (typeof body.until !== 'string' || !body.until.trim())) {
+      return c.json({ error: 'until must be a time or null.' }, 400);
+    }
+    const until = typeof body.until === 'string' ? body.until : null;
+    if (until && Number.isNaN(Date.parse(until))) {
+      return c.json({ error: 'until must be a time or null.' }, 400);
+    }
+    const thread = store.setMuted(actor.id, c.req.param('threadId'), until, lookup);
+    if (!thread) return c.json(NOT_FOUND, 404);
+    return c.json(thread);
+  });
+
+  app.post('/threads/:threadId/archive', async (c) => {
+    const actor = await actorOf(c);
+    if (!actor) return c.json(SIGN_IN, 401);
+    const body = (await c.req.json().catch(() => ({}))) as { archived?: unknown };
+    if (typeof body.archived !== 'boolean') {
+      return c.json({ error: 'archived must be true or false.' }, 400);
+    }
+    const thread = store.setArchived(actor.id, c.req.param('threadId'), body.archived, lookup);
+    if (!thread) return c.json(NOT_FOUND, 404);
+    return c.json(thread);
+  });
+
+  app.post('/threads/:threadId/pin', async (c) => {
+    const actor = await actorOf(c);
+    if (!actor) return c.json(SIGN_IN, 401);
+    const body = (await c.req.json().catch(() => ({}))) as { pinned?: unknown };
+    if (typeof body.pinned !== 'boolean') {
+      return c.json({ error: 'pinned must be true or false.' }, 400);
+    }
+    const thread = store.setPinned(actor.id, c.req.param('threadId'), body.pinned, lookup);
+    if (thread === 'pin_limit') return c.json({ error: 'You can pin up to 3 conversations.' }, 400);
+    if (!thread) return c.json(NOT_FOUND, 404);
+    return c.json(thread);
+  });
+
+  app.post('/threads/:threadId/hide', async (c) => {
+    const actor = await actorOf(c);
+    if (!actor) return c.json(SIGN_IN, 401);
+    if (!store.hideThread(actor.id, c.req.param('threadId'))) return c.json(NOT_FOUND, 404);
+    return c.json({ ok: true });
   });
 
   app.post('/threads/:threadId/read', async (c) => {

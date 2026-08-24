@@ -55,4 +55,7 @@ Not in this V1. Same thread model can grow a `group` kind later without renaming
 
 ## After V1
 
-Conversation completeness (reply, edit, delete, reactions, seen, mute, archive, pin, search) is specified in `docs/development/messaging/v2-wave-1.spec.md`. Groups and C.H.A.T.-native share stay in Wave 2. Do not implement them from this README.
+Wave 1 conversation completeness is implemented: reply, edit, delete, reactions,
+seen receipts, mute, archive, pin, hide-for-me, in-thread search, and history
+pagination. Spec: `docs/development/messaging/v2-wave-1.spec.md`. Groups and
+C.H.A.T.-native share stay in Wave 2.

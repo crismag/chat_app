@@ -6,7 +6,7 @@ This package defines private registered-user messaging for C.H.A.T. It is writte
 
 **V1 is complete and tested.** Direct text, requests, directional contacts, unread, polling, people search, and profile intake are live. Groups were designed here and deferred.
 
-**V2 is planned, not implemented.** Evaluation and waves: [`V2_FEATURE_PLAN.md`](V2_FEATURE_PLAN.md). Wave 1 spec: [`v2-wave-1.spec.md`](v2-wave-1.spec.md).
+**V2 Wave 1 is implemented** (reply, edit, delete, reactions, seen, mute, archive, pin, hide-for-me, search, pagination). Evaluation and later waves: [`V2_FEATURE_PLAN.md`](V2_FEATURE_PLAN.md). Wave 1 spec: [`v2-wave-1.spec.md`](v2-wave-1.spec.md).
 
 ## Read first
 
