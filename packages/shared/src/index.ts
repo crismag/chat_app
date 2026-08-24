@@ -175,6 +175,7 @@ export * from './sections.ts';
 export * from './chat-method.ts';
 export * from './tags.ts';
 export * from './preview.ts';
+export * from './archive.ts';
 
 /*
  * Guest and registered, and the words for them.

@@ -85,6 +85,24 @@ function mockFetch(
         json: async () => ({ error: 'Unauthenticated.' }),
       } as Response)
     }
+    if (url.includes('/auth/sessions')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ sessions: [] }),
+      } as Response)
+    }
+    if (url.includes('/bible/translations')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ translations: [] }),
+      } as Response)
+    }
+    if (url.includes('/preferences')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ preferences: {} }),
+      } as Response)
+    }
     if (url.includes('/profiles/me')) {
       return Promise.resolve({
         ok: true,
@@ -442,4 +460,23 @@ test('a free handle says so, and nothing is marked wrong', async () => {
     expect(screen.getByRole('status')).toHaveTextContent('@quietcedar is available.'),
   )
   expect(screen.getByLabelText('Handle')).not.toHaveAttribute('aria-invalid', 'true')
+})
+
+test("the owner's settings include import and export of their writing", async () => {
+  vi.stubGlobal('fetch', mockFetch({ isOwner: true }))
+  renderProfile('/profile/cris?tab=settings')
+
+  expect(await screen.findByRole('heading', { name: 'Your writing' })).toBeVisible()
+  expect(screen.getByRole('checkbox', { name: /Reflections/ })).toBeChecked()
+  expect(screen.getByRole('checkbox', { name: /Notes/ })).toBeChecked()
+  expect(screen.getByRole('button', { name: 'Download JSON' })).toBeVisible()
+  expect(screen.getByRole('button', { name: 'Download Markdown' })).toBeVisible()
+})
+
+test('a visitor does not see import or export on a profile', async () => {
+  vi.stubGlobal('fetch', mockFetch({ isOwner: false }))
+  renderProfile()
+  await screen.findByRole('heading', { name: 'Cris Magalang' })
+  expect(screen.queryByRole('heading', { name: 'Your writing' })).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Download JSON' })).toBeNull()
 })

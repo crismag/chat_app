@@ -75,6 +75,7 @@ import { createCommunityRoutes } from './community/routes.ts';
 import { createCommunityStore } from './community/store.ts';
 import { createNotesRoutes } from './notes/routes.ts';
 import { createNotesStore } from './notes/store.ts';
+import { createLibraryRoutes } from './library/routes.ts';
 import { createMessagingRoutes } from './messaging/routes.ts';
 import { createMessagingStore } from './messaging/store.ts';
 import { createStudioCreationStore } from './create/store.ts';
@@ -852,6 +853,26 @@ export function createApp(
     createNotesRoutes({
       currentOwner: (c) => currentAccount(c),
       store: notesStore,
+    }),
+  );
+
+  /*
+   * A personal library file. Registered accounts only — this lives on the
+   * profile, and a guest has no profile. Exporting is not sharing; importing
+   * always creates new private copies.
+   */
+  app.route(
+    '/api/library',
+    createLibraryRoutes({
+      currentUser: (c) => currentUser(c),
+      conversations: store.conversations,
+      sections: store.sections,
+      passages: biblePassages,
+      notes: notesStore,
+      tags: {
+        validate: (raw) => validateTags(raw),
+        record: (input) => tagRegistry.record(input),
+      },
     }),
   );
 

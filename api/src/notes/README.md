@@ -118,7 +118,7 @@ Missing and not-yours are both 404, with a body that does not contain the note's
 
 ## Limitations
 
-- Notes are private to one account. There is no share, no export, no attach-to-reflection.
+- Notes are private to one account. There is no share. A registered account can export and import them from Settings on their profile, together with reflections.
 - Trash is not emptied automatically and there is no permanent-delete control.
 - Search is substring `LIKE`, not ranked full-text.
 - No offline cache; the list is whatever the API last returned.

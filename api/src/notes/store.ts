@@ -82,6 +82,13 @@ export interface NotesStore {
   create(userId: string, input: NoteWrite): PublicNote;
   get(userId: string, id: string): PublicNote | null;
   list(query: NoteListQuery): PublicNote[];
+  /**
+   * Every note this person owns, including archived and trash.
+   *
+   * A backup that omitted the trash would not be a backup of what they wrote.
+   * List views stay view-scoped; this is the export seam.
+   */
+  listAll(userId: string): PublicNote[];
   update(userId: string, id: string, patch: NoteWrite): PublicNote | null;
   softDelete(userId: string, id: string): PublicNote | null;
   restore(userId: string, id: string): PublicNote | null;
@@ -306,6 +313,15 @@ class SqliteNotesStore implements NotesStore {
     return rows.map((row) => publicNote(noteFromRow(row)));
   }
 
+  listAll(userId: string): PublicNote[] {
+    const rows = this.db
+      .prepare(
+        `SELECT ${NOTE_COLUMNS} FROM notes WHERE userId = ? ORDER BY updatedAt DESC`,
+      )
+      .all(userId) as Row[];
+    return rows.map((row) => publicNote(noteFromRow(row)));
+  }
+
   update(userId: string, id: string, patch: NoteWrite): PublicNote | null {
     const existing = this.ownedRow(userId, id);
     if (!existing) return null;
@@ -423,6 +439,13 @@ class MemoryNotesStore implements NotesStore {
     return [...this.notes.values()]
       .filter((note) => note.userId === query.userId && inView(note, query.view) && matchesQuery(note, q))
       .sort(sortNotes)
+      .map(publicNote);
+  }
+
+  listAll(userId: string): PublicNote[] {
+    return [...this.notes.values()]
+      .filter((note) => note.userId === userId)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .map(publicNote);
   }
 
