@@ -46,19 +46,31 @@
 
 /*
  * An open thread on a phone should be the screen, not a card sitting in page
- * padding. The shell still owns the bar and the destinations; this only
- * spends the leftover rectangle on the conversation.
+ * padding. The page is a grid with `align-content: start`, so a height on the
+ * section alone leaves extra space *below* the conversation and parks the
+ * composer under the first bubble. Flex makes the thread eat that leftover.
  */
 .page[data-narrow='true'][data-open='true'] {
+  display: flex;
+  flex-direction: column;
   gap: 0;
-  height: calc(100dvh - 8.25rem);
-  margin-block: calc(-1 * var(--space-5));
+  /*
+   * Stretch to the shell's main row when that height is definite; otherwise
+   * fall back to the small viewport minus the phone bar and destinations.
+   * Flex (not a start-packed grid) is what actually gives that height to the
+   * thread so the composer stays on the bottom.
+   */
+  height: max(100%, calc(100svh - 8rem));
+  margin-block-start: calc(-1 * var(--space-5));
   margin-inline: calc(-1 * var(--edge));
   width: calc(100% + 2 * var(--edge));
 }
 
 .page[data-narrow='true'][data-open='true'] .layout {
-  height: 100%;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
 }
 
 .pane {
