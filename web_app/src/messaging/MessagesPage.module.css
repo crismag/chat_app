@@ -48,6 +48,26 @@
   background: var(--surface);
 }
 
+.inboxBar {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-2) 0;
+}
+
+.inboxToggle {
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+}
+
+.inboxToggle[data-active='true'] {
+  background: var(--surface-2);
+}
+
 .tabs {
   display: flex;
   gap: var(--space-1);

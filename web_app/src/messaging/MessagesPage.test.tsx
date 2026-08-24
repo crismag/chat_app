@@ -15,10 +15,18 @@ const thread: MessagingThread = {
     senderUserId: 'u2',
     body: 'Hello there',
     createdAt: new Date().toISOString(),
+    editedAt: null,
+    deletedAt: null,
+    parent: null,
+    reactions: [],
   },
   unreadCount: 1,
   pendingIncomingRequestId: null,
   isContact: false,
+  otherLastReadMessageId: null,
+  mutedUntil: null,
+  archived: false,
+  pinned: false,
   updatedAt: new Date().toISOString(),
 }
 
@@ -51,7 +59,10 @@ function mockFetch() {
       return Promise.resolve({ ok: true, json: async () => ({ thread: { ...thread, id: 't1' } }) })
     }
     if (url.includes('/messaging/threads/t1/messages')) {
-      return Promise.resolve({ ok: true, json: async () => ({ items: [thread.lastMessage] }) })
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ items: [thread.lastMessage], olderCursor: null }),
+      })
     }
     if (url.includes('/messaging/threads/t1') && method === 'GET') {
       return Promise.resolve({ ok: true, json: async () => thread })
@@ -68,7 +79,11 @@ function mockFetch() {
     if (url.includes('/messaging/preferences')) {
       return Promise.resolve({
         ok: true,
-        json: async () => ({ allowNonContactRequests: true, updatedAt: thread.updatedAt }),
+        json: async () => ({
+          allowNonContactRequests: true,
+          allowSeenReceipts: true,
+          updatedAt: thread.updatedAt,
+        }),
       })
     }
     return Promise.resolve({ ok: true, json: async () => ({}) })
@@ -116,9 +131,9 @@ test('opening a chat shows the conversation', async () => {
   vi.stubGlobal('fetch', mockFetch())
   renderMessages()
   fireEvent.click(await screen.findByRole('button', { name: /Bea/ }))
-  await waitFor(() => {
-    expect(screen.getByRole('heading', { name: 'Bea' })).toBeInTheDocument()
-  })
+  expect(await screen.findByRole('heading', { name: 'Bea' })).toBeInTheDocument()
+  expect(await screen.findByRole('button', { name: 'Reply' })).toBeInTheDocument()
+  expect(screen.getByText('More')).toBeInTheDocument()
 })
 
 test('somebody can be found and written to without leaving the page', async () => {

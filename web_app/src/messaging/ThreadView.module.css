@@ -1,6 +1,6 @@
 .thread {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
   min-height: 0;
   height: 100%;
   background: var(--surface);
@@ -95,6 +95,97 @@
   align-items: end;
   padding: var(--space-3);
   border-top: 1px solid var(--line);
+}
+
+.composeNote,
+.search,
+.older,
+.seen,
+.quote,
+.reactionRow,
+.actions {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.search {
+  display: block;
+  padding: 0 var(--space-4);
+}
+
+.searchInput {
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.older,
+.actions button,
+.menuList button,
+.clearNote {
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.composeNote {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.quote {
+  padding: var(--space-1) var(--space-2);
+  border-inline-start: 2px solid var(--line);
+}
+
+.bubble[data-deleted='true'] {
+  font-style: italic;
+  color: var(--muted);
+}
+
+.reactionRow,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.seen {
+  justify-self: end;
+}
+
+.menu {
+  position: relative;
+}
+
+.menu summary {
+  min-height: var(--tap);
+  padding: 0 var(--space-2);
+  cursor: pointer;
+}
+
+.menuList {
+  position: absolute;
+  right: 0;
+  z-index: 2;
+  display: grid;
+  min-width: 10rem;
+  padding: var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
 }
 
 .input {
