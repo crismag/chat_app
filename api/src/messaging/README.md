@@ -52,3 +52,10 @@ Chats (accepted / outgoing) · Requests (inbound pending) · Contacts. Two-pane 
 ## Groups
 
 Not in this V1. Same thread model can grow a `group` kind later without renaming tables.
+
+## After V1
+
+Wave 1 conversation completeness is implemented: reply, edit, delete, reactions,
+seen receipts, mute, archive, pin, hide-for-me, in-thread search, and history
+pagination. Spec: `docs/development/messaging/v2-wave-1.spec.md`. Groups and
+C.H.A.T.-native share stay in Wave 2.

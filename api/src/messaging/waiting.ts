@@ -1,3 +1,4 @@
+import { isMuted } from './limits.ts';
 import type { MessagingStore, PersonLookup } from './store.ts';
 
 /*
@@ -44,6 +45,7 @@ export function waitingFor(
 ): Waiting {
   const messages = store
     .listChats(actorId, lookup)
+    .filter((thread) => !isMuted(thread.mutedUntil))
     .reduce((sum, thread) => sum + thread.unreadCount, 0);
   const requests = store.listIncomingRequests(actorId, lookup).length;
   return { messages, requests, total: messages + requests };

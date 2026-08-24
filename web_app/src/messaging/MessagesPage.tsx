@@ -20,12 +20,14 @@ import {
   findPeople,
   getPreferences,
   getThread,
+  isMuted,
   listChats,
   listContacts,
   listRequests,
   openConversation,
   personLabel,
   setAllowRequests,
+  setAllowSeenReceipts,
   type MessagingContact,
   type MessagingPerson,
   type MessagingRequest,
@@ -54,6 +56,8 @@ export function MessagesPage() {
   const [contacts, setContacts] = useState<MessagingContact[]>([])
   const [thread, setThread] = useState<MessagingThread | null>(null)
   const [allowRequests, setAllow] = useState(true)
+  const [allowSeen, setAllowSeen] = useState(true)
+  const [showArchived, setShowArchived] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -67,7 +71,7 @@ export function MessagesPage() {
     setError(null)
     try {
       const [chatList, requestList, contactList, prefs] = await Promise.all([
-        listChats(),
+        listChats(showArchived ? 'archived' : 'chats'),
         listRequests(),
         listContacts(),
         getPreferences(),
@@ -76,12 +80,13 @@ export function MessagesPage() {
       setRequests(requestList.items)
       setContacts(contactList.items)
       setAllow(prefs.allowNonContactRequests)
+      setAllowSeen(prefs.allowSeenReceipts)
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'Messages could not be loaded just now.')
     } finally {
       setLoading(false)
     }
-  }, [registered])
+  }, [registered, showArchived])
 
   useEffect(() => {
     void loadLists()
@@ -170,11 +175,34 @@ export function MessagesPage() {
                   Loading messages…
                 </p>
               ) : tab === 'chats' ? (
-                chats.length === 0 ? (
+                <>
+                  <div className={styles.inboxBar}>
+                    <button
+                      type="button"
+                      className={styles.inboxToggle}
+                      data-active={!showArchived ? 'true' : 'false'}
+                      onClick={() => setShowArchived(false)}
+                    >
+                      Inbox
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.inboxToggle}
+                      data-active={showArchived ? 'true' : 'false'}
+                      onClick={() => setShowArchived(true)}
+                    >
+                      Archived
+                    </button>
+                  </div>
+                {chats.length === 0 ? (
                   <div className={styles.empty}>
-                    <h2 className={styles.emptyHeading}>No conversations yet</h2>
+                    <h2 className={styles.emptyHeading}>
+                      {showArchived ? 'Nothing archived' : 'No conversations yet'}
+                    </h2>
                     <p className={styles.emptyBody}>
-                      Find somebody above, or message them from their profile. Their reply appears here once they accept.
+                      {showArchived
+                        ? 'Conversations you archive wait here until someone writes again.'
+                        : 'Find somebody above, or message them from their profile. Their reply appears here once they accept.'}
                     </p>
                   </div>
                 ) : (
@@ -194,15 +222,24 @@ export function MessagesPage() {
                             size="small"
                           />
                           <span className={styles.rowText}>
-                            <span className={styles.rowName}>{personLabel(item.other)}</span>
-                            <span className={styles.preview}>{item.lastMessage?.body ?? 'No messages yet'}</span>
+                            <span className={styles.rowName}>
+                              {item.pinned ? 'Pinned · ' : ''}
+                              {isMuted(item.mutedUntil) ? 'Muted · ' : ''}
+                              {personLabel(item.other)}
+                            </span>
+                            <span className={styles.preview}>
+                              {item.lastMessage?.deletedAt
+                                ? 'Message removed'
+                                : item.lastMessage?.body ?? 'No messages yet'}
+                            </span>
                           </span>
                           {item.unreadCount > 0 ? <span className={styles.unread}>{item.unreadCount}</span> : null}
                         </button>
                       </li>
                     ))}
                   </ul>
-                )
+                )}
+                </>
               ) : tab === 'requests' ? (
                 requests.length === 0 ? (
                   <div className={styles.empty}>
@@ -271,6 +308,18 @@ export function MessagesPage() {
                     />
                     Allow message requests from people who are not contacts
                   </label>
+                  <label className={styles.pref}>
+                    <input
+                      type="checkbox"
+                      checked={allowSeen}
+                      onChange={(event) => {
+                        const next = event.target.checked
+                        setAllowSeen(next)
+                        void setAllowSeenReceipts(next)
+                      }}
+                    />
+                    Send and receive seen receipts
+                  </label>
                   {contacts.length === 0 ? (
                     <div className={styles.empty}>
                       <h2 className={styles.emptyHeading}>No contacts yet</h2>
@@ -311,7 +360,11 @@ export function MessagesPage() {
               onBack={narrow ? () => navigate('/messages') : undefined}
               onUpdated={(next) => {
                 setThread(next)
-                setChats((current) => current.map((item) => (item.id === next.id ? next : item)))
+                void loadLists()
+              }}
+              onHidden={() => {
+                setThread(null)
+                void loadLists()
               }}
             />
           ) : showThreadPane && !threadId ? (

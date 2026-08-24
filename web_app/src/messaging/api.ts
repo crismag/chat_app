@@ -7,12 +7,18 @@ export type MessagingPerson = {
   avatarUrl: string | null
 }
 
+export const REACTION_EMOJIS = ['❤', '🙏', '👍', '✅'] as const
+
 export type MessagingMessage = {
   id: string
   threadId: string
   senderUserId: string
   body: string
   createdAt: string
+  editedAt: string | null
+  deletedAt: string | null
+  parent: { id: string; senderUserId: string; body: string } | null
+  reactions: { emoji: string; count: number; me: boolean }[]
 }
 
 export type MessagingThread = {
@@ -24,6 +30,10 @@ export type MessagingThread = {
   pendingIncomingRequestId: string | null
   /** Whether the other person is in *my* contacts. Never whether I am in theirs. */
   isContact: boolean
+  otherLastReadMessageId: string | null
+  mutedUntil: string | null
+  archived: boolean
+  pinned: boolean
   updatedAt: string
 }
 
@@ -43,27 +53,87 @@ export type MessagingContact = {
 
 export type MessagingPreferences = {
   allowNonContactRequests: boolean
+  allowSeenReceipts: boolean
   updatedAt: string
 }
 
-export function listChats() {
-  return api<{ items: MessagingThread[] }>('/messaging/threads')
+export function listChats(view: 'chats' | 'archived' = 'chats') {
+  const query = view === 'archived' ? '?view=archived' : ''
+  return api<{ items: MessagingThread[] }>(`/messaging/threads${query}`)
 }
 
 export function getThread(threadId: string) {
   return api<MessagingThread>(`/messaging/threads/${threadId}`)
 }
 
-export function listMessages(threadId: string, after?: string) {
-  const query = after ? `?after=${encodeURIComponent(after)}` : ''
-  return api<{ items: MessagingMessage[] }>(`/messaging/threads/${threadId}/messages${query}`)
+export function listMessages(threadId: string, opts?: { after?: string; before?: string; limit?: number }) {
+  const params = new URLSearchParams()
+  if (opts?.after) params.set('after', opts.after)
+  if (opts?.before) params.set('before', opts.before)
+  if (opts?.limit) params.set('limit', String(opts.limit))
+  const query = params.size ? `?${params}` : ''
+  return api<{ items: MessagingMessage[]; olderCursor: string | null }>(
+    `/messaging/threads/${threadId}/messages${query}`,
+  )
 }
 
-export function sendMessage(threadId: string, body: string) {
+export function sendMessage(threadId: string, body: string, parentMessageId?: string) {
   return api<MessagingMessage>(`/messaging/threads/${threadId}/messages`, {
     method: 'POST',
+    body: JSON.stringify({ body, parentMessageId }),
+  })
+}
+
+export function editMessage(threadId: string, messageId: string, body: string) {
+  return api<MessagingMessage>(`/messaging/threads/${threadId}/messages/${messageId}`, {
+    method: 'PATCH',
     body: JSON.stringify({ body }),
   })
+}
+
+export function deleteMessage(threadId: string, messageId: string, scope: 'me' | 'everyone') {
+  return api<{ ok: true }>(`/messaging/threads/${threadId}/messages/${messageId}/delete`, {
+    method: 'POST',
+    body: JSON.stringify({ scope }),
+  })
+}
+
+export function setReaction(threadId: string, messageId: string, emoji: string | null) {
+  return api<MessagingMessage>(`/messaging/threads/${threadId}/messages/${messageId}/reaction`, {
+    method: 'PUT',
+    body: JSON.stringify({ emoji }),
+  })
+}
+
+export function searchThread(threadId: string, query: string) {
+  return api<{ items: MessagingMessage[] }>(
+    `/messaging/threads/${threadId}/search?q=${encodeURIComponent(query)}`,
+  )
+}
+
+export function muteThread(threadId: string, until: string | null) {
+  return api<MessagingThread>(`/messaging/threads/${threadId}/mute`, {
+    method: 'POST',
+    body: JSON.stringify({ until }),
+  })
+}
+
+export function archiveThread(threadId: string, archived: boolean) {
+  return api<MessagingThread>(`/messaging/threads/${threadId}/archive`, {
+    method: 'POST',
+    body: JSON.stringify({ archived }),
+  })
+}
+
+export function pinThread(threadId: string, pinned: boolean) {
+  return api<MessagingThread>(`/messaging/threads/${threadId}/pin`, {
+    method: 'POST',
+    body: JSON.stringify({ pinned }),
+  })
+}
+
+export function hideThread(threadId: string) {
+  return api<{ ok: true }>(`/messaging/threads/${threadId}/hide`, { method: 'POST' })
 }
 
 export function markRead(threadId: string, lastReadMessageId: string) {
@@ -127,6 +197,23 @@ export function setAllowRequests(allowNonContactRequests: boolean) {
     method: 'PATCH',
     body: JSON.stringify({ allowNonContactRequests }),
   })
+}
+
+export function setAllowSeenReceipts(allowSeenReceipts: boolean) {
+  return api<MessagingPreferences>('/messaging/preferences', {
+    method: 'PATCH',
+    body: JSON.stringify({ allowSeenReceipts }),
+  })
+}
+
+export const MUTE_UNTIL_ON = '9999-01-01T00:00:00.000Z'
+
+export function isMuted(mutedUntil: string | null): boolean {
+  return Boolean(mutedUntil && Date.parse(mutedUntil) > Date.now())
+}
+
+export function canChangeMessage(createdAt: string): boolean {
+  return Date.now() - Date.parse(createdAt) <= 15 * 60 * 1000
 }
 
 export function personLabel(person: MessagingPerson) {

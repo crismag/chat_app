@@ -18,6 +18,7 @@ It exists so implementation work, AI-assisted development, code generation, and 
 9. [`CREATE_STUDIO_INTEGRATION.md`](CREATE_STUDIO_INTEGRATION.md) — Phase 3 host mapping, persistence, package, export, and attribution boundaries.
 10. [`TAGS.md`](TAGS.md) — the tag registry, suggestions and moderation: how a tag is folded, why the registry keeps two counts that are never the same number, how suggestions are ranked, and what the banned-word list does and does not catch.
 11. [`MOBILE.md`](MOBILE.md) — Capacitor hosts, live reload, packaged API origin, share, and deep links.
+12. [`messaging/README.md`](messaging/README.md) — private user messaging. V1 is live. Next features are in [`messaging/V2_FEATURE_PLAN.md`](messaging/V2_FEATURE_PLAN.md).
 
 Alongside these, [`../examples/REAL_CHAT_SAMPLES.md`](../examples/REAL_CHAT_SAMPLES.md) transcribes roughly thirty reflections people actually wrote. It is evidence, not intent, and it is why the C section holds the passage.
 

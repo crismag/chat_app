@@ -1,15 +1,22 @@
 # Simple Messaging Development Pack
 
-This package defines the first deliberately small registered-user messaging feature for C.H.A.T. It is written for Cursor/AI-assisted implementation while other agents may be modifying Create Studio, profile, reflections, authentication, or community code concurrently.
+This package defines private registered-user messaging for C.H.A.T. It is written for Cursor/AI-assisted implementation while other agents may be modifying Create Studio, profile, reflections, authentication, or community code concurrently.
+
+## Status
+
+**V1 is complete and tested.** Direct text, requests, directional contacts, unread, polling, people search, and profile intake are live. Groups were designed here and deferred.
+
+**V2 Wave 1 is implemented** (reply, edit, delete, reactions, seen, mute, archive, pin, hide-for-me, search, pagination). Evaluation and later waves: [`V2_FEATURE_PLAN.md`](V2_FEATURE_PLAN.md). Wave 1 spec: [`v2-wave-1.spec.md`](v2-wave-1.spec.md).
 
 ## Read first
 
 Before implementation, read:
 
 1. `../DEVELOPMENT_INSTRUCTIONS.md`
-2. `IMPLEMENTATION_PLAN.md`
+2. `IMPLEMENTATION_PLAN.md` (V1 — historical contract)
 3. `DATA_MODEL_AND_RULES.md`
 4. `CURSOR_WORKFLOW.md`
+5. `V2_FEATURE_PLAN.md` and `v2-wave-1.spec.md` when changing messaging after V1
 
 The repository development rules remain authoritative. This package narrows those rules for messaging; it does not replace them.
 
@@ -26,10 +33,12 @@ V1 includes:
 - accepted contacts;
 - message requests from non-contacts, subject to recipient settings;
 - accept, decline, and block;
-- simple private group chats;
+- people search;
 - polling for new messages.
 
-V1 explicitly excludes attachments, voice/video, calls, typing indicators, presence, reactions, forwarding, disappearing messages, WebSockets, push notifications, phone-contact synchronization, and end-to-end-encryption claims.
+V1 deferred simple private group chats. They remain a Wave 2 item.
+
+V1 explicitly excludes attachments, voice/video, calls, typing indicators, presence, reactions, forwarding, disappearing messages, WebSockets, push notifications, phone-contact synchronization, and end-to-end-encryption claims. Wave 1 adds some of those conversation verbs; it does not add media, groups, or a new transport.
 
 ## Concurrent-work isolation is a primary requirement
 
@@ -89,15 +98,8 @@ Do not add an event bus, queue, realtime service, notification pipeline, reposit
 
 ## Implementation sequence
 
-Cursor should work in slices and stop after each slice for review:
+V1 slices 1–6 and the profile/nav seams are done. Slice 7 (groups) was deferred; it is Wave 2 in [`V2_FEATURE_PLAN.md`](V2_FEATURE_PLAN.md).
 
-1. inspection and boundary report — no code;
-2. isolated module skeleton and schema/store seam;
-3. direct threads;
-4. send/read/unread/polling;
-5. contacts, requests, blocking, and messaging preference check;
-6. minimal messaging UI;
-7. simple group chat;
-8. tiny cross-feature integration points only after the core is stable.
+New messaging work after V1 starts from that plan and [`v2-wave-1.spec.md`](v2-wave-1.spec.md), still stopping after each slice for review.
 
-See `IMPLEMENTATION_PLAN.md` for acceptance criteria and `CURSOR_WORKFLOW.md` for the exact agent workflow.
+See `IMPLEMENTATION_PLAN.md` for the original V1 acceptance criteria and `CURSOR_WORKFLOW.md` for isolation rules that still apply.

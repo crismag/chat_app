@@ -14,9 +14,15 @@ import type { DatabaseSync } from 'node:sqlite';
 import {
   DECLINE_COOLDOWN_MS,
   MEMBER_ROLES,
+  MESSAGE_PAGE_DEFAULT,
+  PIN_LIMIT,
+  REACTION_EMOJIS,
   REQUEST_STATUS,
+  SEARCH_LIMIT,
   THREAD_KINDS,
+  changeWindowOpen,
   directPairKey,
+  truncateParentBody,
   type RequestStatus,
 } from './limits.ts';
 
@@ -27,13 +33,36 @@ export type MessagingPerson = {
   avatarUrl: string | null;
 };
 
+export type MessageParent = {
+  id: string;
+  senderUserId: string;
+  body: string;
+};
+
+export type MessageReaction = {
+  emoji: string;
+  count: number;
+  me: boolean;
+};
+
 export type PublicMessage = {
   id: string;
   threadId: string;
   senderUserId: string;
   body: string;
   createdAt: string;
+  editedAt: string | null;
+  deletedAt: string | null;
+  parent: MessageParent | null;
+  reactions: MessageReaction[];
 };
+
+export type MessageList = {
+  items: PublicMessage[];
+  olderCursor: string | null;
+};
+
+export type ThreadListView = 'chats' | 'archived';
 
 export type PublicThread = {
   id: string;
@@ -49,6 +78,10 @@ export type PublicThread = {
    * adds or removes them cannot disagree with the thread it is drawn on.
    */
   isContact: boolean;
+  otherLastReadMessageId: string | null;
+  mutedUntil: string | null;
+  archived: boolean;
+  pinned: boolean;
   updatedAt: string;
 };
 
@@ -68,6 +101,7 @@ export type PublicContact = {
 
 export type MessagingPreferences = {
   allowNonContactRequests: boolean;
+  allowSeenReceipts: boolean;
   updatedAt: string;
 };
 
@@ -86,9 +120,22 @@ type StoredMember = {
   role: string;
   joinedAt: string;
   lastReadMessageId: string | null;
+  mutedUntil: string | null;
+  archivedAt: string | null;
+  pinnedAt: string | null;
+  hiddenAt: string | null;
 };
 
-type StoredMessage = PublicMessage;
+type StoredMessage = {
+  id: string;
+  threadId: string;
+  senderUserId: string;
+  body: string;
+  createdAt: string;
+  parentMessageId: string | null;
+  editedAt: string | null;
+  deletedAt: string | null;
+};
 
 type StoredRequest = {
   id: string;
@@ -107,6 +154,8 @@ type MemoryState = {
   contacts: { userId: string; contactUserId: string; createdAt: string }[];
   requests: StoredRequest[];
   preferences: Map<string, MessagingPreferences>;
+  hides: { userId: string; messageId: string; createdAt: string }[];
+  reactions: { messageId: string; userId: string; emoji: string; createdAt: string }[];
 };
 
 export type PersonLookup = (userId: string) => MessagingPerson;
@@ -124,10 +173,52 @@ export interface MessagingStore {
     otherId: string,
     lookup: PersonLookup,
   ): PublicThread;
-  listChats(actorId: string, lookup: PersonLookup): PublicThread[];
+  listChats(actorId: string, lookup: PersonLookup, view?: ThreadListView): PublicThread[];
   getThread(actorId: string, threadId: string, lookup: PersonLookup): PublicThread | null;
-  listMessages(actorId: string, threadId: string, afterId?: string): PublicMessage[] | null;
-  sendMessage(actorId: string, threadId: string, body: string): PublicMessage | null | 'forbidden';
+  listMessages(
+    actorId: string,
+    threadId: string,
+    opts?: { after?: string; before?: string; limit?: number },
+  ): MessageList | null;
+  sendMessage(
+    actorId: string,
+    threadId: string,
+    body: string,
+    parentMessageId?: string,
+  ): PublicMessage | null | 'forbidden' | 'bad_parent';
+  editMessage(
+    actorId: string,
+    threadId: string,
+    messageId: string,
+    body: string,
+  ): PublicMessage | null | 'forbidden' | 'closed';
+  deleteMessage(
+    actorId: string,
+    threadId: string,
+    messageId: string,
+    scope: 'me' | 'everyone',
+  ): true | null | 'forbidden' | 'closed';
+  setReaction(
+    actorId: string,
+    threadId: string,
+    messageId: string,
+    emoji: string | null,
+  ): PublicMessage | null | 'forbidden' | 'bad_emoji';
+  searchMessages(actorId: string, threadId: string, query: string): PublicMessage[] | null;
+  setMuted(actorId: string, threadId: string, until: string | null, lookup: PersonLookup): PublicThread | null;
+  setArchived(
+    actorId: string,
+    threadId: string,
+    archived: boolean,
+    lookup: PersonLookup,
+  ): PublicThread | null;
+  setPinned(
+    actorId: string,
+    threadId: string,
+    pinned: boolean,
+    lookup: PersonLookup,
+  ): PublicThread | null | 'pin_limit';
+  hideThread(actorId: string, threadId: string): boolean;
   markRead(actorId: string, threadId: string, messageId: string): boolean;
   /**
    * Is `b` in `a`'s contacts?
@@ -157,6 +248,7 @@ export interface MessagingStore {
   declineRequest(actorId: string, requestId: string): boolean;
   preferences(userId: string): MessagingPreferences;
   setAllowNonContactRequests(userId: string, allow: boolean): MessagingPreferences;
+  setAllowSeenReceipts(userId: string, allow: boolean): MessagingPreferences;
   otherMemberId(threadId: string, actorId: string): string | null;
   isMember(threadId: string, userId: string): boolean;
 }
@@ -166,7 +258,47 @@ function nowIso(): string {
 }
 
 function defaultPreferences(): MessagingPreferences {
-  return { allowNonContactRequests: true, updatedAt: nowIso() };
+  return { allowNonContactRequests: true, allowSeenReceipts: true, updatedAt: nowIso() };
+}
+
+function addColumn(db: DatabaseSync, table: string, column: string, type: string): void {
+  const existing = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (existing.some((row) => row.name === column)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+}
+
+function pageVisible(
+  rows: StoredMessage[],
+  opts: { after?: string; before?: string; limit: number },
+): StoredMessage[] {
+  if (opts.after) return after(rows, opts.after);
+  const end = opts.before ? rows.findIndex((row) => row.id === opts.before) : rows.length;
+  const head = end === -1 ? rows : rows.slice(0, end);
+  return head.slice(-opts.limit);
+}
+
+function olderCursorFor(all: StoredMessage[], page: StoredMessage[]): string | null {
+  const first = page[0];
+  if (!first || !all[0] || first.id === all[0].id) return null;
+  return first.id;
+}
+
+function summariseReactions(
+  rows: { emoji: string; userId: string }[],
+  actorId: string,
+): MessageReaction[] {
+  const counts = new Map<string, { count: number; me: boolean }>();
+  for (const row of rows) {
+    const current = counts.get(row.emoji) ?? { count: 0, me: false };
+    current.count += 1;
+    if (row.userId === actorId) current.me = true;
+    counts.set(row.emoji, current);
+  }
+  return REACTION_EMOJIS.filter((emoji) => counts.has(emoji)).map((emoji) => ({
+    emoji,
+    count: counts.get(emoji)!.count,
+    me: counts.get(emoji)!.me,
+  }));
 }
 
 /**
@@ -244,7 +376,28 @@ class SqliteMessagingStore implements MessagingStore {
         allowNonContactRequests INTEGER NOT NULL DEFAULT 1,
         updatedAt TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS messaging_message_hides (
+        userId TEXT NOT NULL,
+        messageId TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        PRIMARY KEY (userId, messageId)
+      );
+      CREATE TABLE IF NOT EXISTS messaging_reactions (
+        messageId TEXT NOT NULL,
+        userId TEXT NOT NULL,
+        emoji TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        PRIMARY KEY (messageId, userId)
+      );
     `);
+    addColumn(this.db, 'messaging_messages', 'parentMessageId', 'TEXT');
+    addColumn(this.db, 'messaging_messages', 'editedAt', 'TEXT');
+    addColumn(this.db, 'messaging_messages', 'deletedAt', 'TEXT');
+    addColumn(this.db, 'messaging_thread_members', 'mutedUntil', 'TEXT');
+    addColumn(this.db, 'messaging_thread_members', 'archivedAt', 'TEXT');
+    addColumn(this.db, 'messaging_thread_members', 'pinnedAt', 'TEXT');
+    addColumn(this.db, 'messaging_thread_members', 'hiddenAt', 'TEXT');
+    addColumn(this.db, 'messaging_preferences', 'allowSeenReceipts', 'INTEGER NOT NULL DEFAULT 1');
   }
 
   /*
@@ -265,6 +418,7 @@ class SqliteMessagingStore implements MessagingStore {
       .prepare('SELECT * FROM messaging_threads WHERE directPairKey = ?')
       .get(key) as Record<string, unknown> | undefined;
     if (existing) {
+      this.revealFor(String(existing['id']), actorId);
       const thread = this.publicThread(actorId, String(existing['id']), lookup);
       if (thread) return thread;
     }
@@ -305,13 +459,15 @@ class SqliteMessagingStore implements MessagingStore {
     return this.publicThread(actorId, id, lookup)!;
   }
 
-  listChats(actorId: string, lookup: PersonLookup): PublicThread[] {
+  listChats(actorId: string, lookup: PersonLookup, view: ThreadListView = 'chats'): PublicThread[] {
     const rows = this.db
       .prepare(
         `SELECT t.id FROM messaging_threads t
           JOIN messaging_thread_members m ON m.threadId = t.id
          WHERE m.userId = ?
-         ORDER BY t.updatedAt DESC`,
+           AND m.hiddenAt IS NULL
+           AND ${view === 'archived' ? 'm.archivedAt IS NOT NULL' : 'm.archivedAt IS NULL'}
+         ORDER BY CASE WHEN m.pinnedAt IS NULL THEN 1 ELSE 0 END, t.updatedAt DESC`,
       )
       .all(actorId) as { id: string }[];
     const chats: PublicThread[] = [];
@@ -328,22 +484,31 @@ class SqliteMessagingStore implements MessagingStore {
     return this.publicThread(actorId, threadId, lookup);
   }
 
-  listMessages(actorId: string, threadId: string, afterId?: string): PublicMessage[] | null {
+  listMessages(
+    actorId: string,
+    threadId: string,
+    opts: { after?: string; before?: string; limit?: number } = {},
+  ): MessageList | null {
     if (!this.isMember(threadId, actorId)) return null;
-    const rows = this.db
-      .prepare(
-        `SELECT id, threadId, senderUserId, body, createdAt
-           FROM messaging_messages WHERE threadId = ?
-          ORDER BY rowid ASC`,
-      )
-      .all(threadId) as StoredMessage[];
-    return after(rows, afterId);
+    const rows = this.visibleRows(actorId, threadId);
+    const limit = opts.limit ?? MESSAGE_PAGE_DEFAULT;
+    const page = pageVisible(rows, { after: opts.after, before: opts.before, limit });
+    return {
+      items: page.map((row) => this.publicMessage(actorId, row)),
+      olderCursor: opts.after ? null : olderCursorFor(rows, page),
+    };
   }
 
-  sendMessage(actorId: string, threadId: string, body: string): PublicMessage | null | 'forbidden' {
+  sendMessage(
+    actorId: string,
+    threadId: string,
+    body: string,
+    parentMessageId?: string,
+  ): PublicMessage | null | 'forbidden' | 'bad_parent' {
     if (!this.isMember(threadId, actorId)) return null;
     const incoming = this.pendingIncoming(actorId, threadId);
     if (incoming) return 'forbidden';
+    if (parentMessageId && !this.canQuote(actorId, threadId, parentMessageId)) return 'bad_parent';
     const at = nowIso();
     const message: StoredMessage = {
       id: randomUUID(),
@@ -351,15 +516,20 @@ class SqliteMessagingStore implements MessagingStore {
       senderUserId: actorId,
       body,
       createdAt: at,
+      parentMessageId: parentMessageId ?? null,
+      editedAt: null,
+      deletedAt: null,
     };
     this.db
       .prepare(
-        `INSERT INTO messaging_messages (id, threadId, senderUserId, body, createdAt)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO messaging_messages
+           (id, threadId, senderUserId, body, createdAt, parentMessageId, editedAt, deletedAt)
+         VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)`,
       )
-      .run(message.id, threadId, actorId, body, at);
+      .run(message.id, threadId, actorId, body, at, message.parentMessageId);
     this.db.prepare('UPDATE messaging_threads SET updatedAt = ? WHERE id = ?').run(at, threadId);
-    return message;
+    this.wakeOthers(threadId, actorId);
+    return this.publicMessage(actorId, message);
   }
 
   markRead(actorId: string, threadId: string, messageId: string): boolean {
@@ -374,6 +544,145 @@ class SqliteMessagingStore implements MessagingStore {
           WHERE threadId = ? AND userId = ?`,
       )
       .run(messageId, threadId, actorId);
+    return true;
+  }
+
+  editMessage(
+    actorId: string,
+    threadId: string,
+    messageId: string,
+    body: string,
+  ): PublicMessage | null | 'forbidden' | 'closed' {
+    if (!this.isMember(threadId, actorId)) return null;
+    if (this.pendingIncoming(actorId, threadId)) return 'forbidden';
+    const row = this.storedMessage(threadId, messageId);
+    if (!row || this.isHidden(actorId, messageId)) return null;
+    if (row.senderUserId !== actorId || row.deletedAt) return 'forbidden';
+    if (!changeWindowOpen(row.createdAt)) return 'closed';
+    const at = nowIso();
+    this.db
+      .prepare('UPDATE messaging_messages SET body = ?, editedAt = ? WHERE id = ?')
+      .run(body, at, messageId);
+    return this.publicMessage(actorId, { ...row, body, editedAt: at });
+  }
+
+  deleteMessage(
+    actorId: string,
+    threadId: string,
+    messageId: string,
+    scope: 'me' | 'everyone',
+  ): true | null | 'forbidden' | 'closed' {
+    if (!this.isMember(threadId, actorId)) return null;
+    if (this.pendingIncoming(actorId, threadId)) return 'forbidden';
+    const row = this.storedMessage(threadId, messageId);
+    if (!row || this.isHidden(actorId, messageId)) return null;
+    if (scope === 'me') {
+      this.db
+        .prepare(
+          `INSERT INTO messaging_message_hides (userId, messageId, createdAt)
+           VALUES (?, ?, ?) ON CONFLICT(userId, messageId) DO NOTHING`,
+        )
+        .run(actorId, messageId, nowIso());
+      return true;
+    }
+    if (row.senderUserId !== actorId || row.deletedAt) return 'forbidden';
+    if (!changeWindowOpen(row.createdAt)) return 'closed';
+    this.db
+      .prepare('UPDATE messaging_messages SET body = ?, deletedAt = ? WHERE id = ?')
+      .run('', nowIso(), messageId);
+    return true;
+  }
+
+  setReaction(
+    actorId: string,
+    threadId: string,
+    messageId: string,
+    emoji: string | null,
+  ): PublicMessage | null | 'forbidden' | 'bad_emoji' {
+    if (!this.isMember(threadId, actorId)) return null;
+    if (this.pendingIncoming(actorId, threadId)) return 'forbidden';
+    if (emoji && !REACTION_EMOJIS.includes(emoji as (typeof REACTION_EMOJIS)[number])) {
+      return 'bad_emoji';
+    }
+    const row = this.storedMessage(threadId, messageId);
+    if (!row || this.isHidden(actorId, messageId) || row.deletedAt) return null;
+    const existing = this.db
+      .prepare('SELECT emoji FROM messaging_reactions WHERE messageId = ? AND userId = ?')
+      .get(messageId, actorId) as { emoji: string } | undefined;
+    if (!emoji || existing?.emoji === emoji) {
+      this.db
+        .prepare('DELETE FROM messaging_reactions WHERE messageId = ? AND userId = ?')
+        .run(messageId, actorId);
+    } else {
+      this.db
+        .prepare(
+          `INSERT INTO messaging_reactions (messageId, userId, emoji, createdAt)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(messageId, userId) DO UPDATE SET emoji = excluded.emoji, createdAt = excluded.createdAt`,
+        )
+        .run(messageId, actorId, emoji, nowIso());
+    }
+    return this.publicMessage(actorId, row);
+  }
+
+  searchMessages(actorId: string, threadId: string, query: string): PublicMessage[] | null {
+    if (!this.isMember(threadId, actorId)) return null;
+    const needle = query.trim();
+    if (needle.length < 2) return [];
+    const rows = this.visibleRows(actorId, threadId)
+      .filter((row) => !row.deletedAt && row.body.toLowerCase().includes(needle.toLowerCase()))
+      .reverse()
+      .slice(0, SEARCH_LIMIT);
+    return rows.map((row) => this.publicMessage(actorId, row));
+  }
+
+  setMuted(
+    actorId: string,
+    threadId: string,
+    until: string | null,
+    lookup: PersonLookup,
+  ): PublicThread | null {
+    if (!this.isMember(threadId, actorId)) return null;
+    this.db
+      .prepare('UPDATE messaging_thread_members SET mutedUntil = ? WHERE threadId = ? AND userId = ?')
+      .run(until, threadId, actorId);
+    return this.publicThread(actorId, threadId, lookup);
+  }
+
+  setArchived(
+    actorId: string,
+    threadId: string,
+    archived: boolean,
+    lookup: PersonLookup,
+  ): PublicThread | null {
+    if (!this.isMember(threadId, actorId)) return null;
+    this.db
+      .prepare('UPDATE messaging_thread_members SET archivedAt = ? WHERE threadId = ? AND userId = ?')
+      .run(archived ? nowIso() : null, threadId, actorId);
+    return this.publicThread(actorId, threadId, lookup);
+  }
+
+  setPinned(
+    actorId: string,
+    threadId: string,
+    pinned: boolean,
+    lookup: PersonLookup,
+  ): PublicThread | null | 'pin_limit' {
+    if (!this.isMember(threadId, actorId)) return null;
+    if (pinned && this.pinCount(actorId, threadId) >= PIN_LIMIT) return 'pin_limit';
+    this.db
+      .prepare('UPDATE messaging_thread_members SET pinnedAt = ? WHERE threadId = ? AND userId = ?')
+      .run(pinned ? nowIso() : null, threadId, actorId);
+    return this.publicThread(actorId, threadId, lookup);
+  }
+
+  hideThread(actorId: string, threadId: string): boolean {
+    if (!this.isMember(threadId, actorId)) return false;
+    this.db
+      .prepare(
+        'UPDATE messaging_thread_members SET hiddenAt = ?, archivedAt = NULL, pinnedAt = NULL WHERE threadId = ? AND userId = ?',
+      )
+      .run(nowIso(), threadId, actorId);
     return true;
   }
 
@@ -521,26 +830,26 @@ class SqliteMessagingStore implements MessagingStore {
 
   preferences(userId: string): MessagingPreferences {
     const row = this.db
-      .prepare('SELECT allowNonContactRequests, updatedAt FROM messaging_preferences WHERE userId = ?')
-      .get(userId) as { allowNonContactRequests: number; updatedAt: string } | undefined;
+      .prepare(
+        'SELECT allowNonContactRequests, allowSeenReceipts, updatedAt FROM messaging_preferences WHERE userId = ?',
+      )
+      .get(userId) as
+      | { allowNonContactRequests: number; allowSeenReceipts: number; updatedAt: string }
+      | undefined;
     if (!row) return defaultPreferences();
     return {
       allowNonContactRequests: Number(row.allowNonContactRequests) === 1,
+      allowSeenReceipts: Number(row.allowSeenReceipts) === 1,
       updatedAt: row.updatedAt,
     };
   }
 
   setAllowNonContactRequests(userId: string, allow: boolean): MessagingPreferences {
-    const at = nowIso();
-    this.db
-      .prepare(
-        `INSERT INTO messaging_preferences (userId, allowNonContactRequests, updatedAt)
-         VALUES (?, ?, ?)
-         ON CONFLICT(userId) DO UPDATE SET allowNonContactRequests = excluded.allowNonContactRequests,
-           updatedAt = excluded.updatedAt`,
-      )
-      .run(userId, allow ? 1 : 0, at);
-    return { allowNonContactRequests: allow, updatedAt: at };
+    return this.patchPreferences(userId, { allowNonContactRequests: allow });
+  }
+
+  setAllowSeenReceipts(userId: string, allow: boolean): MessagingPreferences {
+    return this.patchPreferences(userId, { allowSeenReceipts: allow });
   }
 
   otherMemberId(threadId: string, actorId: string): string | null {
@@ -581,14 +890,32 @@ class SqliteMessagingStore implements MessagingStore {
       .run(userId, contactUserId, at);
   }
 
-  private lastMessage(threadId: string): StoredMessage | null {
-    const row = this.db
+  private lastMessage(threadId: string, actorId?: string): StoredMessage | null {
+    const rows = actorId ? this.visibleRows(actorId, threadId) : this.threadRows(threadId);
+    return rows.at(-1) ?? null;
+  }
+
+  private patchPreferences(
+    userId: string,
+    patch: { allowNonContactRequests?: boolean; allowSeenReceipts?: boolean },
+  ): MessagingPreferences {
+    const current = this.preferences(userId);
+    const next: MessagingPreferences = {
+      allowNonContactRequests: patch.allowNonContactRequests ?? current.allowNonContactRequests,
+      allowSeenReceipts: patch.allowSeenReceipts ?? current.allowSeenReceipts,
+      updatedAt: nowIso(),
+    };
+    this.db
       .prepare(
-        `SELECT id, threadId, senderUserId, body, createdAt FROM messaging_messages
-          WHERE threadId = ? ORDER BY createdAt DESC, id DESC LIMIT 1`,
+        `INSERT INTO messaging_preferences (userId, allowNonContactRequests, allowSeenReceipts, updatedAt)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(userId) DO UPDATE SET
+           allowNonContactRequests = excluded.allowNonContactRequests,
+           allowSeenReceipts = excluded.allowSeenReceipts,
+           updatedAt = excluded.updatedAt`,
       )
-      .get(threadId) as StoredMessage | undefined;
-    return row ?? null;
+      .run(userId, next.allowNonContactRequests ? 1 : 0, next.allowSeenReceipts ? 1 : 0, next.updatedAt);
+    return next;
   }
 
   private pendingIncoming(actorId: string, threadId: string): StoredRequest | null {
@@ -609,22 +936,32 @@ class SqliteMessagingStore implements MessagingStore {
     if (!row) return null;
     const otherId = this.otherMemberId(threadId, actorId);
     if (!otherId) return null;
-    const last = this.lastMessage(threadId);
+    const last = this.lastMessage(threadId, actorId);
     const membership = this.db
       .prepare(
-        'SELECT lastReadMessageId FROM messaging_thread_members WHERE threadId = ? AND userId = ?',
+        `SELECT lastReadMessageId, mutedUntil, archivedAt, pinnedAt
+           FROM messaging_thread_members WHERE threadId = ? AND userId = ?`,
       )
-      .get(threadId, actorId) as { lastReadMessageId: string | null };
+      .get(threadId, actorId) as {
+      lastReadMessageId: string | null;
+      mutedUntil: string | null;
+      archivedAt: string | null;
+      pinnedAt: string | null;
+    };
     const unreadCount = this.unreadCount(threadId, actorId, membership.lastReadMessageId);
     const incoming = this.pendingIncoming(actorId, threadId);
     return {
       id: String(row['id']),
       kind: 'direct',
       other: lookup(otherId),
-      lastMessage: last,
+      lastMessage: last ? this.publicMessage(actorId, last) : null,
       unreadCount,
       pendingIncomingRequestId: incoming?.id ?? null,
       isContact: this.areContacts(actorId, otherId),
+      otherLastReadMessageId: this.seenCursor(actorId, threadId, otherId),
+      mutedUntil: membership.mutedUntil,
+      archived: Boolean(membership.archivedAt),
+      pinned: Boolean(membership.pinnedAt),
       updatedAt: String(row['updatedAt']),
     };
   }
@@ -637,16 +974,131 @@ class SqliteMessagingStore implements MessagingStore {
    * not.
    */
   private unreadCount(threadId: string, actorId: string, lastReadMessageId: string | null): number {
+    const rows = this.visibleRows(actorId, threadId).filter(
+      (row) => row.senderUserId !== actorId && !row.deletedAt,
+    );
+    if (!lastReadMessageId) return rows.length;
+    const readAt = this.visibleRows(actorId, threadId).findIndex((row) => row.id === lastReadMessageId);
+    if (readAt === -1) return rows.length;
+    return this.visibleRows(actorId, threadId)
+      .slice(readAt + 1)
+      .filter((row) => row.senderUserId !== actorId && !row.deletedAt).length;
+  }
+
+  private visibleRows(actorId: string, threadId: string): StoredMessage[] {
+    return this.threadRows(threadId).filter((row) => !this.isHidden(actorId, row.id));
+  }
+
+  private threadRows(threadId: string): StoredMessage[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT id, threadId, senderUserId, body, createdAt, parentMessageId, editedAt, deletedAt
+             FROM messaging_messages WHERE threadId = ? ORDER BY rowid ASC`,
+        )
+        .all(threadId) as Record<string, unknown>[]
+    ).map(messageFromRow);
+  }
+
+  private storedMessage(threadId: string, messageId: string): StoredMessage | null {
     const row = this.db
       .prepare(
-        `SELECT COUNT(*) AS n FROM messaging_messages
-          WHERE threadId = ? AND senderUserId <> ?
-            AND rowid > COALESCE(
-              (SELECT rowid FROM messaging_messages WHERE id = ?), 0)`,
+        `SELECT id, threadId, senderUserId, body, createdAt, parentMessageId, editedAt, deletedAt
+           FROM messaging_messages WHERE id = ? AND threadId = ?`,
       )
-      .get(threadId, actorId, lastReadMessageId ?? '') as { n: number } | undefined;
+      .get(messageId, threadId) as Record<string, unknown> | undefined;
+    return row ? messageFromRow(row) : null;
+  }
+
+  private isHidden(actorId: string, messageId: string): boolean {
+    const row = this.db
+      .prepare('SELECT 1 AS present FROM messaging_message_hides WHERE userId = ? AND messageId = ?')
+      .get(actorId, messageId) as { present?: number } | undefined;
+    return row !== undefined;
+  }
+
+  private canQuote(actorId: string, threadId: string, parentId: string): boolean {
+    const parent = this.storedMessage(threadId, parentId);
+    return Boolean(parent && !parent.deletedAt && !this.isHidden(actorId, parentId));
+  }
+
+  private revealFor(threadId: string, actorId: string): void {
+    this.db
+      .prepare('UPDATE messaging_thread_members SET hiddenAt = NULL WHERE threadId = ? AND userId = ?')
+      .run(threadId, actorId);
+  }
+
+  private wakeOthers(threadId: string, actorId: string): void {
+    this.db
+      .prepare(
+        `UPDATE messaging_thread_members
+            SET archivedAt = NULL, hiddenAt = NULL
+          WHERE threadId = ? AND userId <> ?`,
+      )
+      .run(threadId, actorId);
+  }
+
+  private pinCount(actorId: string, exceptThreadId: string): number {
+    const row = this.db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM messaging_thread_members
+          WHERE userId = ? AND pinnedAt IS NOT NULL AND hiddenAt IS NULL AND threadId <> ?`,
+      )
+      .get(actorId, exceptThreadId) as { n: number } | undefined;
     return Number(row?.n ?? 0);
   }
+
+  private seenCursor(actorId: string, threadId: string, otherId: string): string | null {
+    if (!this.preferences(actorId).allowSeenReceipts) return null;
+    if (!this.preferences(otherId).allowSeenReceipts) return null;
+    const row = this.db
+      .prepare(
+        'SELECT lastReadMessageId FROM messaging_thread_members WHERE threadId = ? AND userId = ?',
+      )
+      .get(threadId, otherId) as { lastReadMessageId: string | null } | undefined;
+    return row?.lastReadMessageId ?? null;
+  }
+
+  private publicMessage(actorId: string, row: StoredMessage): PublicMessage {
+    const reactions = this.db
+      .prepare('SELECT emoji, userId FROM messaging_reactions WHERE messageId = ?')
+      .all(row.id) as { emoji: string; userId: string }[];
+    let parent: MessageParent | null = null;
+    if (row.parentMessageId) {
+      const stored = this.storedMessage(row.threadId, row.parentMessageId);
+      if (stored && !stored.deletedAt && !this.isHidden(actorId, stored.id)) {
+        parent = {
+          id: stored.id,
+          senderUserId: stored.senderUserId,
+          body: truncateParentBody(stored.body),
+        };
+      }
+    }
+    return {
+      id: row.id,
+      threadId: row.threadId,
+      senderUserId: row.senderUserId,
+      body: row.deletedAt ? '' : row.body,
+      createdAt: row.createdAt,
+      editedAt: row.editedAt,
+      deletedAt: row.deletedAt,
+      parent,
+      reactions: summariseReactions(reactions, actorId),
+    };
+  }
+}
+
+function messageFromRow(row: Record<string, unknown>): StoredMessage {
+  return {
+    id: String(row['id']),
+    threadId: String(row['threadId']),
+    senderUserId: String(row['senderUserId']),
+    body: String(row['body']),
+    createdAt: String(row['createdAt']),
+    parentMessageId: row['parentMessageId'] == null ? null : String(row['parentMessageId']),
+    editedAt: row['editedAt'] == null ? null : String(row['editedAt']),
+    deletedAt: row['deletedAt'] == null ? null : String(row['deletedAt']),
+  };
 }
 
 function requestFromRow(row: Record<string, unknown>): StoredRequest {
@@ -665,6 +1117,20 @@ function requestFromRow(row: Record<string, unknown>): StoredRequest {
 
 const memoryByStore = new WeakMap<object, MemoryState>();
 
+function emptyMember(threadId: string, userId: string, at: string): StoredMember {
+  return {
+    threadId,
+    userId,
+    role: MEMBER_ROLES.MEMBER,
+    joinedAt: at,
+    lastReadMessageId: null,
+    mutedUntil: null,
+    archivedAt: null,
+    pinnedAt: null,
+    hiddenAt: null,
+  };
+}
+
 function memoryState(host: object): MemoryState {
   const existing = memoryByStore.get(host);
   if (existing) return existing;
@@ -675,6 +1141,8 @@ function memoryState(host: object): MemoryState {
     contacts: [],
     requests: [],
     preferences: new Map(),
+    hides: [],
+    reactions: [],
   };
   memoryByStore.set(host, created);
   return created;
@@ -691,6 +1159,7 @@ class MemoryMessagingStore implements MessagingStore {
     const key = directPairKey(actorId, otherId);
     for (const thread of this.state.threads.values()) {
       if (thread.directPairKey === key) {
+        this.revealFor(thread.id, actorId);
         return this.publicThread(actorId, thread.id, lookup)!;
       }
     }
@@ -704,46 +1173,198 @@ class MemoryMessagingStore implements MessagingStore {
       updatedAt: at,
       directPairKey: key,
     });
-    this.state.members.push(
-      { threadId: id, userId: actorId, role: MEMBER_ROLES.MEMBER, joinedAt: at, lastReadMessageId: null },
-      { threadId: id, userId: otherId, role: MEMBER_ROLES.MEMBER, joinedAt: at, lastReadMessageId: null },
-    );
+    this.state.members.push(emptyMember(id, actorId, at), emptyMember(id, otherId, at));
     return this.publicThread(actorId, id, lookup)!;
   }
 
-  listChats(actorId: string, lookup: PersonLookup): PublicThread[] {
+  listChats(actorId: string, lookup: PersonLookup, view: ThreadListView = 'chats'): PublicThread[] {
     return [...this.state.threads.values()]
       .filter((thread) => this.isMember(thread.id, actorId))
       .map((thread) => this.publicThread(actorId, thread.id, lookup))
-      .filter((thread): thread is PublicThread => thread !== null && !thread.pendingIncomingRequestId)
-      .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+      .filter((thread): thread is PublicThread => {
+        if (!thread || thread.pendingIncomingRequestId) return false;
+        const member = this.member(thread.id, actorId);
+        if (!member || member.hiddenAt) return false;
+        return view === 'archived' ? Boolean(member.archivedAt) : !member.archivedAt;
+      })
+      .sort((a, b) => {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+        return a.updatedAt < b.updatedAt ? 1 : -1;
+      });
   }
 
   getThread(actorId: string, threadId: string, lookup: PersonLookup): PublicThread | null {
     return this.publicThread(actorId, threadId, lookup);
   }
 
-  listMessages(actorId: string, threadId: string, afterId?: string): PublicMessage[] | null {
+  listMessages(
+    actorId: string,
+    threadId: string,
+    opts: { after?: string; before?: string; limit?: number } = {},
+  ): MessageList | null {
     if (!this.isMember(threadId, actorId)) return null;
-    const rows = this.state.messages.filter((row) => row.threadId === threadId);
-    return after(rows, afterId).map((row) => ({ ...row }));
+    const rows = this.visibleRows(actorId, threadId);
+    const limit = opts.limit ?? MESSAGE_PAGE_DEFAULT;
+    const page = pageVisible(rows, { after: opts.after, before: opts.before, limit });
+    return {
+      items: page.map((row) => this.publicMessage(actorId, row)),
+      olderCursor: opts.after ? null : olderCursorFor(rows, page),
+    };
   }
 
-  sendMessage(actorId: string, threadId: string, body: string): PublicMessage | null | 'forbidden' {
+  sendMessage(
+    actorId: string,
+    threadId: string,
+    body: string,
+    parentMessageId?: string,
+  ): PublicMessage | null | 'forbidden' | 'bad_parent' {
     if (!this.isMember(threadId, actorId)) return null;
-    const incoming = this.pendingIncoming(actorId, threadId);
-    if (incoming) return 'forbidden';
+    if (this.pendingIncoming(actorId, threadId)) return 'forbidden';
+    if (parentMessageId && !this.canQuote(actorId, threadId, parentMessageId)) return 'bad_parent';
     const message: StoredMessage = {
       id: randomUUID(),
       threadId,
       senderUserId: actorId,
       body,
       createdAt: nowIso(),
+      parentMessageId: parentMessageId ?? null,
+      editedAt: null,
+      deletedAt: null,
     };
     this.state.messages.push(message);
     const thread = this.state.threads.get(threadId);
     if (thread) thread.updatedAt = message.createdAt;
-    return { ...message };
+    this.wakeOthers(threadId, actorId);
+    return this.publicMessage(actorId, message);
+  }
+
+  editMessage(
+    actorId: string,
+    threadId: string,
+    messageId: string,
+    body: string,
+  ): PublicMessage | null | 'forbidden' | 'closed' {
+    if (!this.isMember(threadId, actorId)) return null;
+    if (this.pendingIncoming(actorId, threadId)) return 'forbidden';
+    const row = this.storedMessage(threadId, messageId);
+    if (!row || this.isHidden(actorId, messageId)) return null;
+    if (row.senderUserId !== actorId || row.deletedAt) return 'forbidden';
+    if (!changeWindowOpen(row.createdAt)) return 'closed';
+    row.editedAt = nowIso();
+    row.body = body;
+    return this.publicMessage(actorId, row);
+  }
+
+  deleteMessage(
+    actorId: string,
+    threadId: string,
+    messageId: string,
+    scope: 'me' | 'everyone',
+  ): true | null | 'forbidden' | 'closed' {
+    if (!this.isMember(threadId, actorId)) return null;
+    if (this.pendingIncoming(actorId, threadId)) return 'forbidden';
+    const row = this.storedMessage(threadId, messageId);
+    if (!row || this.isHidden(actorId, messageId)) return null;
+    if (scope === 'me') {
+      if (!this.isHidden(actorId, messageId)) {
+        this.state.hides.push({ userId: actorId, messageId, createdAt: nowIso() });
+      }
+      return true;
+    }
+    if (row.senderUserId !== actorId || row.deletedAt) return 'forbidden';
+    if (!changeWindowOpen(row.createdAt)) return 'closed';
+    row.body = '';
+    row.deletedAt = nowIso();
+    return true;
+  }
+
+  setReaction(
+    actorId: string,
+    threadId: string,
+    messageId: string,
+    emoji: string | null,
+  ): PublicMessage | null | 'forbidden' | 'bad_emoji' {
+    if (!this.isMember(threadId, actorId)) return null;
+    if (this.pendingIncoming(actorId, threadId)) return 'forbidden';
+    if (emoji && !REACTION_EMOJIS.includes(emoji as (typeof REACTION_EMOJIS)[number])) {
+      return 'bad_emoji';
+    }
+    const row = this.storedMessage(threadId, messageId);
+    if (!row || this.isHidden(actorId, messageId) || row.deletedAt) return null;
+    const existing = this.state.reactions.find((item) => item.messageId === messageId && item.userId === actorId);
+    if (!emoji || existing?.emoji === emoji) {
+      this.state.reactions = this.state.reactions.filter(
+        (item) => !(item.messageId === messageId && item.userId === actorId),
+      );
+    } else if (existing) {
+      existing.emoji = emoji;
+      existing.createdAt = nowIso();
+    } else {
+      this.state.reactions.push({ messageId, userId: actorId, emoji, createdAt: nowIso() });
+    }
+    return this.publicMessage(actorId, row);
+  }
+
+  searchMessages(actorId: string, threadId: string, query: string): PublicMessage[] | null {
+    if (!this.isMember(threadId, actorId)) return null;
+    const needle = query.trim();
+    if (needle.length < 2) return [];
+    return this.visibleRows(actorId, threadId)
+      .filter((row) => !row.deletedAt && row.body.toLowerCase().includes(needle.toLowerCase()))
+      .reverse()
+      .slice(0, SEARCH_LIMIT)
+      .map((row) => this.publicMessage(actorId, row));
+  }
+
+  setMuted(
+    actorId: string,
+    threadId: string,
+    until: string | null,
+    lookup: PersonLookup,
+  ): PublicThread | null {
+    const member = this.member(threadId, actorId);
+    if (!member) return null;
+    member.mutedUntil = until;
+    return this.publicThread(actorId, threadId, lookup);
+  }
+
+  setArchived(
+    actorId: string,
+    threadId: string,
+    archived: boolean,
+    lookup: PersonLookup,
+  ): PublicThread | null {
+    const member = this.member(threadId, actorId);
+    if (!member) return null;
+    member.archivedAt = archived ? nowIso() : null;
+    return this.publicThread(actorId, threadId, lookup);
+  }
+
+  setPinned(
+    actorId: string,
+    threadId: string,
+    pinned: boolean,
+    lookup: PersonLookup,
+  ): PublicThread | null | 'pin_limit' {
+    const member = this.member(threadId, actorId);
+    if (!member) return null;
+    if (pinned) {
+      const count = this.state.members.filter(
+        (row) => row.userId === actorId && row.pinnedAt && !row.hiddenAt && row.threadId !== threadId,
+      ).length;
+      if (count >= PIN_LIMIT) return 'pin_limit';
+    }
+    member.pinnedAt = pinned ? nowIso() : null;
+    return this.publicThread(actorId, threadId, lookup);
+  }
+
+  hideThread(actorId: string, threadId: string): boolean {
+    const member = this.member(threadId, actorId);
+    if (!member) return false;
+    member.hiddenAt = nowIso();
+    member.archivedAt = null;
+    member.pinnedAt = null;
+    return true;
   }
 
   markRead(actorId: string, threadId: string, messageId: string): boolean {
@@ -862,7 +1483,13 @@ class MemoryMessagingStore implements MessagingStore {
   }
 
   setAllowNonContactRequests(userId: string, allow: boolean): MessagingPreferences {
-    const prefs = { allowNonContactRequests: allow, updatedAt: nowIso() };
+    const prefs = { ...this.preferences(userId), allowNonContactRequests: allow, updatedAt: nowIso() };
+    this.state.preferences.set(userId, prefs);
+    return prefs;
+  }
+
+  setAllowSeenReceipts(userId: string, allow: boolean): MessagingPreferences {
+    const prefs = { ...this.preferences(userId), allowSeenReceipts: allow, updatedAt: nowIso() };
     this.state.preferences.set(userId, prefs);
     return prefs;
   }
@@ -890,9 +1517,13 @@ class MemoryMessagingStore implements MessagingStore {
     this.state.contacts.push({ userId, contactUserId, createdAt: at });
   }
 
-  private lastMessage(threadId: string): StoredMessage | null {
-    const rows = this.state.messages.filter((row) => row.threadId === threadId);
+  private lastMessage(threadId: string, actorId?: string): StoredMessage | null {
+    const rows = actorId ? this.visibleRows(actorId, threadId) : this.state.messages.filter((row) => row.threadId === threadId);
     return rows.at(-1) ?? null;
+  }
+
+  private member(threadId: string, userId: string): StoredMember | undefined {
+    return this.state.members.find((row) => row.threadId === threadId && row.userId === userId);
   }
 
   private pendingIncoming(actorId: string, threadId: string): StoredRequest | null {
@@ -912,36 +1543,95 @@ class MemoryMessagingStore implements MessagingStore {
     if (!thread) return null;
     const otherId = this.otherMemberId(threadId, actorId);
     if (!otherId) return null;
-    const last = this.lastMessage(threadId);
-    const membership = this.state.members.find((row) => row.threadId === threadId && row.userId === actorId);
+    const last = this.lastMessage(threadId, actorId);
+    const membership = this.member(threadId, actorId);
     const incoming = this.pendingIncoming(actorId, threadId);
     return {
       id: thread.id,
       kind: 'direct',
       other: lookup(otherId),
-      lastMessage: last ? { ...last } : null,
+      lastMessage: last ? this.publicMessage(actorId, last) : null,
       unreadCount: this.unreadCount(threadId, actorId, membership?.lastReadMessageId ?? null),
       pendingIncomingRequestId: incoming?.id ?? null,
       isContact: this.areContacts(actorId, otherId),
+      otherLastReadMessageId: this.seenCursor(actorId, threadId, otherId),
+      mutedUntil: membership?.mutedUntil ?? null,
+      archived: Boolean(membership?.archivedAt),
+      pinned: Boolean(membership?.pinnedAt),
       updatedAt: thread.updatedAt,
     };
   }
 
   private unreadCount(threadId: string, actorId: string, lastReadMessageId: string | null): number {
-    if (!lastReadMessageId) {
-      return this.state.messages.filter(
-        (row) => row.threadId === threadId && row.senderUserId !== actorId,
-      ).length;
+    const rows = this.visibleRows(actorId, threadId);
+    const unread = rows.filter((row) => row.senderUserId !== actorId && !row.deletedAt);
+    if (!lastReadMessageId) return unread.length;
+    const readAt = rows.findIndex((row) => row.id === lastReadMessageId);
+    if (readAt === -1) return unread.length;
+    return rows.slice(readAt + 1).filter((row) => row.senderUserId !== actorId && !row.deletedAt).length;
+  }
+
+  private visibleRows(actorId: string, threadId: string): StoredMessage[] {
+    return this.state.messages.filter((row) => row.threadId === threadId && !this.isHidden(actorId, row.id));
+  }
+
+  private storedMessage(threadId: string, messageId: string): StoredMessage | undefined {
+    return this.state.messages.find((row) => row.id === messageId && row.threadId === threadId);
+  }
+
+  private isHidden(actorId: string, messageId: string): boolean {
+    return this.state.hides.some((row) => row.userId === actorId && row.messageId === messageId);
+  }
+
+  private canQuote(actorId: string, threadId: string, parentId: string): boolean {
+    const parent = this.storedMessage(threadId, parentId);
+    return Boolean(parent && !parent.deletedAt && !this.isHidden(actorId, parentId));
+  }
+
+  private revealFor(threadId: string, actorId: string): void {
+    const member = this.member(threadId, actorId);
+    if (member) member.hiddenAt = null;
+  }
+
+  private wakeOthers(threadId: string, actorId: string): void {
+    for (const member of this.state.members) {
+      if (member.threadId === threadId && member.userId !== actorId) {
+        member.archivedAt = null;
+        member.hiddenAt = null;
+      }
     }
-    const readAt = this.state.messages.findIndex((row) => row.id === lastReadMessageId);
-    if (readAt === -1) {
-      return this.state.messages.filter(
-        (row) => row.threadId === threadId && row.senderUserId !== actorId,
-      ).length;
+  }
+
+  private seenCursor(actorId: string, threadId: string, otherId: string): string | null {
+    if (!this.preferences(actorId).allowSeenReceipts) return null;
+    if (!this.preferences(otherId).allowSeenReceipts) return null;
+    return this.member(threadId, otherId)?.lastReadMessageId ?? null;
+  }
+
+  private publicMessage(actorId: string, row: StoredMessage): PublicMessage {
+    const reactions = this.state.reactions.filter((item) => item.messageId === row.id);
+    let parent: MessageParent | null = null;
+    if (row.parentMessageId) {
+      const stored = this.storedMessage(row.threadId, row.parentMessageId);
+      if (stored && !stored.deletedAt && !this.isHidden(actorId, stored.id)) {
+        parent = {
+          id: stored.id,
+          senderUserId: stored.senderUserId,
+          body: truncateParentBody(stored.body),
+        };
+      }
     }
-    return this.state.messages
-      .slice(readAt + 1)
-      .filter((row) => row.threadId === threadId && row.senderUserId !== actorId).length;
+    return {
+      id: row.id,
+      threadId: row.threadId,
+      senderUserId: row.senderUserId,
+      body: row.deletedAt ? '' : row.body,
+      createdAt: row.createdAt,
+      editedAt: row.editedAt,
+      deletedAt: row.deletedAt,
+      parent,
+      reactions: summariseReactions(reactions, actorId),
+    };
   }
 }
 
