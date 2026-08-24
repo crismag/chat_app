@@ -13,6 +13,7 @@ import { NARROW_QUERY, useMediaQuery } from '../shared/ui/useMediaQuery.ts'
 import { useMobileBar } from '../shared/mobile/MobileBar.tsx'
 import { useAuth } from '../auth/useAuth.ts'
 import { ThreadView } from './ThreadView.tsx'
+import { formatListTime } from './time.ts'
 import {
   acceptRequest,
   blockRequest,
@@ -61,7 +62,18 @@ export function MessagesPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useMobileBar(() => ({ title: 'Messages' }), [])
+  useMobileBar(
+    () =>
+      narrow && threadId
+        ? {
+            title: thread ? personLabel(thread.other) : 'Messages',
+            titleIsHeading: false,
+            onBack: () => navigate('/messages'),
+            backLabel: 'Chats',
+          }
+        : { title: 'Messages' },
+    [narrow, threadId, thread],
+  )
 
   const loadLists = useCallback(async () => {
     if (!registered) {
@@ -123,8 +135,18 @@ export function MessagesPage() {
     <section className={styles.page} data-narrow={narrow ? 'true' : 'false'} data-open={threadId ? 'true' : 'false'}>
       {narrow && threadId ? null : (
         <header className={styles.header}>
-          <h1 className={styles.title}>Messages</h1>
-          <p className={styles.description}>Private text with people you know. Not a reflection, and not shared.</p>
+          {/*
+            The phone's bar already says Messages. A second h1 behind the same
+            word is still a second heading, the way Community keeps one.
+          */}
+          {narrow ? null : (
+            <>
+              <h1 className={styles.title}>Messages</h1>
+              <p className={styles.description}>
+                Private text with people you know. Not a reflection, and not shared.
+              </p>
+            </>
+          )}
           {/*
             Somewhere to start.
             Messaging arrived with one way in — the Message button on somebody
@@ -156,7 +178,10 @@ export function MessagesPage() {
                     aria-selected={tab === item.id}
                     className={styles.tab}
                     data-active={tab === item.id ? 'true' : 'false'}
-                    onClick={() => setTab(item.id)}
+                    onClick={() => {
+                      setTab(item.id)
+                      if (item.id !== 'chats') setShowArchived(false)
+                    }}
                   >
                     {item.label}
                     {item.id === 'requests' && requests.length > 0 ? (
@@ -164,6 +189,16 @@ export function MessagesPage() {
                     ) : null}
                   </button>
                 ))}
+                {tab === 'chats' ? (
+                  <button
+                    type="button"
+                    className={styles.archiveChip}
+                    aria-pressed={showArchived}
+                    onClick={() => setShowArchived((current) => !current)}
+                  >
+                    Archived
+                  </button>
+                ) : null}
               </div>
 
               {error ? (
@@ -175,26 +210,7 @@ export function MessagesPage() {
                   Loading messages…
                 </p>
               ) : tab === 'chats' ? (
-                <>
-                  <div className={styles.inboxBar}>
-                    <button
-                      type="button"
-                      className={styles.inboxToggle}
-                      data-active={!showArchived ? 'true' : 'false'}
-                      onClick={() => setShowArchived(false)}
-                    >
-                      Inbox
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.inboxToggle}
-                      data-active={showArchived ? 'true' : 'false'}
-                      onClick={() => setShowArchived(true)}
-                    >
-                      Archived
-                    </button>
-                  </div>
-                {chats.length === 0 ? (
+                chats.length === 0 ? (
                   <div className={styles.empty}>
                     <h2 className={styles.emptyHeading}>
                       {showArchived ? 'Nothing archived' : 'No conversations yet'}
@@ -233,13 +249,19 @@ export function MessagesPage() {
                                 : item.lastMessage?.body ?? 'No messages yet'}
                             </span>
                           </span>
-                          {item.unreadCount > 0 ? <span className={styles.unread}>{item.unreadCount}</span> : null}
+                          <span className={styles.rowMeta}>
+                            <time className={styles.rowTime} dateTime={item.updatedAt}>
+                              {formatListTime(item.updatedAt)}
+                            </time>
+                            {item.unreadCount > 0 ? (
+                              <span className={styles.unread}>{item.unreadCount}</span>
+                            ) : null}
+                          </span>
                         </button>
                       </li>
                     ))}
                   </ul>
-                )}
-                </>
+                )
               ) : tab === 'requests' ? (
                 requests.length === 0 ? (
                   <div className={styles.empty}>
@@ -441,7 +463,12 @@ function FindSomeone({ onPick }: { onPick: (handle: string) => void }) {
         aria-describedby={`${listId}-hint`}
         onChange={(event) => setQuery(event.target.value)}
       />
-      <p className={styles.findHint} id={`${listId}-hint`} role="status">
+      <p
+        className={styles.findHint}
+        id={`${listId}-hint`}
+        data-empty={tooShort || searching || (query.trim() && people.length === 0) ? 'false' : 'true'}
+        role="status"
+      >
         {tooShort
           ? 'Keep typing — two letters or more.'
           : searching
