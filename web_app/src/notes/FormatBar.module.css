@@ -67,8 +67,24 @@
   text-underline-offset: 0.15em;
 }
 
-.preview {
+/*
+ * Preview and the mode switch, pushed to the end of the row as a pair.
+ *
+ * The margin lives on this wrapper rather than on `.preview` itself, because
+ * `RichToolbar` uses `.mode` alone, with no `.preview` beside it — an `auto`
+ * margin on each of two adjacent items splits the row's slack between them
+ * instead of pushing the pair, which reads as a gap opening up between the
+ * two buttons rather than the row's actual content moving. One flexible
+ * space before the group, none between its members, works in both.
+ */
+.trailing {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   margin-inline-start: auto;
+}
+
+.preview {
   min-block-size: var(--tap, 2.75rem);
   padding-inline: var(--space-3);
   border: 1px solid var(--line);
@@ -84,6 +100,23 @@
   background: var(--accent-soft);
   border-color: var(--accent);
   color: var(--accent-ink, var(--accent));
+}
+
+.mode {
+  min-block-size: var(--tap, 2.75rem);
+  padding-inline: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.mode:hover {
+  border-color: var(--accent);
+  color: var(--ink);
 }
 
 .icon {

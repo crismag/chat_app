@@ -171,7 +171,8 @@ test('clicking a card opens the editor with that note', async () => {
   renderPage()
   fireEvent.click(await screen.findByRole('heading', { name: 'Sunday list' }))
   expect(await screen.findByLabelText('Note title')).toHaveValue('Sunday list')
-  expect(screen.getByLabelText('Note')).toHaveValue('Milk and bread for the week.')
+  /* Opens in rich text by default, so the body is rendered content, not a value. */
+  expect(screen.getByLabelText('Note')).toHaveTextContent('Milk and bread for the week.')
 })
 
 test('search asks the server with the typed query', async () => {

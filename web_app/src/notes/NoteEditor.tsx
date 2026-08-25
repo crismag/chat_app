@@ -4,12 +4,42 @@ import { ArchiveIcon, CloseIcon, PinIcon, RestoreIcon, TrashIcon } from './icons
 import { updateNote, type Note, type NoteView } from './api.ts'
 import { FormatBar, formatShortcut } from './FormatBar.tsx'
 import { NoteMarkdown } from './NoteMarkdown.tsx'
+import { RichTextEditor } from './RichTextEditor.tsx'
 import { toggleTaskAt } from './format.ts'
 import styles from './NoteEditor.module.css'
 
 const SAVE_DEBOUNCE_MS = 600
 const TITLE_MAX = 200
 const BODY_MAX = 20_000
+
+/*
+ * Rich text or Markdown, remembered across notes.
+ *
+ * Unlike `preview` below, this is not reset when a different note opens: it
+ * is a choice about how *this person* writes, not about *this note*, and
+ * asking again on every note would be the setting reappearing as a question.
+ * Rich text is the default for exactly the reason this whole change exists —
+ * raw Markdown syntax is not something most people arrive already knowing.
+ */
+const EDITOR_MODE_KEY = 'chat.notes.editorMode'
+type EditorMode = 'rich' | 'markdown'
+
+function readStoredMode(): EditorMode {
+  try {
+    return window.localStorage.getItem(EDITOR_MODE_KEY) === 'markdown' ? 'markdown' : 'rich'
+  } catch {
+    /* Private browsing, a blocked origin, a full quota — rich text either way. */
+    return 'rich'
+  }
+}
+
+function storeMode(mode: EditorMode): void {
+  try {
+    window.localStorage.setItem(EDITOR_MODE_KEY, mode)
+  } catch {
+    /* Not remembered next time, which is the same experience as never having chosen. */
+  }
+}
 
 type SaveStatus = 'editing' | 'saving' | 'saved' | 'failed' | 'idle'
 
@@ -54,6 +84,11 @@ export function NoteEditor({
    * caret belongs when somebody has just chosen something to write in.
    */
   const [preview, setPreview] = useState(false)
+  const [mode, setModeState] = useState<EditorMode>(readStoredMode)
+  function setMode(next: EditorMode) {
+    setModeState(next)
+    storeMode(next)
+  }
   const saveGen = useRef(0)
   const timer = useRef(0)
   const savedSnap = useRef({ title: note.title, body: note.body })
@@ -199,40 +234,57 @@ export function NoteEditor({
           onChange={(event) => setTitle(event.target.value)}
         />
 
-        <FormatBar
-          field={bodyRef}
-          onChange={setBody}
-          preview={preview}
-          onTogglePreview={() => setPreview((on) => !on)}
-        />
-
         <label className={styles.srOnly} htmlFor={bodyId}>
           Note
         </label>
-        {preview ? (
+        {mode === 'rich' ? (
           /*
-           * The same text, rendered — and the only place a task can be ticked.
-           * Ticking edits the note's own text, so the tick is saved by the
-           * ordinary debounce rather than by a second path that could disagree
-           * with what is in the box.
+           * The default: what the note looks like, edited directly. See
+           * `RichTextEditor.tsx` — it still saves through `setBody` on the
+           * same debounce as every other surface here, as plain Markdown.
            */
-          <div className={styles.preview}>
-            <NoteMarkdown
-              markdown={body}
-              onToggleTask={(index) => setBody((current) => toggleTaskAt(current, index))}
-            />
-          </div>
-        ) : (
-          <textarea
-            ref={bodyRef}
-            id={bodyId}
-            className={styles.body}
+          <RichTextEditor
+            noteId={note.id}
             value={body}
-            maxLength={BODY_MAX}
+            onChange={setBody}
             placeholder="Write a note…"
-            onChange={(event) => setBody(event.target.value)}
-            onKeyDown={(event) => formatShortcut(event, setBody)}
+            onSwitchToMarkdown={() => setMode('markdown')}
           />
+        ) : (
+          <>
+            <FormatBar
+              field={bodyRef}
+              onChange={setBody}
+              preview={preview}
+              onTogglePreview={() => setPreview((on) => !on)}
+              onSwitchToRichText={() => setMode('rich')}
+            />
+            {preview ? (
+              /*
+               * The same text, rendered — and the only place a task can be
+               * ticked. Ticking edits the note's own text, so the tick is
+               * saved by the ordinary debounce rather than by a second path
+               * that could disagree with what is in the box.
+               */
+              <div className={styles.preview}>
+                <NoteMarkdown
+                  markdown={body}
+                  onToggleTask={(index) => setBody((current) => toggleTaskAt(current, index))}
+                />
+              </div>
+            ) : (
+              <textarea
+                ref={bodyRef}
+                id={bodyId}
+                className={styles.body}
+                value={body}
+                maxLength={BODY_MAX}
+                placeholder="Write a note…"
+                onChange={(event) => setBody(event.target.value)}
+                onKeyDown={(event) => formatShortcut(event, setBody)}
+              />
+            )}
+          </>
         )}
       </div>
     </div>

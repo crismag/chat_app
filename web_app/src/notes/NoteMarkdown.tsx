@@ -69,7 +69,7 @@ function inline({ text, key }: Inline): ReactNode[] {
   return out
 }
 
-type Block =
+export type Block =
   | { kind: 'heading'; level: 1 | 2; text: string }
   | { kind: 'paragraph'; lines: string[] }
   | { kind: 'bullets'; items: string[] }

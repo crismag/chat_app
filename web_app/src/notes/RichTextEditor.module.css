@@ -1,0 +1,158 @@
+/*
+ * The rich-text surface, occupying exactly the box the plain textarea and
+ * the Markdown preview both do — see `NoteEditor.module.css`'s `.preview`.
+ * Same box, so switching modes does not resize the editor or move the title
+ * above it.
+ */
+.wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-block-size: 0;
+}
+
+.scroll {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow-y: auto;
+  padding-block: var(--space-2);
+}
+
+/*
+ * The editable document. Reading type, matching `NoteMarkdown.module.css`'s
+ * `.note` — a note is prose somebody wrote, in edit or in read, and the two
+ * must not be visibly different sizes of the same words.
+ */
+.content {
+  min-block-size: 100%;
+  padding-inline: var(--space-5);
+  padding-block-end: var(--space-5);
+  color: var(--ink);
+  font-size: var(--text-base);
+  line-height: var(--leading-body, 1.6);
+  overflow-wrap: anywhere;
+}
+
+.content:focus {
+  outline: none;
+}
+
+.content p {
+  margin: var(--space-3) 0;
+}
+
+.content p:first-child {
+  margin-block-start: 0;
+}
+
+.content h3,
+.content h4 {
+  margin: var(--space-3) 0;
+  font-size: var(--text-lg, 1.15rem);
+  line-height: var(--leading-snug, 1.3);
+}
+
+.content ul:not([data-type='taskList']),
+.content ol {
+  margin: var(--space-3) 0;
+  padding-inline-start: 1.25rem;
+  display: grid;
+  gap: var(--space-1, 0.25rem);
+}
+
+.content blockquote {
+  margin: var(--space-3) 0;
+  padding-inline-start: var(--space-3);
+  border-inline-start: 3px solid var(--line);
+  color: var(--ink-soft, var(--ink));
+}
+
+.content blockquote p {
+  margin: 0;
+}
+
+.content code {
+  padding: 0.1em 0.3em;
+  border-radius: var(--radius-sm, 0.25rem);
+  background: var(--surface-2);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.9em;
+}
+
+/*
+ * Underline is `++text++`, which Markdown does not have. Given a colour of
+ * its own it would read as a link; left plain it reads as what it is — the
+ * same choice `NoteMarkdown.module.css`'s `.underline` makes.
+ */
+.content u {
+  text-underline-offset: 0.15em;
+}
+
+/* --------------------------------------------------------------- tasks */
+
+/*
+ * Tiptap's own structure: `ul[data-type="taskList"]` > `li[data-checked]` >
+ * `label` (holding the checkbox) + `div` (holding the paragraph). Styled by
+ * that shape rather than by classes this file would have to add itself,
+ * since the node view is the extension's, not this component's.
+ */
+.content ul[data-type='taskList'] {
+  margin: var(--space-3) 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-1, 0.25rem);
+}
+
+.content ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.content ul[data-type='taskList'] li > label {
+  display: flex;
+  align-items: center;
+  min-block-size: var(--tap, 2.75rem);
+  cursor: pointer;
+}
+
+.content ul[data-type='taskList'] input[type='checkbox'] {
+  inline-size: 1.05rem;
+  block-size: 1.05rem;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.content ul[data-type='taskList'] li > div {
+  min-inline-size: 0;
+  padding-block: 0.15rem;
+}
+
+.content ul[data-type='taskList'] li > div p {
+  margin: 0;
+}
+
+/*
+ * Done is struck through *and* dimmed, matching `NoteMarkdown.module.css`:
+ * strike-through alone is a colour-free signal but a weak one at this size.
+ */
+.content ul[data-type='taskList'] li[data-checked='true'] > div {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+/* -------------------------------------------------------------- placeholder */
+
+/*
+ * `:global`, because `is-editor-empty` is a class the Placeholder extension
+ * writes onto the actual DOM node at runtime — a literal string, not a name
+ * this file gets to hash the way CSS Modules hashes everything else here.
+ */
+.content p:global(.is-editor-empty):first-child::before {
+  content: attr(data-placeholder);
+  float: inline-start;
+  block-size: 0;
+  color: var(--faint);
+  pointer-events: none;
+}

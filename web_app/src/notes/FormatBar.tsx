@@ -99,11 +99,14 @@ export function FormatBar({
   onChange,
   preview,
   onTogglePreview,
+  onSwitchToRichText,
 }: {
   field: RefObject<HTMLTextAreaElement | null>
   onChange: (next: string) => void
   preview: boolean
   onTogglePreview: () => void
+  /** Back to the default surface. Absent only in tests exercising this bar alone. */
+  onSwitchToRichText?: () => void
 }) {
   return (
     <div className={styles.bar} role="toolbar" aria-label="Formatting">
@@ -136,14 +139,28 @@ export function FormatBar({
         second pane because a note is written on a phone as often as not, and
         two columns at that width is one column of each, too narrow to use.
       */}
-      <button
-        type="button"
-        className={styles.preview}
-        aria-pressed={preview}
-        onClick={onTogglePreview}
-      >
-        {preview ? 'Edit' : 'Preview'}
-      </button>
+      <div className={styles.trailing}>
+        <button
+          type="button"
+          className={styles.preview}
+          aria-pressed={preview}
+          onClick={onTogglePreview}
+        >
+          {preview ? 'Edit' : 'Preview'}
+        </button>
+
+        {/*
+          The way back to the default surface. Markdown mode is for somebody
+          who asked for it — typing raw syntax on purpose, or somebody who
+          already knows it — so the way out is a press away rather than a
+          setting to go and find.
+        */}
+        {onSwitchToRichText ? (
+          <button type="button" className={styles.mode} onClick={onSwitchToRichText}>
+            Rich text
+          </button>
+        ) : null}
+      </div>
     </div>
   )
 }
