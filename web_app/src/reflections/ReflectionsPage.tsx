@@ -31,6 +31,7 @@ import {
 import { fetchReflection, fetchReflectionPage } from './api.ts'
 import {
   ChatProgress,
+  FullSections,
   ReflectionCard,
   ReflectionCardSkeleton,
   SECTIONS,
@@ -99,7 +100,7 @@ type Enrichment = {
  * question and used to be a permanent pair of buttons.
  */
 type Display = 'cards' | 'list'
-type Density = 'compact' | 'preview' | 'full'
+export type Density = 'compact' | 'preview' | 'full'
 type Status = 'all' | 'draft' | 'complete'
 type Visibility = 'all' | 'private' | 'shared'
 type Sort = 'recent' | 'title'
@@ -307,32 +308,6 @@ function Overflow({ item }: { item: ReflectionSummary }) {
   )
 }
 
-/**
- * Every written section, shown in place.
- *
- * The excerpt answers "which one is this"; this answers "what does it say",
- * which is a different question and used to need the editor to answer.
- */
-function FullChat({
-  sections,
-}: {
-  sections: NonNullable<Enrichment['sections']>
-}) {
-  return (
-    <div className={styles.fullChat}>
-      {sections.map((section) => (
-        <div className={styles.fullSection} data-section={section.type} key={section.type}>
-          <h4 className={styles.fullHeading}>
-            <span className={styles.fullLetter} aria-hidden="true">{section.letter}</span>
-            {section.label}
-          </h4>
-          {/* The author's own line breaks, kept. */}
-          <p className={styles.fullBody}>{section.content}</p>
-        </div>
-      ))}
-    </div>
-  )
-}
 
 /**
  * Moving between pages.
@@ -544,7 +519,7 @@ function Tile({
       item={item}
       excerpt={
         density === 'full' && enrichment?.sections?.length
-          ? <FullChat sections={enrichment.sections} />
+          ? <FullSections sections={enrichment.sections} />
           : density === 'compact'
             ? ''
             : enrichment?.excerpt
@@ -585,7 +560,7 @@ function Row({
           </span>
         </div>
         {density === 'full' && enrichment?.sections?.length ? (
-          <FullChat sections={enrichment.sections} />
+          <FullSections sections={enrichment.sections} />
         ) : density === 'compact' ? null : (
           <p className={styles.rowExcerpt}>{enrichment?.excerpt || 'Nothing written yet.'}</p>
         )}
@@ -1217,6 +1192,8 @@ export function ReflectionsPage() {
                   now={now}
                   written={enrichment?.written}
                   preview={enrichment?.preview ?? ''}
+                  density={density}
+                  sections={enrichment?.sections}
                 />
               )
             }),
@@ -1348,11 +1325,15 @@ export function ReflectionsPage() {
 
       <PageMenu open={narrow && viewOpen} onClose={() => setViewOpen(false)}>
         {/*
-          Density stays available as a preference, moved out of the toolbar
-          rather than deleted. Layout and page size are not offered here: a
-          phone shows one canonical card, and changing the stored desktop
-          preference from a screen that ignores it would be a setting that
-          appears to do nothing.
+          Moved out of the toolbar rather than deleted — a phone has no room
+          for a row of controls the way the desktop bar does — and it is not
+          a quieter version of the same setting. The phone's own card reads
+          this the same way `Row` and `Tile` do: Compact drops the excerpt,
+          Full shows every written section, exactly as it does everywhere
+          else `Density` is honoured. Layout and page size stay off this
+          sheet regardless — those really are desktop-only questions, about
+          a grid a phone does not have and a page length nobody scrolls to
+          the end of on one.
         */}
         <SheetChoice
           legend="How much to show"

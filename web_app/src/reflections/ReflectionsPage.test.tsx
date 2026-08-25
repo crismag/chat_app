@@ -254,6 +254,68 @@ test('a page of reflections is one request, not one per card', async () => {
   expect(detailCalls).toHaveLength(0)
 })
 
+/*
+ * Density, honoured on a phone.
+ *
+ * `DENSITY_KEY` is a stored preference read on mount regardless of screen
+ * width, so a phone opening this page is not a phone that has never chosen
+ * one — it usually already has, from the last time this browser used the
+ * desktop layout. The phone's own card used to ignore that value entirely
+ * and always show the preview line, which is what this asserts against: not
+ * that Compact, Preview and Full C.H.A.T. exist, but that a phone actually
+ * renders differently for each.
+ */
+function withDensity(value: 'compact' | 'preview' | 'full') {
+  window.localStorage.setItem('chat.reflections.density', value)
+}
+
+function viewport(narrow: boolean) {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn((query: string) => ({
+      matches: narrow,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })),
+  )
+}
+
+test('on a phone, Full C.H.A.T. density actually shows every section', async () => {
+  viewport(true)
+  withDensity('full')
+  vi.stubGlobal('fetch', mockFetch())
+  renderPage()
+
+  await screen.findByRole('link', { name: 'Trusting while I cannot see' })
+  /*
+   * A section heading, not the section's own text — the list summary's
+   * `preview` field happens to share wording with the detail fixture below,
+   * so text alone would pass whether or not this came from `FullSections`.
+   * Only the full rendering names the section it is showing. Both reflections
+   * share the same detail fixture, so each heading appears twice — once per
+   * card — which is itself part of what confirms this is not the desktop
+   * grid rendering, where these two would be in different groups entirely.
+   */
+  expect(await screen.findAllByRole('heading', { name: /Content/ })).toHaveLength(2)
+  expect(screen.getAllByRole('heading', { name: /Heart/ })).toHaveLength(2)
+})
+
+test('on a phone, Compact density shows no excerpt at all', async () => {
+  viewport(true)
+  withDensity('compact')
+  vi.stubGlobal('fetch', mockFetch())
+  renderPage()
+
+  await screen.findByRole('link', { name: 'Trusting while I cannot see' })
+  expect(screen.queryByText('It met my fear.')).toBeNull()
+  expect(screen.queryByText('Nothing written yet — open it and begin.')).toBeNull()
+})
+
 test('full density is the one view that asks for more', async () => {
   const fetcher = mockFetch()
   vi.stubGlobal('fetch', fetcher)

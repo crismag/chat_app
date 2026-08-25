@@ -123,6 +123,41 @@ export function StateBadge({ state }: { state: Visibility }) {
   )
 }
 
+/**
+ * Every written section on a card, in full.
+ *
+ * Shared rather than reimplemented, for the same reason the rest of this
+ * file is: the desktop grid, the desktop list row and the phone's card all
+ * show "Full C.H.A.T." density identically, or a phone showing a different
+ * thing for the same setting is exactly the bug that setting existing at
+ * all was supposed to prevent.
+ *
+ * Each section keeps its tone down the leading edge, so a reader scanning a
+ * page of expanded results can still tell Heart from Application without
+ * reading a word — which is the whole reason the sections are coloured
+ * elsewhere.
+ */
+export function FullSections({
+  sections,
+}: {
+  sections: { type: ChatSectionType; letter: string; label: string; content: string }[]
+}) {
+  return (
+    <div className={styles.fullChat}>
+      {sections.map((section) => (
+        <div className={styles.fullSection} data-section={section.type} key={section.type}>
+          <h4 className={styles.fullHeading}>
+            <span className={styles.fullLetter} aria-hidden="true">{section.letter}</span>
+            {section.label}
+          </h4>
+          {/* The author's own line breaks, kept. */}
+          <p className={styles.fullBody}>{section.content}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export type ReflectionCardItem = {
   id: string
   title: string

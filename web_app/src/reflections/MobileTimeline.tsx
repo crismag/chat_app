@@ -1,8 +1,9 @@
 import { Link, useNavigate } from 'react-router'
 import type { ChatFormat, ChatSectionType, Visibility } from '@chat/shared'
 import { ActionMenu } from '../shared/ui/ActionMenu.tsx'
-import { ChatProgress, StateBadge, formatDate } from '../shared/ui/ReflectionCard.tsx'
+import { ChatProgress, FullSections, StateBadge, formatDate } from '../shared/ui/ReflectionCard.tsx'
 import { MoreIcon } from '../shared/ui/icons.tsx'
+import type { Density } from './ReflectionsPage.tsx'
 import styles from './MobileTimeline.module.css'
 
 /*
@@ -19,7 +20,15 @@ import styles from './MobileTimeline.module.css'
  *
  * Its height is deliberately not fixed. A two-line title has to fit, and a
  * card with a rigid height would either crop it or overlap the row below.
- * Only the preview is bounded, and it is bounded by lines rather than pixels.
+ * Only the preview is bounded, and it is bounded by lines rather than pixels
+ * — `FullSections`, when `density` is `'full'`, is not, for the same reason
+ * it is not on the desktop card it is shared with.
+ *
+ * `density` answers the same question `Row` and `Tile` answer on the desktop
+ * grid and list — Compact, Preview or Full C.H.A.T. — and this card used to
+ * not ask it at all, always showing the preview line regardless of what was
+ * chosen. A setting a phone silently ignores is worse than no setting: it
+ * looks like it did something and did not.
  */
 
 export type TimelineItem = {
@@ -41,11 +50,21 @@ export function MobileCard({
   preview,
   written,
   now,
+  density,
+  sections,
 }: {
   item: TimelineItem
   preview: string
   written: ChatSectionType[] | undefined
   now: number
+  /**
+   * The same setting the desktop grid and list obey — Compact, Preview or
+   * Full C.H.A.T. — defaulting to `preview` so a caller that has not been
+   * updated still gets today's card rather than a blank one.
+   */
+  density?: Density
+  /** Every written section, present once `density` is `'full'` and fetched. */
+  sections?: { type: ChatSectionType; letter: string; label: string; content: string }[]
 }) {
   const navigate = useNavigate()
   return (
@@ -84,7 +103,17 @@ export function MobileCard({
         </span>
       </p>
 
-      <p className={styles.preview}>{preview || 'Nothing written yet — open it and begin.'}</p>
+      {/*
+        The same three answers the desktop grid and list give the same
+        question — a phone showing one fixed thing regardless of what was
+        chosen is the setting appearing to do nothing, which is the whole
+        defect this branch exists to close.
+      */}
+      {density === 'full' && sections?.length ? (
+        <FullSections sections={sections} />
+      ) : density === 'compact' ? null : (
+        <p className={styles.preview}>{preview || 'Nothing written yet — open it and begin.'}</p>
+      )}
 
       <div className={styles.foot}>
         <ChatProgress format={item.format} written={written} />

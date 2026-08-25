@@ -309,3 +309,53 @@
     transform: none;
   }
 }
+
+/* --------------------------------------------------------- full sections */
+
+.fullChat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.fullSection {
+  padding-inline-start: var(--space-3);
+  border-inline-start: 2px solid var(--line-strong);
+}
+
+.fullSection[data-section='content'] { border-inline-start-color: var(--content); }
+.fullSection[data-section='heart'] { border-inline-start-color: var(--heart); }
+.fullSection[data-section='application'] { border-inline-start-color: var(--application); }
+.fullSection[data-section='testimony'] { border-inline-start-color: var(--testimony); }
+
+.fullHeading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0 0 0.15rem;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.fullSection[data-section='content'] .fullLetter { color: var(--content); }
+.fullSection[data-section='heart'] .fullLetter { color: var(--heart); }
+.fullSection[data-section='application'] .fullLetter { color: var(--application); }
+.fullSection[data-section='testimony'] .fullLetter { color: var(--testimony); }
+
+.fullLetter {
+  font-size: var(--text-sm);
+  letter-spacing: 0;
+}
+
+/* Their own line breaks, kept — a paragraph split in two was split on purpose. */
+.fullBody {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
