@@ -6,11 +6,19 @@
  * (`--content`, `--heart`, `--application`, `--testimony`), keyed off the
  * step's stored type. Nothing here invents a palette, so all eight themes get
  * it right without this file knowing any of them exist.
+ *
+ * The page background is `--paper` — the same base every other page shows,
+ * `body`'s own colour — rather than the tinted `--surface-sunk` this used to
+ * carry, which nothing else in the application used as a whole page's
+ * background. This is also where a brand-new browser's very first `/` lands
+ * — see `RootEntry` — so it is the first thing the chosen theme is judged
+ * on; a different shade here read as the wrong theme having loaded, for a
+ * moment, on the one visit that most needed to look right.
  */
 .page {
   min-block-size: 100svh;
   padding: clamp(var(--space-5), 5vw, var(--space-8, 4rem)) var(--gutter);
-  background: var(--surface-sunk, var(--surface));
+  background: var(--paper);
   color: var(--ink);
 }
 

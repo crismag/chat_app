@@ -6,13 +6,22 @@
  * reflections.crishub.com opens for a person who has never seen it, and what a
  * platform reviewer reads before approving anything, so here the name, the
  * four letters and the promises are the content.
+ *
+ * The background is `--paper` — the same base every other page shows,
+ * `body`'s own colour, which the document pages (About and the rest) never
+ * override either. It used to be `--surface-sunk`, a third, tinted shade
+ * nothing else in the application used as a whole page's background: a
+ * bigger jump between this page and the one it links to than "poster" was
+ * meant to buy. Whichever theme somebody has chosen should look like the
+ * same theme the moment they land, not a slightly different one that
+ * resolves once they click through.
  */
 .page {
   min-block-size: 100svh;
   display: grid;
   grid-template-rows: 1fr auto;
   padding: clamp(var(--space-5), 5vw, var(--space-8, 4rem)) var(--gutter);
-  background: var(--surface-sunk, var(--surface));
+  background: var(--paper);
   color: var(--ink);
 }
 
