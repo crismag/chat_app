@@ -24,8 +24,8 @@
 import type { JSONContent } from '@tiptap/core'
 import { toBlocks, type Block } from '../NoteMarkdown.tsx'
 
-type MarkName = 'bold' | 'italic' | 'underline' | 'code'
-type TextMark = { type: MarkName }
+type MarkName = 'bold' | 'italic' | 'underline' | 'strike' | 'code' | 'link'
+type TextMark = { type: MarkName; attrs?: { href: string } }
 type TextNode = { type: 'text'; text: string; marks?: TextMark[] }
 type HardBreak = { type: 'hardBreak' }
 type Inline = TextNode | HardBreak
@@ -48,7 +48,8 @@ function inlineNodes(text: string, marks: TextMark[] = []): TextNode[] {
    * would overwrite the outer call's position mid-loop; fresh here, each call
    * gets its own, exactly as `NoteMarkdown.tsx`'s own `inline()` does.
    */
-  const pattern = /(\*\*(.+?)\*\*|\+\+(.+?)\+\+|\*(.+?)\*|`([^`]+?)`)/g
+  const pattern =
+    /(\*\*(.+?)\*\*|\+\+(.+?)\+\+|~~(.+?)~~|\*(.+?)\*|`([^`]+?)`|\[([^\]]+?)\]\(([^)\s]+)\))/g
   let at = 0
   let match: RegExpExecArray | null
   while ((match = pattern.exec(text)) !== null) {
@@ -58,10 +59,15 @@ function inlineNodes(text: string, marks: TextMark[] = []): TextNode[] {
     } else if (match[3] !== undefined) {
       out.push(...inlineNodes(match[3], [...marks, { type: 'underline' }]))
     } else if (match[4] !== undefined) {
-      out.push(...inlineNodes(match[4], [...marks, { type: 'italic' }]))
+      out.push(...inlineNodes(match[4], [...marks, { type: 'strike' }]))
     } else if (match[5] !== undefined) {
+      out.push(...inlineNodes(match[5], [...marks, { type: 'italic' }]))
+    } else if (match[6] !== undefined) {
       /* Code is literal: no emphasis is parsed inside it, matching the reader. */
-      push(match[5], [...marks, { type: 'code' }])
+      push(match[6], [...marks, { type: 'code' }])
+    } else if (match[7] !== undefined) {
+      /* A link's text is literal too, matching the reader — one fewer thing to nest. */
+      push(match[7], [...marks, { type: 'link', attrs: { href: match[8] ?? '' } }])
     }
     at = pattern.lastIndex
   }
@@ -114,7 +120,36 @@ function blockToNode(block: Block): DocNode {
       content: block.lines.map((line) => withContent('paragraph', inlineNodes(line))),
     }
   }
+  if (block.kind === 'codeBlock') {
+    const attrs = block.lang ? { language: block.lang } : undefined
+    const text = block.lines.join('\n')
+    const node: DocNode = { type: 'codeBlock', ...(attrs ? { attrs } : {}) }
+    if (text.length > 0) node.content = [{ type: 'text', text }]
+    return node
+  }
+  if (block.kind === 'hr') {
+    return { type: 'horizontalRule' }
+  }
+  if (block.kind === 'table') {
+    /*
+     * No table node exists in this schema (see the header comment) — a table
+     * still has to become *something*, so it becomes its own literal source
+     * text, as one paragraph. That keeps it lossless: switching back to
+     * Markdown mode without touching it in rich mode reproduces the same
+     * table, just not through a route that renders it as one here.
+     */
+    return withContent('paragraph', paragraphContent(tableSourceLines(block)))
+  }
   return withContent('paragraph', paragraphContent(block.lines))
+}
+
+function tableSourceLines(block: Extract<Block, { kind: 'table' }>): string[] {
+  const row = (cells: string[]) => `| ${cells.join(' | ')} |`
+  return [
+    row(block.header),
+    row(block.header.map(() => '---')),
+    ...block.rows.map(row),
+  ]
 }
 
 /** A note's Markdown body, as the JSON document `useEditor({ content })` takes. */

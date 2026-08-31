@@ -137,3 +137,60 @@ describe('idempotence', () => {
     expect(twice).toBe(once)
   })
 })
+
+describe('strikethrough and links', () => {
+  test('strikethrough round-trips', () => {
+    expect(roundTrip('~~done~~')).toBe('~~done~~')
+  })
+
+  test('strikethrough combines with other marks, in fixed order', () => {
+    expect(roundTrip('**~~both~~**')).toBe('**~~both~~**')
+  })
+
+  test('a link round-trips, text and url both', () => {
+    expect(roundTrip('[the site](https://example.com)')).toBe('[the site](https://example.com)')
+  })
+
+  test('a link next to plain text keeps its surroundings', () => {
+    expect(roundTrip('See [the site](https://example.com) for more')).toBe(
+      'See [the site](https://example.com) for more',
+    )
+  })
+})
+
+describe('code blocks and horizontal rules', () => {
+  test('a fenced code block round-trips, language tag included', () => {
+    const markdown = '```js\nconst x = 1\n```'
+    expect(roundTrip(markdown)).toBe(markdown)
+  })
+
+  test('a fenced code block with no language round-trips', () => {
+    const markdown = '```\nplain text\n```'
+    expect(roundTrip(markdown)).toBe(markdown)
+  })
+
+  test('a multi-line code block keeps its internal newlines literal', () => {
+    const markdown = '```\nline one\nline two\n```'
+    expect(roundTrip(markdown)).toBe(markdown)
+  })
+
+  test('a horizontal rule round-trips as ---', () => {
+    const markdown = 'above\n\n---\n\nbelow'
+    expect(roundTrip(markdown)).toBe(markdown)
+  })
+})
+
+describe('tables, opened in rich text mode', () => {
+  /*
+   * There is no table node in this schema (see `schema.ts`), so a table is
+   * the one block kind `markdownToDoc` turns into something other than what
+   * it parsed — a literal paragraph of its own source text. What matters is
+   * that nothing is lost: a table untouched in rich mode reproduces the same
+   * table when it comes back out, even though it was never a real table in
+   * between.
+   */
+  test('a table survives a visit to rich text mode unedited', () => {
+    const markdown = '| Name | Qty |\n| --- | --- |\n| Milk | 2 |\n| Eggs | 12 |'
+    expect(roundTrip(markdown)).toBe(markdown)
+  })
+})

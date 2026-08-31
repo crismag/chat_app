@@ -117,3 +117,52 @@ test('an empty note says so rather than rendering nothing at all', () => {
   render(<NoteMarkdown markdown="   " />)
   expect(screen.getByText('Nothing written yet.')).toBeInTheDocument()
 })
+
+test('a fenced code block renders literally, no emphasis parsed', () => {
+  const { container } = render(<NoteMarkdown markdown={'```js\nconst x = **not bold**\n```'} />)
+  expect(container.querySelector('pre code')?.textContent).toBe('const x = **not bold**')
+  expect(container.querySelector('strong')).toBeNull()
+})
+
+test('a horizontal rule renders as hr, and separates paragraphs', () => {
+  const { container } = render(<NoteMarkdown markdown={'above\n\n---\n\nbelow'} />)
+  expect(container.querySelector('hr')).not.toBeNull()
+  expect(container.querySelectorAll('p')).toHaveLength(2)
+})
+
+test('a GFM table renders as a table', () => {
+  const { container } = render(
+    <NoteMarkdown markdown={'| Name | Qty |\n| --- | --- |\n| Milk | 2 |\n| Eggs | 12 |'} />,
+  )
+  expect(container.querySelector('table')).not.toBeNull()
+  expect([...container.querySelectorAll('th')].map((cell) => cell.textContent)).toEqual([
+    'Name',
+    'Qty',
+  ])
+  expect(container.querySelectorAll('tbody tr')).toHaveLength(2)
+  expect(container.querySelector('tbody tr td')?.textContent).toBe('Milk')
+})
+
+test('strikethrough renders as <s>', () => {
+  const { container } = render(<NoteMarkdown markdown="~~done~~" />)
+  expect(container.querySelector('s')?.textContent).toBe('done')
+})
+
+test('a link renders as an anchor, opening in a new tab', () => {
+  const { container } = render(<NoteMarkdown markdown="[site](https://example.com)" />)
+  const a = container.querySelector('a')
+  expect(a?.getAttribute('href')).toBe('https://example.com')
+  expect(a?.getAttribute('target')).toBe('_blank')
+  expect(a?.textContent).toBe('site')
+})
+
+/*
+ * `javascript:` in an href is the one thing a note's own text must never be
+ * able to make happen — otherwise typing a note becomes a way to run script
+ * in whoever reads it. The text still shows; it just is not a link.
+ */
+test('a javascript: link is shown as text, not a clickable anchor', () => {
+  render(<NoteMarkdown markdown="[click](javascript:document.location='https://evil.example')" />)
+  expect(document.querySelector('a')).toBeNull()
+  expect(screen.getByText('click')).toBeInTheDocument()
+})

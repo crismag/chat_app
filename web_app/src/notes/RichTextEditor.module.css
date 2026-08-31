@@ -79,6 +79,31 @@
   font-size: 0.9em;
 }
 
+/* A fenced code block already carries the background; its own <code> should not double it. */
+.content pre {
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm, 0.25rem);
+  background: var(--surface-2);
+  overflow-x: auto;
+}
+
+.content pre code {
+  padding: 0;
+  background: none;
+  font-size: 0.9em;
+}
+
+.content hr {
+  border: none;
+  border-block-start: 1px solid var(--line);
+  margin: var(--space-3) 0;
+}
+
+.content a {
+  color: var(--accent);
+}
+
 /*
  * Underline is `++text++`, which Markdown does not have. Given a colour of
  * its own it would read as a link; left plain it reads as what it is — the

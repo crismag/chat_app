@@ -16,6 +16,7 @@
     "@crismag/create-studio": "file:../vendor/crismag-create-studio-0.1.0.tgz",
     "@tiptap/core": "^3.30.3",
     "@tiptap/extension-heading": "^3.30.3",
+    "@tiptap/extension-link": "^3.30.3",
     "@tiptap/extension-task-item": "^3.30.3",
     "@tiptap/extension-task-list": "^3.30.3",
     "@tiptap/extensions": "^3.30.3",

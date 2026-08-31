@@ -25,12 +25,17 @@
 
 import type { JSONContent } from '@tiptap/core'
 
-type MarkName = 'bold' | 'underline' | 'italic'
+type MarkName = 'bold' | 'underline' | 'strike' | 'italic'
 /** `JSONContent` is what `editor.getJSON()` actually returns. */
 type DocNode = JSONContent
 
-const MARK_ORDER: MarkName[] = ['bold', 'underline', 'italic']
-const MARK_SYNTAX: Record<MarkName, string> = { bold: '**', underline: '++', italic: '*' }
+const MARK_ORDER: MarkName[] = ['bold', 'underline', 'strike', 'italic']
+const MARK_SYNTAX: Record<MarkName, string> = {
+  bold: '**',
+  underline: '++',
+  strike: '~~',
+  italic: '*',
+}
 
 /** Every text/hardBreak run inside one block, as the line(s) of Markdown it is. */
 function inlineMarkdown(nodes: DocNode[] | undefined): string {
@@ -54,6 +59,13 @@ function inlineMarkdown(nodes: DocNode[] | undefined): string {
     if (names.has('code')) {
       closeTo(0)
       out += `\`${node.text}\``
+      continue
+    }
+    if (names.has('link')) {
+      closeTo(0)
+      const link = node.marks?.find((mark) => mark.type === 'link')
+      const href = typeof link?.attrs?.['href'] === 'string' ? link.attrs['href'] : ''
+      out += `[${node.text}](${href})`
       continue
     }
 
@@ -101,6 +113,14 @@ function blockMarkdown(node: DocNode): string {
   }
   if (node.type === 'blockquote') {
     return (node.content ?? []).map((paragraph) => `> ${inlineMarkdown(paragraph.content)}`).join('\n')
+  }
+  if (node.type === 'codeBlock') {
+    const lang = typeof node.attrs?.['language'] === 'string' ? node.attrs['language'] : ''
+    const text = (node.content ?? []).map((child) => child.text ?? '').join('')
+    return ['```' + lang, text, '```'].join('\n')
+  }
+  if (node.type === 'horizontalRule') {
+    return '---'
   }
   /* A paragraph, including an empty one — hitting Enter twice is real content. */
   return inlineMarkdown(node.content)

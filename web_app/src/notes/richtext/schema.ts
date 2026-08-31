@@ -8,11 +8,12 @@
  *
  * ── Why it is smaller than the editor could support ─────────────────────────
  *
- * `@tiptap/starter-kit` ships strikethrough, fenced code blocks and a
- * horizontal rule; none of those exist in `NoteMarkdown.tsx`'s reader, so a
- * note that used them in rich mode would render as something else — or
- * nothing — the moment it was opened in Markdown mode or on a card. Every
- * node and mark enabled here is one `NoteMarkdown.tsx` already reads.
+ * Every node and mark enabled here is one `NoteMarkdown.tsx` already reads —
+ * strikethrough, fenced code blocks and a horizontal rule included, since
+ * that reader now covers full GFM. The one exception is tables: a table has
+ * no editing affordances here (no add-row, no add-column — see `toDoc.ts`
+ * for what a table becomes when a note that has one opens in rich mode), so
+ * it stays out of the schema rather than being half-supported.
  *
  * Headings are capped at two levels for the same reason `NoteMarkdown.tsx`
  * caps them: `HEADING = /^(#{1,2})/` does not recognise `###`, so a level-3
@@ -24,6 +25,7 @@ import StarterKit from '@tiptap/starter-kit'
 import Heading from '@tiptap/extension-heading'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
+import Link from '@tiptap/extension-link'
 import { Placeholder } from '@tiptap/extensions'
 import { Mark } from '@tiptap/core'
 
@@ -75,14 +77,16 @@ export function richTextExtensions(placeholder: string) {
     StarterKit.configure({
       /* Replaced below by `NoteHeading`, which renders h3/h4 instead of h1/h2. */
       heading: false,
-      strike: false,
-      codeBlock: false,
-      horizontalRule: false,
     }),
     NoteHeading.configure({ levels: [1, 2] }),
     Underline,
     TaskList,
     TaskItem.configure({ nested: false }),
+    /*
+     * `openOnClick: false` — a link in a note being edited should be
+     * selectable and re-typeable like any other text, not a navigation.
+     */
+    Link.configure({ openOnClick: false, autolink: false }),
     Placeholder.configure({ placeholder }),
   ]
 }

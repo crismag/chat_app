@@ -106,3 +106,38 @@
 .underline {
   text-underline-offset: 0.15em;
 }
+
+.codeBlock {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm, 0.25rem);
+  background: var(--surface-2);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.9em;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.hr {
+  border: none;
+  border-block-start: 1px solid var(--line);
+  margin: var(--space-2) 0;
+}
+
+.table {
+  border-collapse: collapse;
+  inline-size: 100%;
+  font-size: var(--text-sm);
+}
+
+.table th,
+.table td {
+  border: 1px solid var(--line);
+  padding: var(--space-1, 0.25rem) var(--space-2);
+  text-align: start;
+}
+
+.table th {
+  background: var(--surface-2);
+  font-weight: 600;
+}
