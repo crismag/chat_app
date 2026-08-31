@@ -59,11 +59,27 @@ Two ways to fix it, and the first is better:
 
 1. **hPanel → Setup Node.js App**, configured as below. The panel keeps its own
    process alive and restarts it. This is the intended arrangement.
-2. **hPanel → Advanced → Cron Jobs**, running every minute:
+2. **hPanel → Advanced → Cron Jobs**. The interval is your worst-case
+   downtime; every minute costs nothing, and a run that finds the API healthy
+   takes milliseconds and writes nothing.
 
    ```
-   /home/u471078694/domains/reflections.crishub.com/private/chat_app/current/scripts-deploy/keepalive.sh
+   /usr/bin/flock -n /home/u471078694/domains/reflections.crishub.com/private/chat_app/keepalive.lock /usr/bin/env PATH=/opt/alt/alt-nodejs22/root/usr/bin:/usr/local/bin:/usr/bin /usr/bin/bash /home/u471078694/domains/reflections.crishub.com/private/chat_app/current/scripts-deploy/keepalive.sh
    ```
+
+   **The `PATH` prefix is required.** `restart-api.sh` runs bare `node`; cron's
+   PATH is `/usr/local/bin:/usr/bin`, and node is at
+   `/opt/alt/alt-nodejs22/root/usr/bin`. Without it the script detects the
+   outage and then dies on `node: command not found`.
+
+   `flock -n` makes overlapping runs impossible if a restart ever runs long.
+   The path goes through `current`, which is a symlink, so it survives deploys.
+
+   **To check the cron is running at all:** every run touches
+   `private/chat_app/logs/keepalive.last`, so `ls -l` on that file shows when
+   it last fired. That exists because a healthy run writes nothing to
+   `keepalive.log` — which makes a working cron and one that was never
+   installed look identical.
 
    `keepalive.sh` asks the API whether it is answering and starts it if not. It
    does nothing when the API is up, and writes a line to
