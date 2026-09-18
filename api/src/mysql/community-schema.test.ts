@@ -84,11 +84,11 @@ describe.skipIf(!config)('community rules in MariaDB', () => {
   }
 
   test('a community is closed until somebody opens it', async () => {
-    const author = await one<{ id: number }>('SELECT id FROM users ORDER BY id DESC LIMIT 1');
+    const { userId } = await anAuthor();
     await run(
       `INSERT INTO communities (public_uuid, name, description, created_by_user_id, created_at, updated_at)
        VALUES (UUID(), 'A circle', '', ?, NOW(), NOW())`,
-      [author.id],
+      [userId],
     );
     const community = await one<{
       discoverability: string;
