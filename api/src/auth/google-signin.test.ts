@@ -210,6 +210,22 @@ test('the config endpoint offers the client id and never a secret', async () => 
   expect(JSON.stringify(body)).not.toMatch(/secret/i);
 });
 
+test('a configured client id is what the login page is told to use', async () => {
+  const previous = process.env['GOOGLE_CLIENT_ID'];
+  process.env['GOOGLE_CLIENT_ID'] = 'live-client.apps.googleusercontent.com';
+  try {
+    const configured = createApp(new SqliteStore(), {}, {}, undefined, { googleVerifier: verifier });
+    const response = await configured.request('/api/auth/google/config');
+    expect(await response.json()).toEqual({
+      clientId: 'live-client.apps.googleusercontent.com',
+      configured: true,
+    });
+  } finally {
+    if (previous === undefined) delete process.env['GOOGLE_CLIENT_ID'];
+    else process.env['GOOGLE_CLIENT_ID'] = previous;
+  }
+});
+
 /* ----------------------------------------------------------------- logout */
 
 test('logging out ends the CHAT session', async () => {

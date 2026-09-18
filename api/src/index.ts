@@ -5,6 +5,7 @@ import { DeterministicStudioImageProvider } from './create/image-provider.ts';
 import { createMysqlPool, migrate, MysqlPersistence, readMysqlConfig } from './mysql/index.ts';
 import { MysqlAuthStore, SqliteAuthStore, type AuthStore } from './auth/store.ts';
 import { hashPassword, verifyPassword } from './auth/local-password.ts';
+import { readGoogleClientId } from './auth/google.ts';
 
 const port = Number(process.env.PORT ?? 8000);
 
@@ -63,5 +64,11 @@ serve({
   console.log(
     `C.H.A.T. API listening on http://${hostname ?? 'localhost'}:${port}` +
       (hostname ? ' (loopback only; reached through the gateway)' : ''),
+  );
+  const google = readGoogleClientId();
+  console.log(
+    google
+      ? 'Google sign-in is offered.'
+      : 'Google sign-in is off (set GOOGLE_CLIENT_ID to offer it).',
   );
 });

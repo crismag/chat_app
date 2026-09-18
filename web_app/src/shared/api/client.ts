@@ -108,11 +108,18 @@ export const UNREACHABLE_MESSAGE =
 export async function api<T>(path: string, init?: RequestInit, retrying = false): Promise<T> {
   let response: Response;
   try {
+    /*
+     * `Content-Type: application/json` on a GET is enough to make the browser
+     * preflight. The Google config call is a GET, and a preflight that hits
+     * a down API (the PHP gateway's 502) fails CORS before the page can even
+     * learn that Google is configured — which is how "Continue with Google"
+     * vanishes while the email form still paints.
+     */
     response = await fetch(`${apiBase}${path}`, {
       ...init,
       credentials: 'include',
       headers: {
-        'Content-Type': 'application/json',
+        ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
         ...(init?.headers ?? {}),
       },
     });

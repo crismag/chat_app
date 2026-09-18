@@ -39,8 +39,9 @@ beforeEach(() => {
     const json = (body: unknown, status = 200) =>
       new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 
-    if (url.includes('/auth/me')) return json({ error: 'Unauthenticated.' }, 401)
-    if (url.includes('/auth/register')) {
+      if (url.includes('/auth/me')) return json({ error: 'Unauthenticated.' }, 401)
+      if (url.includes('/auth/google/config')) return json({ clientId: null, configured: false })
+      if (url.includes('/auth/register')) {
       registerCalls += 1
       if (pending) return pending.promise
       return json({ id: 'u1', email: 'a@b.co' })
@@ -101,6 +102,12 @@ test('a taken email is reported on the email field, and the caret goes there', a
     const url = String(input)
     if (url.includes('/auth/me')) {
       return new Response(JSON.stringify({}), { status: 401, headers: { 'Content-Type': 'application/json' } })
+    }
+    if (url.includes('/auth/google/config')) {
+      return new Response(JSON.stringify({ clientId: null, configured: false }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
     }
     return new Response(JSON.stringify({ error: 'An account with that email already exists.' }), {
       status: 409,
@@ -196,6 +203,9 @@ test('an email that already has an account offers the way in, not an error', asy
         guestName: 'QuietCedar-14',
         emailVerified: false,
       })
+    }
+    if (url.includes('/auth/google/config')) {
+      return json({ clientId: null, configured: false })
     }
     if (url.includes('/auth/register')) {
       return json({ error: 'exists', accountExists: true, guestReflections: 3 }, 409)

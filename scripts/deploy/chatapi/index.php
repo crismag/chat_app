@@ -53,6 +53,31 @@ const FORWARD_REQUEST = [
  */
 const DROP_RESPONSE = ['transfer-encoding', 'content-length', 'connection', 'keep-alive'];
 
+/*
+ * The web app is on a different origin. When Node is up, Hono answers CORS.
+ * When Node is not, this file's 502 still has to name the caller or the
+ * browser hides the body — and the login page treats that as "Google is not
+ * offered".
+ */
+function cors_for_web_origin(): void
+{
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    $allowed = [
+        'https://reflections.crishub.com',
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+    ];
+    if (!in_array($origin, $allowed, true)) {
+        return;
+    }
+    header('Access-Control-Allow-Origin: ' . $origin);
+    header('Access-Control-Allow-Credentials: true');
+    header('Access-Control-Allow-Methods: GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS');
+    $requested = $_SERVER['HTTP_ACCESS_CONTROL_REQUEST_HEADERS'] ?? 'Content-Type';
+    header('Access-Control-Allow-Headers: ' . $requested);
+    header('Vary: Origin');
+}
+
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 $query = $_SERVER['QUERY_STRING'] ?? '';
 $target = UPSTREAM . $path . ($query !== '' ? '?' . $query : '');
@@ -123,7 +148,16 @@ if ($response === false || $status === 0) {
     /*
      * The API is not answering. Said in the API's own shape, because the thing
      * reading this is the web app's error handling and not a person.
+     *
+     * CORS has to be on this path: the browser will not hand a 502 from
+     * another origin to JavaScript without it, and a failed preflight looks
+     * like "Failed to fetch" — which on the login page hides Google sign-in.
      */
+    cors_for_web_origin();
+    if ($method === 'OPTIONS') {
+        http_response_code(204);
+        return;
+    }
     http_response_code(502);
     header('Content-Type: application/json');
     error_log('chatapi gateway: upstream unreachable: ' . $error);
