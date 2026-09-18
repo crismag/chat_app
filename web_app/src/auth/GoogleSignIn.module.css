@@ -1,7 +1,8 @@
 .root {
   display: grid;
   gap: var(--space-2);
-  justify-items: center;
+  justify-items: stretch;
+  width: 100%;
 }
 
 /*
@@ -9,12 +10,22 @@
  * choose — the brand requires it — so this reserves the room rather than
  * restyling the control, which keeps the layout from jumping when the script
  * finishes loading.
+ *
+ * The width is definite on purpose. Google's iframe is sized in pixels from
+ * its parent's box; a shrink-to-fit parent makes that box 0 and the button
+ * vanishes while the rest of the form looks fine.
  */
 .button {
   min-block-size: 44px;
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.button :global(iframe),
+.button :global(div) {
+  max-width: 100%;
 }
 
 .note {
@@ -22,6 +33,7 @@
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   color: var(--muted);
+  text-align: center;
 }
 
 .problem {
@@ -30,4 +42,57 @@
   font-size: var(--text-sm);
   color: var(--heart);
   text-align: center;
+}
+
+.fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 44px;
+  padding: 0.55rem 1.1rem;
+  border: 1px solid var(--line-strong, #dadce0);
+  border-radius: var(--radius-pill);
+  background: var(--surface, #fff);
+  color: var(--ink, #1f1f1f);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.fallback:hover {
+  background: var(--surface-2, #f8f9fa);
+}
+
+.mark {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+/*
+ * "or", with a rule either side.
+ *
+ * Two ways in, and this says they are alternatives rather than steps — a
+ * Google button sitting directly above a form reads as something to do first.
+ * Rendered here so it disappears with the control when Google is not offered.
+ */
+.divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1 1 auto;
+  block-size: 1px;
+  background: var(--line);
 }

@@ -132,6 +132,7 @@ else comes from `.env`:
 | --- | --- |
 | `MYSQL_*` | the Hostinger MariaDB, and what migrations run against |
 | `SMTP_*` | sending mail. Without it a password-reset link is written to the log instead of being sent, and the route still answers identically — see below |
+| `GOOGLE_CLIENT_ID` | the Google Identity Services *web* client id, not a secret. Unset hides "Continue with Google" on `/login`. The client secret is never read |
 | `GEMINI_API_KEY`, `AI_ENABLED` | assistance, off unless switched on |
 | `YVP_APP_KEY` | Scripture lookup, on by default but inert without the key |
 

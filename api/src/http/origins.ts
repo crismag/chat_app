@@ -14,6 +14,14 @@ export const DEFAULT_WEB_ORIGINS = [
   'http://localhost',
   'capacitor://localhost',
   'ionic://localhost',
+  /*
+   * The production site. CORS is origin-exact, and the managed-host path
+   * starts `app.mjs` without `restart-api.sh`, so `CHAT_WEB_ORIGINS` is not
+   * always exported. Leaving this off is how a perfectly configured Google
+   * client id still never reaches the login page: the config GET is refused
+   * as a cross-origin call and the button is not offered.
+   */
+  'https://reflections.crishub.com',
 ] as const
 
 export const NATIVE_WEBVIEW_ORIGINS = new Set([

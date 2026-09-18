@@ -8,6 +8,11 @@ test('always includes the Vite and Capacitor WebView origins', () => {
   expect(origins).toContain('capacitor://localhost')
 })
 
+test('always includes the production web origin, not only Vite and Capacitor', () => {
+  const origins = webOrigins({})
+  expect(origins).toContain('https://reflections.crishub.com')
+})
+
 test('CHAT_WEB_ORIGINS adds a deployed web host without dropping defaults', () => {
   const origins = webOrigins({ CHAT_WEB_ORIGINS: 'https://chat.example, https://api-ui.example' })
   expect(origins).toContain('https://chat.example')

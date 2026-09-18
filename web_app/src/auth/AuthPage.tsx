@@ -198,10 +198,6 @@ export function AuthPage() {
         */}
         <GoogleSignIn keepSignedIn={keepSignedIn} onSignedIn={() => {}} />
 
-        <p className={styles.divider}>
-          <span>or</span>
-        </p>
-
         <form className={styles.form} onSubmit={onSubmit}>
           <div className="field">
             <label className="label" htmlFor="email">
