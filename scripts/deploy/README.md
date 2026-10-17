@@ -89,6 +89,26 @@ Two ways to fix it, and the first is better:
 There is no `crontab` command on this host; cron is hPanel-only, so neither of
 these can be installed from a deploy script.
 
+### The gateway wakes it, too
+
+This plan has no Setup Node.js App, so the cron is the guarantee — and between
+two ticks of it, the API can be gone. `chatapi/index.php` covers that gap:
+when a request finds nothing listening on the loopback, it starts the same
+`keepalive.sh` under the same lock (so cron and gateway never start two), waits
+up to 15s for the API to bind, and sends the request again. Tested: the first
+request after an outage is answered in under a second, ten at once all succeed
+with one process started, and the API outlives the PHP request that started it.
+
+- Only a **refused connection** is retried. That request provably never
+  reached the API, so it cannot be done twice. A timeout is not retried.
+- If a wake does not bring the API up, requests in the next 60s get the 502
+  at once instead of each waiting 15s for an API that will not start.
+- It needs PHP to be allowed to start processes. If `proc_open` is disabled,
+  it does nothing and answers the 502 it always did — so keep the cron.
+  Look for `started keepalive` in the PHP error log to see it acting.
+- It finds `keepalive.sh` through `PRIVATE_DIR` in the file, which
+  `remote-install.sh` sets from `DEPLOY_PRIVATE`.
+
 ## Sending mail
 
 Password reset needs somewhere to send from. Four values in `.env`:

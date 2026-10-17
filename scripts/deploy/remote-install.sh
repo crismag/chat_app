@@ -53,6 +53,11 @@ echo "==> publishing the API gateway"
 # process reachable at all on this plan — see README.
 if [ -d "${DEPLOY_API_PUBLIC}" ]; then
   cp "${BUNDLE}/../chatapi/index.php" "${BUNDLE}/../chatapi/.htaccess" "${DEPLOY_API_PUBLIC}/"
+  # The gateway starts keepalive.sh when it finds the API gone, so it has to
+  # know where this deployment lives. The file carries the default; a host
+  # with another DEPLOY_PRIVATE gets its own path written in.
+  sed -i "s|^const PRIVATE_DIR = '.*';|const PRIVATE_DIR = '${DEPLOY_PRIVATE}';|" \
+    "${DEPLOY_API_PUBLIC}/index.php"
 else
   echo "    no ${DEPLOY_API_PUBLIC}; skipping (the API will not be reachable from a browser)"
 fi
