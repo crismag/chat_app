@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "C.H.A.T. — Content, Heart, Application, Testimony",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.18"
   },
   "workspaces": [
     "web_app",
@@ -13,7 +13,8 @@
   ],
   "scripts": {
     "dev": "concurrently -k -n web,api -c cyan,magenta \"npm run dev -w web_app\" \"npm run dev -w api\"",
-    "build": "npm run build --workspaces --if-present && npm run notices:artifact",
+    "build": "npm run build -w web_app && npm run notices:artifact",
+    "start": "node server.mjs",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present && npm run notices:check && npm run check:create-studio-package",
     "notices:generate": "node scripts/notices.mjs",
@@ -39,5 +40,6 @@
     "@capacitor/keyboard": "^8.0.5",
     "@capacitor/share": "^8.0.1",
     "@capacitor/status-bar": "^8.0.3"
-  }
+  },
+  "main": "server.mjs"
 }

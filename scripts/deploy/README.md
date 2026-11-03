@@ -1,5 +1,10 @@
 # Deploying to reflections.crishub.com
 
+> **New installs:** the one-process install in
+> [`docs/development/HOSTINGER.md`](../../docs/development/HOSTINGER.md) is far
+> simpler — build and start commands in hPanel, nothing else. This page
+> documents the original split deployment, which still works.
+
 Two things are deployed and they are not alike. The web app is static files
 Vite has already built. The API is a Node process that has to stay running.
 A host that can serve the first cannot necessarily run the second, and that is

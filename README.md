@@ -157,6 +157,17 @@ curl -s localhost:8000/api/ai/status
 curl -s localhost:8000/api/bible/status
 ```
 
+### Production in one process
+
+The same three commands any Node host runs, and all a Hostinger "Node.js Web
+App" install needs (see [`docs/development/HOSTINGER.md`](docs/development/HOSTINGER.md)):
+
+```bash
+npm install
+npm run build      # builds the web app into web_app/dist
+npm start          # one process: the web app and /api on the same origin
+```
+
 Useful commands:
 
 ```bash
