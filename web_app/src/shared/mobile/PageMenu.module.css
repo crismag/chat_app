@@ -90,3 +90,13 @@
 .row:disabled:hover {
   background: transparent;
 }
+
+/* Instructions, not an action: it reads like a row but does not pretend to be pressable. */
+.hint {
+  margin: 0;
+  cursor: default;
+}
+
+.hint:hover {
+  background: transparent;
+}

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { accountLabel, isGuest } from '@chat/shared'
 import { useAuth } from '../../auth/useAuth.ts'
+import { useInstallOffer } from '../pwa/install.ts'
 import { Sheet } from './Sheet.tsx'
 import styles from './PageMenu.module.css'
 
@@ -53,6 +54,7 @@ function AccountBlock({ onClose }: { onClose: () => void }) {
   const { user, logout, forgetThisBrowser } = useAuth()
   const navigate = useNavigate()
   const guest = user ? isGuest(user) : false
+  const installOffer = useInstallOffer()
 
   const go = (to: string) => {
     onClose()
@@ -78,6 +80,32 @@ function AccountBlock({ onClose }: { onClose: () => void }) {
       </p>
 
       <div className={styles.rows}>
+        {/*
+          Opened from a phone's browser, the app can live on the home screen
+          and open full-screen like any other. Offered only where it can work:
+          a real prompt on Android, the Share-sheet route on iOS, and nothing
+          once it is installed.
+        */}
+        {installOffer.kind === 'prompt' ? (
+          <button
+            type="button"
+            className={styles.row}
+            onClick={() => {
+              onClose()
+              void installOffer.install()
+            }}
+          >
+            Install app
+            <small>Add C.H.A.T. to your home screen</small>
+          </button>
+        ) : null}
+        {installOffer.kind === 'ios' ? (
+          <p className={`${styles.row} ${styles.hint}`} role="note">
+            Add to Home Screen
+            <small>In Safari, tap Share, then “Add to Home Screen”</small>
+          </p>
+        ) : null}
+
         {user ? (
           <button type="button" className={styles.row} onClick={() => go('/profile')}>
             Profile

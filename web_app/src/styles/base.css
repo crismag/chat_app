@@ -108,6 +108,24 @@ button {
 }
 
 /*
+ * No form field smaller than 16px on a touch screen.
+ *
+ * iOS Safari zooms the whole page in when a field under 16px takes focus, and
+ * does not zoom back out when it loses it — the layout is left half off the
+ * screen until the person pinches it back. Setting the size here, rather than
+ * disabling zoom in the viewport tag, keeps pinch-to-zoom for people who need
+ * it. The selectors outrank a single module class, so a compact field
+ * designed for the desktop still gets this on a phone.
+ */
+@media (pointer: coarse) {
+  input:not([type='checkbox'], [type='radio'], [type='range']),
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
+}
+
+/*
  * Motion is used to explain what moved where. When it is unwelcome, it goes —
  * but transitions are reduced to something instant rather than removed, so
  * nothing depends on an animation that will not run.

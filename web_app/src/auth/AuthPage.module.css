@@ -142,6 +142,19 @@
   color: var(--accent-hover);
 }
 
+/*
+ * A text link is still something a thumb has to hit. On a touch screen it gets
+ * the full tap height without looking any different: the padding is invisible
+ * and the underline stays under the words.
+ */
+@media (pointer: coarse) {
+  .link {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
+  }
+}
+
 @media (min-width: 900px) {
   .page {
     grid-template-columns: 1fr minmax(0, 26rem);

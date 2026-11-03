@@ -58,7 +58,9 @@
   <FilesMatch "\.(js|css|woff2?|png|svg|jpg|jpeg|webp)$">
     Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
-  <FilesMatch "^index\.html$">
+  # The service worker and the manifest are matched by the rule above (.js,
+  # .png) but must never be cached for long: a stale sw.js is a stale app.
+  <FilesMatch "^(index\.html|sw\.js|manifest\.webmanifest)$">
     Header set Cache-Control "no-cache"
   </FilesMatch>
 </IfModule>

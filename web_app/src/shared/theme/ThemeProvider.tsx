@@ -65,6 +65,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     applyTheme(document.documentElement, preferences.theme, systemDark)
+    /*
+     * The phone's status bar and the installed app's title bar follow the
+     * theme too. Without this a Dark reader gets a cream strip across the top
+     * of a dark page, because the tag in index.html can only name one colour.
+     */
+    const surface = getComputedStyle(document.documentElement).getPropertyValue('--surface').trim()
+    const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+    if (surface && themeColor) themeColor.content = surface
     try {
       window.localStorage.setItem(THEME_STORAGE_KEY, preferences.theme)
     } catch {
